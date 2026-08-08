@@ -1,0 +1,19 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic[email]==2.5.0
+pydantic-settings==2.1.0
+sqlalchemy==2.0.23
+alembic==1.13.0
+# Sync driver — the app uses a synchronous SQLAlchemy engine/session throughout.
+# asyncpg was pinned here but nothing imports it and there is no async session.
+psycopg2-binary==2.9.9
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+# passlib 1.7.4 reads bcrypt.__about__, which bcrypt removed in 4.1. With bcrypt
+# 5.x, CryptContext.hash() raises "password cannot be longer than 72 bytes" for
+# *any* password — registration and login break outright. Verified locally.
+# Pin until passlib is replaced (it has had no release since 2020).
+bcrypt==4.0.1
+python-dotenv==1.0.0
+httpx==0.25.2

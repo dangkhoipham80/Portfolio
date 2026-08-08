@@ -1,0 +1,16 @@
+{
+  "name": "portfolio",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.5.1",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "start": "pnpm --filter web start",
+    "lint": "pnpm --filter web lint",
+    "type-check": "pnpm --filter web exec tsc --noEmit",
+    "api:dev": "cd apps/api && python -m uvicorn app.main:app --reload --port 8000",
+    "api:lint": "cd apps/api && python -m ruff check .",
+    "api:test": "cd apps/api && python -m pytest -q"
+  }
+}

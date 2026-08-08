@@ -1,0 +1,7 @@
+# Migrations are deliberately NOT run here. Chaining `alembic upgrade head &&`
+# into the web process means a failed migration takes every instance down with
+# no way back, and concurrent instances race for the migration lock on rollouts.
+# Run them as a release/pre-deploy step instead.
+# (Right now there is nothing to run anyway: alembic.ini was deleted in 32c7391
+# and alembic/versions/ is empty.)
+web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
