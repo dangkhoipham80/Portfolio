@@ -10,7 +10,23 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.next
+out
 *.local
+
+# Python (apps/api)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets. apps/api/.env holds the Postgres URL and the JWT signing key; a live
+# Neon credential was once committed to this repo, so keep this rule broad.
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*

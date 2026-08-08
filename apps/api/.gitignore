@@ -51,9 +51,9 @@ Thumbs.db
 *.db
 *.sqlite3
 
-# Alembic
-alembic/versions/*.py
-!alembic/versions/__init__.py
+# Alembic — migrations MUST be committed. This used to ignore
+# alembic/versions/*.py, which would have silently swallowed every migration
+# the moment we started generating them.
 
 # Testing
 .coverage

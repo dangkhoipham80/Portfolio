@@ -1,0 +1,8 @@
+packages:
+  - "apps/web"
+
+# apps/api is Python (FastAPI) and deliberately not a workspace member.
+
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
