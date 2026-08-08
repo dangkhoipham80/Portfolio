@@ -1,8 +1,11 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum
+import enum
+
+from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from app.models.base import Base
-import enum
+
 
 class UserStatus(enum.Enum):
     ACTIVE = "active"

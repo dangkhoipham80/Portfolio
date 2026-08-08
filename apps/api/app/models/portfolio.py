@@ -1,5 +1,7 @@
-from sqlalchemy import Column, String, Text, Boolean, JSON, Integer, DateTime
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
+
 from .base import BaseModel
+
 
 class Project(BaseModel):
     __tablename__ = "projects"

@@ -1,8 +1,10 @@
-import time
 import logging
-from fastapi import Request, Response
+import time
+
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)

@@ -1,19 +1,18 @@
-from typing import Optional, Dict, Any
-from datetime import datetime, timedelta, timezone
+import smtplib
+from datetime import datetime, timezone
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.exceptions import UnauthorizedError, ValidationError
+from app.core.security import verify_token
 from app.models.token import TokenType
 from app.models.user import UserStatus
-from app.schemas.user import UserCreate, UserLogin, GoogleLogin, TokenResponse, PasswordResetRequest, PasswordResetConfirm
+from app.schemas.user import PasswordResetConfirm, PasswordResetRequest, TokenResponse, UserLogin
 from app.services.user_service import UserService
-from app.core.security import create_access_token, verify_token
-from app.core.constants import ErrorMessages
-from app.core.exceptions import UnauthorizedError, ValidationError
-from app.core.config import settings
-import httpx
-import json
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+
 
 class AuthService:
     def __init__(self, db: Session):
@@ -34,33 +33,9 @@ class AuthService:
 
         return self._create_token_pair(user)
 
-    def google_login(self, google_data: GoogleLogin) -> TokenResponse:
-        """Login with Google OAuth"""
-        try:
-            # Verify Google token and get user info
-            google_user_info = self._verify_google_token(google_data.google_token)
-
-            # Authenticate or create user
-            user = self.user_service.authenticate_google_user(google_user_info)
-
-            return self._create_token_pair(user)
-
-        except Exception as e:
-            raise UnauthorizedError(f"Google authentication failed: {str(e)}")
-
-    def register(self, user_data: UserCreate) -> Dict[str, Any]:
-        """Register new user"""
-        user = self.user_service.create_user(user_data)
-
-        # Send email verification if not OAuth user
-        if not user.google_id:
-            self._send_verification_email(user)
-
-        return {
-            "message": "User registered successfully",
-            "user_id": user.id,
-            "email_verification_required": not user.google_id
-        }
+    # google_login() and register() were removed along with their endpoints —
+    # see the note in app/api/v1/endpoints/auth.py. The admin account comes from
+    # the seed script, so nothing needs a public signup path.
 
     def refresh_token(self, refresh_token: str) -> TokenResponse:
         """Refresh access token using refresh token"""
@@ -182,63 +157,35 @@ class AuthService:
         return True
 
     def _create_token_pair(self, user) -> TokenResponse:
-        """Create access and refresh token pair"""
-        # Create access token (30 minutes)
+        """Create access and refresh token pair.
+
+        Lifetimes come from settings rather than being hardcoded here — they
+        used to say 30 minutes and 7 days while the config said something else
+        entirely, so the documented values were never the ones in effect.
+        """
+        access_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        refresh_minutes = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60
+
         access_token = self.user_service.create_token(
             user.id,
             TokenType.ACCESS,
-            expires_in_minutes=30
+            expires_in_minutes=access_minutes
         )
 
-        # Create refresh token (7 days)
         refresh_token = self.user_service.create_token(
             user.id,
             TokenType.REFRESH,
-            expires_in_minutes=10080  # 7 days
+            expires_in_minutes=refresh_minutes
         )
 
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            expires_in=30 * 60,  # 30 minutes in seconds
+            expires_in=access_minutes * 60,
             user_id=user.id,
             email=user.email
         )
-
-    def _verify_google_token(self, google_token: str) -> Dict[str, Any]:
-        """Verify Google ID token and return user info"""
-        try:
-            # In production, use Google's official library
-            # For now, we'll make a request to Google's userinfo endpoint
-            headers = {"Authorization": f"Bearer {google_token}"}
-            with httpx.Client() as client:
-                response = client.get(
-                    "https://www.googleapis.com/oauth2/v2/userinfo",
-                    headers=headers
-                )
-
-            if response.status_code != 200:
-                raise ValidationError("Failed to verify Google token")
-
-            user_info = response.json()
-
-            # Validate required fields
-            if not user_info.get("id") or not user_info.get("email"):
-                raise ValidationError("Invalid user info from Google")
-
-            return {
-                "id": user_info["id"],
-                "email": user_info["email"],
-                "name": user_info.get("name", ""),
-                "picture": user_info.get("picture"),
-                "verified_email": user_info.get("verified_email", False)
-            }
-
-        except ValidationError:
-            raise
-        except Exception as e:
-            raise ValidationError(f"Google token verification failed: {str(e)}")
 
     def _send_verification_email(self, user, token: str = None) -> None:
         """Send email verification"""

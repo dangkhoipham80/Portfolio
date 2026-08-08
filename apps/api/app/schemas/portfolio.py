@@ -1,6 +1,8 @@
-from pydantic import BaseModel, HttpUrl
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel
+
 
 # Project Schemas
 class ProjectBase(BaseModel):

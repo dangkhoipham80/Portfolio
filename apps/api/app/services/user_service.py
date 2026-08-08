@@ -1,15 +1,23 @@
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta, timezone
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
-from app.models.user import User, UserStatus
-from app.models.token import Token, TokenType
-from app.models.role import Role, Permission, UserRole, RolePermission
-from app.schemas.user import UserCreate, UserUpdate, UserPasswordUpdate, RoleCreate, PermissionCreate
-from app.core.security import get_password_hash, verify_password, create_access_token
-from app.core.constants import ErrorMessages
-from app.core.exceptions import NotFoundError, ConflictError, ValidationError
 import json
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session
+
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.security import create_access_token, get_password_hash, verify_password
+from app.models.role import Permission, Role, RolePermission, UserRole
+from app.models.token import Token, TokenType
+from app.models.user import User, UserStatus
+from app.schemas.user import (
+    PermissionCreate,
+    RoleCreate,
+    UserCreate,
+    UserPasswordUpdate,
+    UserUpdate,
+)
+
 
 class UserService:
     def __init__(self, db: Session):
@@ -89,7 +97,7 @@ class UserService:
             raise NotFoundError("User not found")
         
         # Update fields
-        for field, value in user_data.dict(exclude_unset=True).items():
+        for field, value in user_data.model_dump(exclude_unset=True).items():
             setattr(user, field, value)
         
         user.updated_at = datetime.now(timezone.utc)
@@ -179,7 +187,6 @@ class UserService:
     # Token management
     def create_token(self, user_id: int, token_type: TokenType, expires_in_minutes: int = 30, metadata: Dict[str, Any] = None) -> str:
         """Create a new token"""
-        from app.core.security import create_access_token
 
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=expires_in_minutes)
         token_data = {"sub": str(user_id), "type": token_type.value}
@@ -232,7 +239,7 @@ class UserService:
             and_(
                 Token.token_hash == token_hash,
                 Token.token_type == token_type,
-                Token.is_revoked == False,
+                Token.is_revoked.is_(False),
                 Token.expires_at > datetime.now(timezone.utc)
             )
         ).first()
@@ -246,7 +253,7 @@ class UserService:
         if existing_role:
             raise ConflictError("Role with this name already exists")
         
-        role = Role(**role_data.dict())
+        role = Role(**role_data.model_dump())
         self.db.add(role)
         self.db.commit()
         self.db.refresh(role)
@@ -318,7 +325,7 @@ class UserService:
         if existing_permission:
             raise ConflictError("Permission with this name already exists")
         
-        permission = Permission(**permission_data.dict())
+        permission = Permission(**permission_data.model_dump())
         self.db.add(permission)
         self.db.commit()
         self.db.refresh(permission)

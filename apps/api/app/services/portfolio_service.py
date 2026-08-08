@@ -1,7 +1,18 @@
 from typing import List, Optional
+
 from sqlalchemy.orm import Session
-from app.models.portfolio import Project, Skill, Certificate, Contact
-from app.schemas.portfolio import ProjectCreate, ProjectUpdate, SkillCreate, SkillUpdate, CertificateCreate, CertificateUpdate, ContactCreate
+
+from app.models.portfolio import Certificate, Contact, Project, Skill
+from app.schemas.portfolio import (
+    CertificateCreate,
+    CertificateUpdate,
+    ContactCreate,
+    ProjectCreate,
+    ProjectUpdate,
+    SkillCreate,
+    SkillUpdate,
+)
+
 
 class PortfolioService:
     def __init__(self, db: Session):
@@ -11,14 +22,14 @@ class PortfolioService:
     def get_projects(self, featured_only: bool = False) -> List[Project]:
         query = self.db.query(Project)
         if featured_only:
-            query = query.filter(Project.featured == True)
+            query = query.filter(Project.featured.is_(True))
         return query.order_by(Project.order).all()
 
     def get_project(self, project_id: int) -> Optional[Project]:
         return self.db.query(Project).filter(Project.id == project_id).first()
 
     def create_project(self, project: ProjectCreate) -> Project:
-        db_project = Project(**project.dict())
+        db_project = Project(**project.model_dump())
         self.db.add(db_project)
         self.db.commit()
         self.db.refresh(db_project)
@@ -29,7 +40,7 @@ class PortfolioService:
         if not db_project:
             return None
         
-        update_data = project.dict(exclude_unset=True)
+        update_data = project.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_project, field, value)
         
@@ -57,7 +68,7 @@ class PortfolioService:
         return self.db.query(Skill).filter(Skill.id == skill_id).first()
 
     def create_skill(self, skill: SkillCreate) -> Skill:
-        db_skill = Skill(**skill.dict())
+        db_skill = Skill(**skill.model_dump())
         self.db.add(db_skill)
         self.db.commit()
         self.db.refresh(db_skill)
@@ -68,7 +79,7 @@ class PortfolioService:
         if not db_skill:
             return None
         
-        update_data = skill.dict(exclude_unset=True)
+        update_data = skill.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_skill, field, value)
         
@@ -93,7 +104,7 @@ class PortfolioService:
         return self.db.query(Certificate).filter(Certificate.id == certificate_id).first()
 
     def create_certificate(self, certificate: CertificateCreate) -> Certificate:
-        db_certificate = Certificate(**certificate.dict())
+        db_certificate = Certificate(**certificate.model_dump())
         self.db.add(db_certificate)
         self.db.commit()
         self.db.refresh(db_certificate)
@@ -104,7 +115,7 @@ class PortfolioService:
         if not db_certificate:
             return None
         
-        update_data = certificate.dict(exclude_unset=True)
+        update_data = certificate.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_certificate, field, value)
         
@@ -125,14 +136,14 @@ class PortfolioService:
     def get_contacts(self, unread_only: bool = False) -> List[Contact]:
         query = self.db.query(Contact)
         if unread_only:
-            query = query.filter(Contact.read == False)
+            query = query.filter(Contact.read.is_(False))
         return query.order_by(Contact.created_at.desc()).all()
 
     def get_contact(self, contact_id: int) -> Optional[Contact]:
         return self.db.query(Contact).filter(Contact.id == contact_id).first()
 
     def create_contact(self, contact: ContactCreate) -> Contact:
-        db_contact = Contact(**contact.dict())
+        db_contact = Contact(**contact.model_dump())
         self.db.add(db_contact)
         self.db.commit()
         self.db.refresh(db_contact)

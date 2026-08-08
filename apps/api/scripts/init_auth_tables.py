@@ -2,18 +2,16 @@
 """
 Initialize authentication tables and default data
 """
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy.orm import Session
-from app.core.database import engine, get_db
-from app.models.user import User, UserStatus
-from app.models.token import Token, TokenType
-from app.models.role import Role, Permission, UserRole, RolePermission
+from app.core.database import get_db
+from app.models.user import UserStatus
+from app.schemas.user import PermissionCreate, RoleCreate, UserCreate
 from app.services.user_service import UserService
-from app.schemas.user import RoleCreate, PermissionCreate, UserCreate
-from app.core.security import get_password_hash, create_access_token
+
 
 def create_default_roles():
     """Create default roles"""

@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
 
+
 class CustomHTTPException(HTTPException):
     """Base custom HTTP exception"""
     def __init__(self, status_code: int, detail: str):

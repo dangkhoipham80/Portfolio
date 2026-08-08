@@ -1,10 +1,13 @@
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+
+from app.api.v1.dependencies import require_admin
 from app.core.constants import ErrorMessages, SuccessMessages
-from app.services.portfolio_service import PortfolioService
+from app.core.database import get_db
 from app.schemas.portfolio import Skill, SkillCreate, SkillUpdate
+from app.services.portfolio_service import PortfolioService
 
 router = APIRouter()
 
@@ -26,13 +29,13 @@ def get_skill(skill_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=ErrorMessages.SKILL_NOT_FOUND)
     return skill
 
-@router.post("/", response_model=Skill)
+@router.post("/", response_model=Skill, dependencies=[Depends(require_admin)])
 def create_skill(skill: SkillCreate, db: Session = Depends(get_db)):
     """Create a new skill"""
     service = PortfolioService(db)
     return service.create_skill(skill)
 
-@router.put("/{skill_id}", response_model=Skill)
+@router.put("/{skill_id}", response_model=Skill, dependencies=[Depends(require_admin)])
 def update_skill(
     skill_id: int,
     skill: SkillUpdate,
@@ -45,7 +48,7 @@ def update_skill(
         raise HTTPException(status_code=404, detail=ErrorMessages.SKILL_NOT_FOUND)
     return updated_skill
 
-@router.delete("/{skill_id}")
+@router.delete("/{skill_id}", dependencies=[Depends(require_admin)])
 def delete_skill(skill_id: int, db: Session = Depends(get_db)):
     """Delete a skill"""
     service = PortfolioService(db)
