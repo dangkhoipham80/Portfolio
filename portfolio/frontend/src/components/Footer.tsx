@@ -23,7 +23,7 @@ const Footer = () => {
           <div className="flex justify-center gap-6">
             <motion.a
               whileHover={{ scale: 1.1, y: -5 }}
-              href="https://github.com/dangkhoi2204"
+              href="https://github.com/dangkhoipham80"
               target="_blank"
               rel="noopener noreferrer"
               className="p-3 rounded-xl bg-primary/10 hover:bg-primary/20 transition-all duration-300"

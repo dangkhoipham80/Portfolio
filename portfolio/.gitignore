@@ -151,7 +151,9 @@ next-env.d.ts
 
 # Gatsby files
 .cache/
-public
+# NOTE: no bare `public` here. Gatsby *builds into* public/, but this repo is Vite,
+# where public/ holds committed source assets (favicon, CV). A bare `public` rule
+# silently kept every static asset out of git.
 
 # Storybook build outputs
 .out

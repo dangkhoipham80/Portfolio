@@ -8,9 +8,12 @@ const ThemeToggle = () => {
   return (
     <button
       onClick={toggleTheme}
+      aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
       className={cn(
-        "fixed max-sm:hidden top-5 right-5 z-50 p-2 rounded-full transition-colors duration-300",
-        "focus:outline-hidden"
+        "fixed z-50 p-2 rounded-full transition-colors duration-300",
+        // On mobile the hamburger sits in the top-right corner, so sit just left of it.
+        "top-5 right-5 max-sm:top-4 max-sm:right-20",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       )}
     >
       {isDarkMode ? (

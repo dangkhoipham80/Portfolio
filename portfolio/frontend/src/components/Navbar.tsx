@@ -14,16 +14,17 @@ const navItems = [
     path: "#",
     items: [
       { name: "Career Journey", path: "/career-journey" },
-      { name: "Achievements and Awards", path: "/achievements" },
-      { name: "Blog", path: "/blog" },
-      { name: "Testimonials", path: "/testimonials" },
-      { name: "Resume", path: "/resume" },
-      { name: "Contact", path: "/#contact" },
-      { name: "Activity", path: "/activity" },
       { name: "Certificates", path: "/certificates" },
+      { name: "Contact", path: "/#contact" },
     ],
   },
 ];
+
+// The mobile menu has no room for a dropdown, so the "More" group is flattened
+// into the same single-level list.
+const mobileNavItems = navItems.flatMap((item) =>
+  item.items ? item.items : [{ name: item.name, path: item.path }]
+);
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -32,6 +33,7 @@ const Navbar = () => {
   const [displayText, setDisplayText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const fullText = "Phạm Đăng Khôi";
   const location = useLocation();
 
@@ -57,6 +59,58 @@ const Navbar = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // While the mobile menu is open: trap Tab inside it, close on Escape, freeze the
+  // page behind it, and hand focus over (then hand it back to the trigger on close).
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const menu = menuRef.current;
+    const trigger = document.activeElement as HTMLElement | null;
+    const focusables = () =>
+      Array.from(
+        menu?.querySelectorAll<HTMLElement>("a[href], button:not([disabled])") ?? []
+      );
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const items = focusables();
+      if (items.length === 0) return;
+
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && (active === first || !menu?.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+    focusables()[0]?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      trigger?.focus?.();
+    };
+  }, [isMenuOpen]);
+
+  // Close the mobile menu whenever the route changes.
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     let timeout: NodeJS.Timeout;
@@ -87,9 +141,8 @@ const Navbar = () => {
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
-      // Add 'hidden' for mobile, and 'md:block' to show on medium and larger screens
       className={cn(
-        "fixed w-full z-40 transition-all duration-300 hidden md:block", // <-- Changed here
+        "fixed w-full z-40 transition-all duration-300",
         isScrolled
           ? "py-3 bg-background/80 backdrop-blur-lg border-b border-foreground/10 shadow-lg"
           : "py-5"
@@ -98,7 +151,7 @@ const Navbar = () => {
       <div className="container flex items-center justify-between">
         <motion.a
           whileHover={{ scale: 1.02 }}
-          className="text-xl font-bold flex items-center gap-2"
+          className="text-base sm:text-xl font-bold flex items-center gap-2"
           href="/"
         >
           <span className="relative">
@@ -110,11 +163,14 @@ const Navbar = () => {
                 className="inline-block w-[2px] h-[1em] bg-primary ml-[2px]"
               />
             </span>
-            <span className="text-foreground/80 ml-2">Portfolio</span>
+            {/* Dropped on phones so the brand cannot run under the floating theme toggle. */}
+            <span className="hidden sm:inline text-foreground/80 ml-2">
+              Portfolio
+            </span>
           </span>
         </motion.a>
 
-        {/* desktop navigation (already hidden on mobile by the parent 'nav' element) */}
+        {/* desktop navigation */}
         <div className="hidden md:flex items-center space-x-8">
           {navItems.map((item, key) =>
             item.items ? (
@@ -156,11 +212,7 @@ const Navbar = () => {
                         return (
                           <Link
                             key={subKey}
-                            to={
-                              location.pathname === "/"
-                                ? location.hash
-                                : subItem.path
-                            }
+                            to={subItem.path}
                             className="block px-4 py-2 text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors duration-200"
                             onClick={(e) => {
                               setIsDropdownOpen(false);
@@ -207,7 +259,7 @@ const Navbar = () => {
             ) : item.path.startsWith("/#") ? (
               <Link
                 key={key}
-                to={location.pathname === "/" ? location.hash : item.path}
+                to={item.path}
                 className="text-lg text-foreground hover:text-primary transition-colors duration-300"
                 onClick={(e) => {
                   if (location.pathname === "/") {
@@ -230,37 +282,59 @@ const Navbar = () => {
           )}
         </div>
 
-        {/* mobile menu button and overlay (these will now never be visible because the parent 'nav' is hidden on mobile) */}
-        {/* You can remove these if you want to keep your code clean, as they are effectively not used */}
+        {/* mobile menu button */}
         <button
           onClick={() => setIsMenuOpen((prev) => !prev)}
-          className="md:hidden p-2 text-foreground z-50 hidden" // Added 'hidden'
-          aria-label={isMenuOpen ? "Close Menu" : "Open Menu"}
+          className="md:hidden p-2 text-foreground z-50"
+          aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={isMenuOpen}
+          aria-controls="mobile-menu"
         >
-          {isMenuOpen ? <X size={24} /> : <Menu size={24} />}{" "}
+          {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
 
+        {/* mobile menu overlay */}
         <div
+          id="mobile-menu"
+          ref={menuRef}
+          hidden={!isMenuOpen}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Site navigation"
           className={cn(
-            "fixed inset-0 bg-background/95 backdrop-blur-md z-40 flex flex-col items-center justify-center hidden", // Added 'hidden'
-            "transition-all duration-300 md:hidden",
-            isMenuOpen
-              ? "opacity-100 pointer-events-auto"
-              : "opacity-0 pointer-events-none"
+            "fixed inset-0 bg-background/95 backdrop-blur-md z-40 md:hidden",
+            "flex flex-col items-center justify-center"
           )}
         >
-          <div className="flex flex-col space-y-8 text-xl">
-            {navItems.map((item, key) => (
-              <a
-                key={key}
-                href={item.path || "#"}
-                className="text-foreground/80 hover:text-primary transition-colors duration-300"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {item.name}
-              </a>
-            ))}
-          </div>
+          <nav className="flex flex-col items-center space-y-6 text-xl">
+            {mobileNavItems.map((item) =>
+              item.path.startsWith("/#") ? (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className="text-foreground/80 hover:text-primary transition-colors duration-300"
+                  onClick={(e) => {
+                    setIsMenuOpen(false);
+                    if (location.pathname === "/") {
+                      e.preventDefault();
+                      window.location.hash = item.path.replace("/#", "#");
+                    }
+                  }}
+                >
+                  {item.name}
+                </Link>
+              ) : (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className="text-foreground/80 hover:text-primary transition-colors duration-300"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {item.name}
+                </Link>
+              )
+            )}
+          </nav>
         </div>
       </div>
     </motion.nav>
