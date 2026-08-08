@@ -1,6 +1,12 @@
 import { Briefcase, Code, Sparkles, UserCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
+// The CV is deliberately NOT committed — it carries a personal phone number and a
+// public git history is forever. It is hosted externally and pointed at via env.
+// Locally it falls back to public/assets/, which is gitignored.
+const CV_URL =
+  import.meta.env.VITE_CV_URL || "/assets/CV_PhamDangKhoi_Internship.pdf";
+
 const AboutMeSection = () => {
   return (
     <section id="about" className="py-24 px-4 relative overflow-hidden">
@@ -106,7 +112,7 @@ const AboutMeSection = () => {
               </a>
 
               <a
-                href="/assets/CV_PhamDangKhoi_Internship.pdf"
+                href={CV_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-8 py-3 rounded-full border-2 border-primary text-primary hover:bg-primary/10 transition-all duration-300 relative overflow-hidden group transform hover:scale-105"

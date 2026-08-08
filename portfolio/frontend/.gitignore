@@ -58,3 +58,6 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+# CV / resume PDFs are hosted externally, never committed: they carry a personal
+# phone number and a public git history cannot be un-published. Set VITE_CV_URL.
+public/assets/*.pdf

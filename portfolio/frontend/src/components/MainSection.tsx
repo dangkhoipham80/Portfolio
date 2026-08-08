@@ -239,7 +239,7 @@ const MainSection = () => {
         className="container max-w-4xl mx-auto text-center z-10 mt-16"
       >
         <motion.div variants={itemVariants} className="space-y-8">
-          <motion.h1 className="text-4xl md:text-6xl font-bold tracking-tight font-mono flex items-center justify-center gap-4">
+          <motion.h1 className="text-2xl sm:text-4xl md:text-6xl font-bold tracking-tight font-mono flex flex-wrap items-center justify-center gap-x-3 gap-y-2 md:gap-4">
             <motion.div
               initial={{ scale: 0, rotate: -180 }}
               animate={{ scale: 1, rotate: 0 }}
@@ -266,7 +266,10 @@ const MainSection = () => {
             </motion.div>
             <span className="inline-block">Hi,</span>{" "}
             <span className="inline-block">I'm&nbsp;</span>
-            <span className="bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent min-w-[16ch] h-[1.2em] flex items-center relative whitespace-nowrap">
+            {/* min-w reserves room so the typewriter does not reflow the line on every
+                keystroke — but 16ch of mono type overflows a phone, so only reserve it
+                once there is room for it. */}
+            <span className="bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent sm:min-w-[16ch] h-[1.2em] flex items-center relative whitespace-nowrap">
               {displayed}
               <span className="inline-block animate-pulse">|</span>
               <span className="absolute -bottom-1 left-0 w-full h-[2px] bg-gradient-to-r from-primary/60 via-primary to-primary/60 rounded-full"></span>
