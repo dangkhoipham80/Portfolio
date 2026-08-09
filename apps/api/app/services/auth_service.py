@@ -107,7 +107,7 @@ class AuthService:
         user = self.user_service.get_user_by_id(user_id)
         if not user:
             raise ValidationError("User not found")
-
+        
         # Update password
         user.hashed_password = get_password_hash(request.new_password)
         user.updated_at = datetime.now(timezone.utc)
@@ -269,8 +269,3 @@ class AuthService:
         except Exception as e:
             # Log error but don't fail the request
             print(f"Failed to send email to {to_email}: {str(e)}")
-
-    def get_password_hash(self, password: str) -> str:
-        """Get password hash"""
-        from app.core.security import get_password_hash
-        return get_password_hash(password)

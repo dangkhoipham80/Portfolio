@@ -2,10 +2,6 @@ import logging
 import time
 
 from fastapi import Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -43,24 +39,8 @@ class ErrorHandlingMiddleware:
             logger.error(f"Unhandled error: {str(e)}")
             raise
 
-def setup_middleware(app):
-    """Setup all middleware for the application"""
-    
-    # CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    
-    # Trusted host middleware
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=["*"]  # Configure based on your needs
-    )
-    
-    # Custom middleware
-    app.middleware("http")(LoggingMiddleware())
-    app.middleware("http")(ErrorHandlingMiddleware()) 
+
+# setup_middleware() lived here and was never called — app/main.py wires CORS
+# itself. It has been removed rather than left lying around: it allowed
+# methods=["*"], headers=["*"] and TrustedHostMiddleware(allowed_hosts=["*"]),
+# so wiring it in "to add logging" would have quietly widened CORS.

@@ -1,4 +1,3 @@
-from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -59,21 +58,12 @@ def get_current_user_dependency(
     return user
 
 
-def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: Session = Depends(get_db)
-):
-    """Dependency to get optional authenticated user (for public endpoints)"""
-    if not credentials:
-        return None
-    
-    try:
-        user_id = get_current_user(credentials.credentials)
-        user_service = UserService(db)
-        user = user_service.get_user_by_id(int(user_id))
-        return user if user and user.is_active else None
-    except Exception:
-        return None
+# get_optional_user() was removed. It took `Depends(security)` from the shared
+# HTTPBearer(), which defaults to auto_error=True and so raises 403 before the
+# body runs — its `if not credentials: return None` branch was unreachable.
+# Nothing used it, and left in place it would have silently rejected anonymous
+# callers on the first public route it was attached to.
+
 
 def require_admin(current_user = Depends(get_current_user_dependency)):
     """Dependency to require admin role"""

@@ -181,4 +181,9 @@ def downgrade() -> None:
     op.drop_table('contacts')
     op.drop_index(op.f('ix_certificates_id'), table_name='certificates')
     op.drop_table('certificates')
-    # ### end Alembic commands ### 
+    # ### end Alembic commands ###
+
+    # Autogenerate does not clean up named PostgreSQL enum types, so a
+    # downgrade-then-upgrade would fail with "type userstatus already exists".
+    op.execute("DROP TYPE IF EXISTS userstatus")
+    op.execute("DROP TYPE IF EXISTS tokentype")
