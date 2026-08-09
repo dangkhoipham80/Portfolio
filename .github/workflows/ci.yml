@@ -86,7 +86,7 @@ jobs:
       - run: pytest
 
   web:
-    name: web — lint + type-check + build
+    name: web — lint + type-check + build + tests
     runs-on: ubuntu-latest
 
     defaults:
@@ -114,4 +114,53 @@ jobs:
       # backend that is not there — if it ever stops doing so, the site can be
       # taken down by a sleeping free-tier server, which is the exact thing the
       # fetch layer exists to prevent.
+      #
+      # This is also the command Vercel runs, so it stays here as its own step
+      # even though the e2e suite below builds again. What it does not do is
+      # look at the result: a build that succeeds has proved that nothing threw,
+      # not that the pages say anything to a visitor.
       - run: pnpm build
+
+      # Under a second, no browser. Pure functions only — the fallback logic in
+      # lib/api.ts against every way a request can fail, and the contact form's
+      # field rules, including whether they still match the API's schema.
+      - run: pnpm test
+
+      # Cache the browser binaries, not the OS packages.
+      #
+      # `playwright install` downloads ~130MB of Chromium, which is most of the
+      # cost of running these tests in CI and is pure waste on a run where no
+      # dependency moved. Keyed on the lockfile: too broad, since it re-downloads
+      # when any unrelated package changes, but it can never serve a Chromium
+      # that does not match the installed @playwright/test — and the failure
+      # mode of a too-narrow key is a confusing version mismatch rather than a
+      # slow run.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      # Chromium alone — see the note in playwright.config.ts about why the
+      # other two engines would triple this step for no extra signal.
+      #
+      # `--with-deps` still runs apt on a cache hit, which costs ~20s and cannot
+      # be cached. That is the price of the whole browser layer, and it buys the
+      # states nothing else here can reach: a 429 rendered as "about 45 minutes",
+      # a dropped connection reported as "not sent", and the form working with
+      # JavaScript switched off.
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: apps/web
+
+      # Builds again, deliberately, against a port it has checked is closed.
+      # Every page in this app is prerendered, so the fallback is chosen at build
+      # time — a suite that reused a build made while an API was reachable would
+      # be reading content, not fallbacks, and would pass no matter what.
+      - run: pnpm test:e2e
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
