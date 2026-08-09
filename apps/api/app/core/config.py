@@ -61,6 +61,17 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     EMAILS_FROM_EMAIL: str = ""
     EMAILS_FROM_NAME: str = "Portfolio Contact"
+    # smtplib blocks with no timeout by default. A background task that hangs on
+    # a dead SMTP host holds a thread from the pool until the process restarts.
+    SMTP_TIMEOUT: int = 10
+
+    # Notify the owner when the contact form is used. The kill switch is
+    # explicit, but the effective default is off: `emails_enabled` is False
+    # until real credentials are present, so CI and a fresh clone send nothing
+    # without having to set anything.
+    CONTACT_NOTIFY_ENABLED: bool = True
+    # Who to notify. Empty means "whoever the mail is sent as".
+    CONTACT_NOTIFY_TO: str = ""
 
     DEBUG: bool = True
     ENVIRONMENT: str = "development"
@@ -72,6 +83,26 @@ class Settings(BaseSettings):
     @property
     def emails_enabled(self) -> bool:
         return bool(self.SMTP_HOST and self.SMTP_USER and self.SMTP_PASSWORD)
+
+    @property
+    def emails_from_address(self) -> str:
+        """Envelope sender. Falls back to the account we authenticate as.
+
+        EMAILS_FROM_EMAIL is routinely left blank — it is the one SMTP setting
+        with no obvious value to paste in. Blank used to reach the From header
+        verbatim, producing `Portfolio Contact <>`, which Gmail rejects outright.
+        """
+        return self.EMAILS_FROM_EMAIL or self.SMTP_USER
+
+    @property
+    def contact_notify_recipient(self) -> str:
+        return self.CONTACT_NOTIFY_TO or self.emails_from_address
+
+    @property
+    def contact_notifications_enabled(self) -> bool:
+        return bool(
+            self.CONTACT_NOTIFY_ENABLED and self.emails_enabled and self.contact_notify_recipient
+        )
 
 
 settings = Settings()
