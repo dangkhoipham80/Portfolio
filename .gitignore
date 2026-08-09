@@ -28,6 +28,9 @@ venv/
 .env.*
 !.env.example
 
+# Browser-automation scratch output (screenshots, page snapshots)
+.playwright-mcp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
