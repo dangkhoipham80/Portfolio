@@ -135,7 +135,7 @@ PROJECTS = [
         ),
         "image_url": None,  # /assets/images/portfolio.png — see note above
         "github_url": "https://github.com/dangkhoipham80/portfolio",
-        "live_url": "https://portfolio-fthuepi8a-pham-dang-khois-projects.vercel.app/",
+        "live_url": "https://khoipham.vercel.app",
         "technologies": ["React", "TypeScript", "Tailwind CSS", "Vite", "Vercel"],
         "features": [
             "Interactive animated backgrounds",
