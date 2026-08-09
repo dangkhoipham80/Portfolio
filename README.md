@@ -83,6 +83,41 @@ are keyed on slug, so re-running updates in place rather than duplicating.
 1-5 integer. `Project.status` is `completed` / `in_progress` / `on_hold` /
 `dropped`. A career entry with a null `ended_on` is the current one.
 
+## Design
+
+Tokens live in `apps/web/app/globals.css` — colour, a three-step radius scale,
+and three type roles: Space Grotesk (display), IBM Plex Sans (body), IBM Plex
+Mono (eyebrows and meta rows). Mono is doing real work there: those lines are
+counts, dates and field names, which is the vocabulary of the subject.
+
+Primitives are in `apps/web/components/ui/`. Check what exists before writing a
+component; a class string that appears twice belongs in one of them.
+
+**Light mode deviates from the Vite app's palette in two places.** The
+background is a tinted green rather than white, and that tint ate the contrast
+margin: the legacy `--muted-foreground` measured 4.40:1 on it and `--primary`
+measured 3.86:1 as text, both under the 4.5:1 AA threshold. Both were darkened.
+Dark mode's `--primary-foreground` was also flipped from near-white to near-black,
+because the mid-lightness purple primary under white text measured 3.29:1 — a
+pairing only the filled buttons use, which is why it went unnoticed.
+
+### Why the hero is SVG and not three.js
+
+The signature element is an animated service topology built from the real stack
+in these projects — FastAPI, Postgres, Redis, Kafka. It is inline SVG rendered
+on the server, with one CSS keyframe animating the edge strokes.
+
+three.js was considered and rejected for this slot. It costs ~150KB gzipped
+before anything is drawn, forces a client component and a canvas into the
+highest-priority region of the page, and a rotating abstract shape would say
+nothing about backend engineering. The topology costs no JavaScript, cannot
+affect LCP, and stops dead under `prefers-reduced-motion` through the global
+rule rather than needing its own opt-out.
+
+If a WebGL layer is wanted later, the constraint to keep is placement: below the
+fold, dynamically imported, gated on `prefers-reduced-motion` and on a coarse
+pointer check so phones do not pay for it.
+
 ## Known issues being worked through
 
 - `portfolio/frontend` is still what production serves, and it does not call

@@ -1,25 +1,44 @@
 import type { ReactNode } from "react";
 
+import { Container } from "@/components/ui/container";
+import { Eyebrow } from "@/components/ui/eyebrow";
+
 export function Section({
   id,
+  eyebrow,
   title,
   description,
+  /**
+   * On the home page a Section is one of several, under the hero's h1, so h2
+   * is right. On /career-journey and /certificates the Section *is* the page —
+   * defaulting to h2 there left those pages with no h1 at all and a heading
+   * outline starting at level 2.
+   */
+  level = "h2",
   children,
 }: {
   id?: string;
+  /** The mono label above the heading — a count, a field name, a state. */
+  eyebrow?: string;
   title: string;
   description?: string;
+  level?: "h1" | "h2";
   children: ReactNode;
 }) {
+  const Heading = level;
+
   return (
-    <section id={id} className="mx-auto max-w-5xl px-5 py-14">
-      <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-        {title}
-      </h2>
-      {description ? (
-        <p className="mt-2 max-w-2xl text-muted-foreground">{description}</p>
-      ) : null}
-      <div className="mt-8">{children}</div>
+    <section id={id} className="border-t border-border/60 py-16 sm:py-20">
+      <Container>
+        {eyebrow ? <Eyebrow className="mb-3">{eyebrow}</Eyebrow> : null}
+        <Heading className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          {title}
+        </Heading>
+        {description ? (
+          <p className="mt-3 max-w-2xl text-muted-foreground">{description}</p>
+        ) : null}
+        <div className="mt-10">{children}</div>
+      </Container>
     </section>
   );
 }
@@ -27,14 +46,14 @@ export function Section({
 /**
  * Shown when a content list comes back empty.
  *
- * Empty means one of two things: the owner has published nothing yet, or the
- * API call failed and lib/api.ts returned its fallback. The visitor cannot act
- * on either, so both get the same neutral line rather than an error that looks
- * like the site is broken — the actual failure is on the server log.
+ * Empty means one of two things: nothing is published yet, or the API call
+ * failed and lib/api.ts returned its fallback. A visitor can act on neither, so
+ * both get the same neutral line rather than an error that makes a working site
+ * look broken. The real failure is on the server log.
  */
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+    <p className="rounded-[--radius-card] border border-dashed border-border px-4 py-10 text-center font-mono text-sm text-muted-foreground">
       {children}
     </p>
   );

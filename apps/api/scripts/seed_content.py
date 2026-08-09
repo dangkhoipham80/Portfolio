@@ -31,6 +31,12 @@ from app.models.portfolio import (
     SkillLevel,
 )
 
+# Every `image_url` below is None. The Vite components referenced paths under
+# /assets/images/, but no image file has ever been committed to this repository —
+# `git ls-files` finds zero of them and portfolio/frontend/public/assets is an
+# empty directory. Seeding those paths anyway meant the web app requested five
+# images that 404 on every page view. The original filenames are kept in the
+# comments so they can be restored when the files actually land.
 PROJECTS = [
     {
         "title": "Cenematic",
@@ -46,7 +52,7 @@ PROJECTS = [
             "bookings through a secure interface. Administrators can efficiently "
             "manage show schedules, ticket slots, and user accounts."
         ),
-        "image_url": "/assets/images/cenematic.png",
+        "image_url": None,  # /assets/images/cenematic.png — see note above
         "github_url": "https://github.com/dangkhoipham80/Cenematic",
         "live_url": None,
         "technologies": [
@@ -85,7 +91,7 @@ PROJECTS = [
             "Feng Shui wisdom with modern technology to help users create harmonious "
             "aquatic environments."
         ),
-        "image_url": "/assets/images/feng-shui-koi.png",
+        "image_url": None,  # /assets/images/feng-shui-koi.png — see note above
         "github_url": (
             "https://github.com/dangkhoipham80/"
             "FA24_SE1854_SWP391_G8_FengShuiKoiConsultingSystem.git"
@@ -127,7 +133,7 @@ PROJECTS = [
             "proficiency in frontend development using cutting-edge technologies "
             "and design principles."
         ),
-        "image_url": "/assets/images/portfolio.png",
+        "image_url": None,  # /assets/images/portfolio.png — see note above
         "github_url": "https://github.com/dangkhoipham80/portfolio",
         "live_url": "https://portfolio-fthuepi8a-pham-dang-khois-projects.vercel.app/",
         "technologies": ["React", "TypeScript", "Tailwind CSS", "Vite", "Vercel"],
@@ -165,7 +171,7 @@ PROJECTS = [
             "architecture and modern technologies to ensure high availability and "
             "performance."
         ),
-        "image_url": "/assets/images/edupath.png",
+        "image_url": None,  # /assets/images/edupath.png — see note above
         "github_url": "https://gitlab.com/fpt2843445/period_7/sba301/edupath",
         "live_url": None,
         "technologies": [
@@ -206,7 +212,7 @@ PROJECTS = [
             "FastAPI with WebSocket on AWS EC2 behind Nginx, backed by PostgreSQL "
             "hosted on Neon.tech."
         ),
-        "image_url": "/assets/images/foodforum.png",
+        "image_url": None,  # /assets/images/foodforum.png — see note above
         "github_url": "https://gitlab.com/fpt2843445/period_7/swd392/food-forum",
         "live_url": None,
         "technologies": [

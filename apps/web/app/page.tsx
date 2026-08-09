@@ -1,5 +1,8 @@
+import { HeroTopology } from "@/components/hero-topology";
 import { ProjectCard } from "@/components/project-card";
 import { EmptyState, Section } from "@/components/section";
+import { Container } from "@/components/ui/container";
+import { Eyebrow } from "@/components/ui/eyebrow";
 import { getProjects, getSkills } from "@/lib/api";
 import { LEVEL_WIDTH, levelLabel } from "@/lib/format";
 import type { Skill } from "@/lib/types";
@@ -26,26 +29,34 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="mx-auto max-w-5xl px-5 pt-20 pb-6">
-        <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-          Phạm Đăng Khôi
-        </h1>
-        <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
-          Software engineering student at FPT University, focused on backend
-          development — Python, FastAPI, Spring Boot — and moving toward data and
-          AI engineering.
-        </p>
+      <section className="py-16 sm:py-24">
+        <Container className="grid items-center gap-12 md:grid-cols-[1.1fr_1fr]">
+          <div>
+            <Eyebrow>Backend · Data · AI</Eyebrow>
+            <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+              Phạm Đăng Khôi
+            </h1>
+            <p className="mt-5 max-w-xl text-lg text-muted-foreground">
+              I build the parts you do not see: APIs, schemas, queues and the
+              services between them. Software engineering student at FPT
+              University, working in Python and Java, moving toward data and AI
+              engineering.
+            </p>
+          </div>
+
+          <HeroTopology className="justify-self-center md:justify-self-end" />
+        </Container>
       </section>
 
       <Section
         id="projects"
-        title="Projects"
-        description="Things I have built."
+        eyebrow={`Projects · ${projects.length}`}
+        title="Things I have built"
       >
         {projects.length === 0 ? (
           <EmptyState>No projects published yet.</EmptyState>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2">
             {projects.map((project) => (
               <ProjectCard key={project.id} project={project} />
             ))}
@@ -53,27 +64,25 @@ export default async function HomePage() {
         )}
       </Section>
 
-      <Section id="skills" title="Skills">
+      <Section id="skills" eyebrow={`Skills · ${skills.length}`} title="What I work with">
         {skills.length === 0 ? (
           <EmptyState>No skills published yet.</EmptyState>
         ) : (
-          <div className="grid gap-8 sm:grid-cols-2">
+          <div className="grid gap-x-12 gap-y-10 sm:grid-cols-2">
             {groupByCategory(skills).map(([category, entries]) => (
               <div key={category}>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  {category}
-                </h3>
-                <ul className="mt-3 space-y-3">
+                <Eyebrow>{category}</Eyebrow>
+                <ul className="mt-4 space-y-3.5">
                   {entries.map((skill) => (
                     <li key={skill.id}>
-                      <div className="flex items-baseline justify-between gap-2">
+                      <div className="flex items-baseline justify-between gap-3">
                         <span className="text-sm text-foreground">{skill.name}</span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                           {levelLabel(skill.level)}
                         </span>
                       </div>
                       <div
-                        className="mt-1 h-1.5 overflow-hidden rounded-full bg-accent"
+                        className="mt-1.5 h-1 overflow-hidden rounded-full bg-accent"
                         role="presentation"
                       >
                         <div
