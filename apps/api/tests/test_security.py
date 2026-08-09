@@ -17,6 +17,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.security import create_access_token
 from app.main import app
 
 client = TestClient(app)
@@ -84,6 +85,35 @@ def test_alg_none_token_is_rejected():
 def test_malformed_token_is_rejected():
     r = _call("post", "/api/v1/projects/", headers={"Authorization": "Bearer garbage.token.here"})
     assert r.status_code in (401, 403)
+
+
+def test_refresh_token_cannot_be_used_as_an_access_token():
+    """A refresh token lives for 30 days; an access token for 60 minutes.
+
+    Without a check on the `type` claim the long-lived one authenticated every
+    protected route, which made the short access-token lifetime meaningless.
+    """
+    refresh = create_access_token({"sub": "1", "type": "refresh"})
+    r = _call("post", "/api/v1/projects/", headers={"Authorization": f"Bearer {refresh}"})
+    assert r.status_code in (401, 403)
+
+
+def test_token_not_present_in_the_database_is_rejected():
+    """Logout revokes the row, so authentication has to consult it.
+
+    A correctly signed token that was never issued — or was issued and then
+    revoked — must not authenticate.
+    """
+    orphan = create_access_token({"sub": "1", "type": "access"})
+    r = _call("post", "/api/v1/projects/", headers={"Authorization": f"Bearer {orphan}"})
+    assert r.status_code in (401, 403)
+
+
+def test_non_numeric_subject_is_rejected_not_a_crash():
+    """`int(sub)` used to raise ValueError straight out of the dependency."""
+    weird = create_access_token({"sub": "not-a-number", "type": "access"})
+    r = _call("post", "/api/v1/projects/", headers={"Authorization": f"Bearer {weird}"})
+    assert r.status_code in (401, 403), r.status_code
 
 
 @pytest.mark.parametrize("path", ["/api/v1/auth/register", "/api/v1/auth/google"])

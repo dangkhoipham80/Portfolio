@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.exceptions import UnauthorizedError, ValidationError
-from app.core.security import verify_token
+from app.core.security import get_password_hash, verify_token
 from app.models.token import TokenType
 from app.models.user import UserStatus
 from app.schemas.user import PasswordResetConfirm, PasswordResetRequest, TokenResponse, UserLogin
@@ -38,13 +38,19 @@ class AuthService:
     # the seed script, so nothing needs a public signup path.
 
     def refresh_token(self, refresh_token: str) -> TokenResponse:
-        """Refresh access token using refresh token"""
-        # Verify refresh token
-        token_data = verify_token(refresh_token)
-        if not token_data or token_data.get("type") != TokenType.REFRESH.value:
+        """Exchange a refresh token for a new token pair."""
+        token_data = verify_token(refresh_token, expected_type=TokenType.REFRESH.value)
+        if not token_data:
             raise UnauthorizedError("Invalid refresh token")
 
-        user_id = int(token_data.get("sub"))
+        # The signature alone is not enough: logout() and reset_password() revoke
+        # the row, not the JWT. Checking only the signature here left the other
+        # half of the logout hole open — a stolen refresh token kept minting
+        # fresh access tokens for its full 30 days after the user logged out.
+        if not self.user_service.get_valid_token(refresh_token, TokenType.REFRESH):
+            raise UnauthorizedError("Invalid refresh token")
+
+        user_id = int(token_data["sub"])
         user = self.user_service.get_user_by_id(user_id)
         if not user or not user.is_active:
             raise UnauthorizedError("User not found or inactive")
@@ -92,14 +98,18 @@ class AuthService:
         token = self.user_service.get_valid_token(request.token, TokenType.RESET_PASSWORD)
         if not token:
             raise ValidationError("Invalid or expired reset token")
-        
-        user_id = int(verify_token(request.token).get("sub"))
+
+        payload = verify_token(request.token, expected_type=TokenType.RESET_PASSWORD.value)
+        if not payload:
+            raise ValidationError("Invalid or expired reset token")
+
+        user_id = int(payload["sub"])
         user = self.user_service.get_user_by_id(user_id)
         if not user:
             raise ValidationError("User not found")
         
         # Update password
-        user.hashed_password = self.user_service.get_password_hash(request.new_password)
+        user.hashed_password = get_password_hash(request.new_password)
         user.updated_at = datetime.now(timezone.utc)
         self.db.commit()
         
@@ -114,8 +124,12 @@ class AuthService:
         token_obj = self.user_service.get_valid_token(token, TokenType.EMAIL_VERIFICATION)
         if not token_obj:
             raise ValidationError("Invalid or expired verification token")
-        
-        user_id = int(verify_token(token).get("sub"))
+
+        payload = verify_token(token, expected_type=TokenType.EMAIL_VERIFICATION.value)
+        if not payload:
+            raise ValidationError("Invalid or expired verification token")
+
+        user_id = int(payload["sub"])
         user = self.user_service.get_user_by_id(user_id)
         if not user:
             raise ValidationError("User not found")
@@ -132,16 +146,15 @@ class AuthService:
         return True
 
     def resend_verification_email(self, email: str) -> bool:
-        """Resend email verification"""
+        """Resend email verification.
+
+        Returns quietly for unknown or already-verified addresses. It used to
+        raise "User not found", which let anyone enumerate registered emails —
+        request_password_reset() one method up already got this right.
+        """
         user = self.user_service.get_user_by_email(email)
-        if not user:
-            raise ValidationError("User not found")
-
-        if user.is_verified:
-            raise ValidationError("Email is already verified")
-
-        if user.google_id:
-            raise ValidationError("OAuth users don't need email verification")
+        if not user or user.is_verified:
+            return True
 
         # Create new verification token
         verification_token = self.user_service.create_token(
@@ -256,8 +269,3 @@ class AuthService:
         except Exception as e:
             # Log error but don't fail the request
             print(f"Failed to send email to {to_email}: {str(e)}")
-
-    def get_password_hash(self, password: str) -> str:
-        """Get password hash"""
-        from app.core.security import get_password_hash
-        return get_password_hash(password)
