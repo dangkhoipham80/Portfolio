@@ -1,0 +1,68 @@
+# Fly.io deployment for the content API.
+#
+# Nothing secret belongs in this file — it is committed. DATABASE_URL,
+# SECRET_KEY and the SMTP credentials are set with `fly secrets set`, which
+# stores them encrypted and injects them as environment variables at boot.
+# pydantic-settings reads them the same way it reads .env locally.
+
+app = "khoi-portfolio-api"
+
+# us-east, because that is where the callers are — and no visitor is one of
+# them. apps/web/lib/api.ts is `server-only`, so the browser never contacts
+# this API: every request comes from a Vercel build, an ISR revalidation or the
+# contact Server Action, all of which run in Vercel's us-east region. The Neon
+# database is in us-east-2 as well.
+#
+# This was first deployed to Singapore on the theory that being near the owner
+# mattered. It does not, and it cost. Measured from inside the machine,
+# /api/v1/projects/ answers in 51ms here (median of 6, max 140ms). From sin the
+# same endpoint took ~0.84s measured from a client in Vietnam, with one sample
+# at 3.08s — against the 5s budget in lib/api.ts, because every database round
+# trip was crossing the Pacific to reach Neon in us-east-2.
+primary_region = "iad"
+
+[build]
+
+[deploy]
+  # A separate, short-lived machine runs this before any new version takes
+  # traffic; if it exits non-zero the deploy is aborted and the old version
+  # keeps serving. That is the whole reason migrations are not in the Dockerfile
+  # CMD — see the header of Procfile.
+  release_command = "python -m alembic upgrade head"
+
+[env]
+  # Switches /docs and /redoc off, and makes app/core/rate_limit.py trust
+  # X-Forwarded-For — which is correct here and only here, because Fly's proxy
+  # is what sets it. Without this every visitor shares one rate-limit bucket
+  # and five contact submissions lock the form for everyone.
+  ENVIRONMENT = "production"
+  DEBUG = "False"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+  # Always on, deliberately. Fly can stop idle machines and start them on the
+  # next request, which would cut the bill to well under a dollar — but
+  # apps/web/lib/api.ts gives up on a read after 5s and the contact form's
+  # Server Action after 8s, and Fly does not document how long a cold start
+  # takes. Saving ~$1.50/month by betting the contact form on an undocumented
+  # number is the wrong trade for the one page a recruiter might actually use.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  # Hits the root route, which returns a static JSON body and touches no
+  # database. A health check that queried Postgres would fail whenever Neon
+  # scaled its compute to zero, and Fly would restart a perfectly healthy app.
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "GET"
+    path = "/"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

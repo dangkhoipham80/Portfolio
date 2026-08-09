@@ -12,6 +12,17 @@ from app.core.config import settings
 from app.core.database import engine
 from app.core.rate_limit import limiter
 
+# Uvicorn configures handlers for its own loggers and nothing else, so the
+# application's loggers had none, and Python fell back to logging.lastResort —
+# a stderr handler fixed at WARNING. Errors did still come out; every
+# logger.info() in this codebase was discarded. That is why "Database reachable"
+# below produced no output under `docker logs`, which matters more now that the
+# logs are the only view of this process there is.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
 logger = logging.getLogger(__name__)
 
 
