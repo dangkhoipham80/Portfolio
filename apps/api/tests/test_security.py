@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 
 from app.core.security import create_access_token
 from app.main import app
+from app.models.portfolio import Contact
 
 client = TestClient(app)
 
@@ -122,7 +123,27 @@ def test_public_signup_surface_is_gone(path):
     assert client.post(path, json={}).status_code == 404
 
 
-def test_contact_form_is_public_but_rate_limited():
+CONTACT_TEST_ADDRESS = "ratelimit{}@example.com"
+
+
+@pytest.fixture
+def clean_contact_rows(db):
+    """Remove the messages this test posts, afterwards.
+
+    The rate-limit case has to make real submissions, and a submission is a row
+    in whatever database ``DATABASE_URL`` names. Without this the rows simply
+    accumulate: one run leaves five behind, and the table had collected 138 of
+    them before anyone looked. That is noise in the admin's inbox, and it is the
+    kind of thing that makes a real message easy to miss.
+    """
+    yield
+
+    addresses = [CONTACT_TEST_ADDRESS.format(i) for i in range(7)]
+    db.query(Contact).filter(Contact.email.in_(addresses)).delete(synchronize_session=False)
+    db.commit()
+
+
+def test_contact_form_is_public_but_rate_limited(clean_contact_rows):
     responses = [
         client.post(
             "/api/v1/contacts/",
@@ -132,7 +153,7 @@ def test_contact_form_is_public_but_rate_limited():
                 # email-validator rejected it: .invalid is a reserved
                 # special-use TLD, so every request here 422'd before it ever
                 # reached the limiter and the test passed vacuously on 422s.
-                "email": f"ratelimit{i}@example.com",
+                "email": CONTACT_TEST_ADDRESS.format(i),
                 "subject": "Hi",
                 "message": "hello",
             },
