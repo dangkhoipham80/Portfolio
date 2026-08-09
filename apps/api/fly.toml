@@ -7,10 +7,19 @@
 
 app = "khoi-portfolio-api"
 
-# Singapore is the closest region to both the owner and the Neon database.
-# Latency to the database is on the critical path of every request; latency to
-# Vercel's build machines is not, since content is fetched at build time.
-primary_region = "sin"
+# us-east, because that is where the callers are — and no visitor is one of
+# them. apps/web/lib/api.ts is `server-only`, so the browser never contacts
+# this API: every request comes from a Vercel build, an ISR revalidation or the
+# contact Server Action, all of which run in Vercel's us-east region. The Neon
+# database is in us-east-2 as well.
+#
+# This was first deployed to Singapore on the theory that being near the owner
+# mattered. It does not, and it cost. Measured from inside the machine,
+# /api/v1/projects/ answers in 51ms here (median of 6, max 140ms). From sin the
+# same endpoint took ~0.84s measured from a client in Vietnam, with one sample
+# at 3.08s — against the 5s budget in lib/api.ts, because every database round
+# trip was crossing the Pacific to reach Neon in us-east-2.
+primary_region = "iad"
 
 [build]
 
