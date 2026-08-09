@@ -1,3 +1,4 @@
+import { ContactSection } from "@/components/contact-section";
 import { HeroTopology } from "@/components/hero-topology";
 import { ProjectCard } from "@/components/project-card";
 import { EmptyState, Section } from "@/components/section";
@@ -98,6 +99,8 @@ export default async function HomePage() {
           </div>
         )}
       </Section>
+
+      <ContactSection />
     </>
   );
 }

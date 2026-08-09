@@ -123,17 +123,31 @@ def test_public_signup_surface_is_gone(path):
 
 
 def test_contact_form_is_public_but_rate_limited():
-    codes = [
+    responses = [
         client.post(
             "/api/v1/contacts/",
             json={
                 "name": "Rate Test",
-                "email": f"ratelimit{i}@example.invalid",
+                # Was example.invalid. Once ContactCreate grew an EmailStr,
+                # email-validator rejected it: .invalid is a reserved
+                # special-use TLD, so every request here 422'd before it ever
+                # reached the limiter and the test passed vacuously on 422s.
+                "email": f"ratelimit{i}@example.com",
                 "subject": "Hi",
                 "message": "hello",
             },
-        ).status_code
+        )
         for i in range(7)
     ]
+    codes = [r.status_code for r in responses]
+
     assert codes[0] == 201, codes
     assert 429 in codes, codes
+
+    # The form tells the visitor when they may try again, which it can only do
+    # if the 429 carries Retry-After. slowapi omits those headers unless the
+    # Limiter is built with headers_enabled=True, so this is load-bearing rather
+    # than a restatement of the library's defaults.
+    limited = next(r for r in responses if r.status_code == 429)
+    assert "retry-after" in limited.headers, dict(limited.headers)
+    assert int(limited.headers["retry-after"]) > 0

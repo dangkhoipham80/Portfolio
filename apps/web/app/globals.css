@@ -23,6 +23,7 @@
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
+  --color-destructive-text: hsl(var(--destructive-text));
   --color-ring: hsl(var(--ring));
 
   /*
@@ -83,6 +84,16 @@
     --accent: 210 40% 96.1%;
     --accent-foreground: 222 47% 11%;
     --destructive: 0 84.2% 60.2%;
+    /*
+     * A second red, for error *text*.
+     *
+     * --destructive is tuned to be seen as a fill or a border, and at 60%
+     * lightness it measures 3.76:1 as text on a card — under the 4.5:1 body
+     * text needs. Its dark counterpart is worse: 1.88:1, effectively invisible.
+     * Field validation messages are the first real text this palette has had to
+     * set in red, which is why nothing caught it before. 7.46:1 here.
+     */
+    --destructive-text: 0 72% 38%;
     --ring: 120 60% 28%;
   }
 
@@ -104,6 +115,8 @@
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
+    /* Light rather than dark, for the same reason the light mode's is dark. 7.93:1. */
+    --destructive-text: 0 85% 75%;
     --ring: 250 65% 65%;
   }
 

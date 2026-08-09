@@ -10,7 +10,7 @@ the contact form, to anyone who asked.
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from app.api.v1.dependencies import require_admin
@@ -45,7 +45,18 @@ def get_contact(contact_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=Contact, status_code=201)
 @limiter.limit("5/hour")
-def create_contact(request: Request, contact: ContactCreate, db: Session = Depends(get_db)):
+def create_contact(
+    request: Request,
+    # Declared but unused by the body below, and load-bearing anyway: the
+    # limiter is built with headers_enabled=True, and when a decorated endpoint
+    # returns something that is not a Response — this one returns a model —
+    # slowapi reaches for a `response` keyword argument to write the
+    # X-RateLimit-* headers into. Without the parameter it raises on every
+    # successful submission, not just on the 429.
+    response: Response,
+    contact: ContactCreate,
+    db: Session = Depends(get_db),
+):
     """Submit a contact message. Public, rate limited per IP."""
     service = PortfolioService(db)
     return service.create_contact(contact)
