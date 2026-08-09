@@ -1,3 +1,8 @@
+# Not the active deploy path. Fly.io builds the Dockerfile beside this file and
+# takes its settings from fly.toml. Kept because this plus runtime.txt is all a
+# buildpack host (Railway, Render) needs, so switching back is a decision rather
+# than a rewrite.
+#
 # Migrations are deliberately NOT run here. Chaining `alembic upgrade head &&`
 # into the web process means a failed migration takes every instance down with
 # no way back, and concurrent instances race for the migration lock on rollouts.

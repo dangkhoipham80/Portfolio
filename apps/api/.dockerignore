@@ -1,0 +1,29 @@
+# The first entry is the only one that matters for safety: .env holds the Neon
+# URL, the JWT signing key and the SMTP app password. Docker COPY does not
+# consult .gitignore, so without this line `COPY . .` bakes all three into an
+# image layer — readable by anyone who can pull it, and still there after a
+# later layer deletes the file.
+.env
+.env.*
+!.env.example
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Tests and their fixtures are not needed to serve traffic, and the suite talks
+# to a real database — nothing that runs it should be in the image.
+tests/
+scripts/
+
+.git/
+.gitignore
+README.md
+Procfile
+runtime.txt
+fly.toml
+Dockerfile
+.dockerignore
