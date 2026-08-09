@@ -1,7 +1,5 @@
-import smtplib
+import logging
 from datetime import datetime, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 from sqlalchemy.orm import Session
 
@@ -11,7 +9,10 @@ from app.core.security import get_password_hash, verify_token
 from app.models.token import TokenType
 from app.models.user import UserStatus
 from app.schemas.user import PasswordResetConfirm, PasswordResetRequest, TokenResponse, UserLogin
+from app.services.email_service import send_email
 from app.services.user_service import UserService
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -249,23 +250,14 @@ class AuthService:
         self._send_email(user.email, subject, body)
 
     def _send_email(self, to_email: str, subject: str, body: str) -> None:
-        """Send email using SMTP"""
+        """Send mail, best-effort.
+
+        The transport moved to ``email_service.send_email``, which raises; these
+        flows keep swallowing, as they did before, so that a password-reset
+        request does not 500 on a mail outage. What changed is that the failure
+        now reaches the logger instead of stdout, where nothing was collecting it.
+        """
         try:
-            msg = MIMEMultipart()
-            msg['From'] = f"{settings.EMAILS_FROM_NAME} <{settings.EMAILS_FROM_EMAIL}>"
-            msg['To'] = to_email
-            msg['Subject'] = subject
-
-            msg.attach(MIMEText(body, 'plain'))
-
-            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
-            if settings.SMTP_TLS:
-                server.starttls()
-
-            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.send_message(msg)
-            server.quit()
-
-        except Exception as e:
-            # Log error but don't fail the request
-            print(f"Failed to send email to {to_email}: {str(e)}")
+            send_email(to_email, subject, body)
+        except Exception:
+            logger.exception("Failed to send email to %s", to_email)

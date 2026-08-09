@@ -10,7 +10,15 @@ the contact form, to anyone who asked.
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+)
 from sqlalchemy.orm import Session
 
 from app.api.v1.dependencies import require_admin
@@ -18,6 +26,7 @@ from app.core.constants import ErrorMessages, SuccessMessages
 from app.core.database import get_db
 from app.core.rate_limit import limiter
 from app.schemas.portfolio import Contact, ContactCreate
+from app.services.email_service import send_contact_notification
 from app.services.portfolio_service import PortfolioService
 
 router = APIRouter()
@@ -55,11 +64,33 @@ def create_contact(
     # successful submission, not just on the 429.
     response: Response,
     contact: ContactCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """Submit a contact message. Public, rate limited per IP."""
+    """Submit a contact message. Public, rate limited per IP.
+
+    The message is saved synchronously; the owner is notified after the response
+    has gone out. An SMTP round trip is unbounded in a way a database insert is
+    not — a mail host that stops answering costs SMTP_TIMEOUT seconds, and the
+    visitor should not spend them watching a spinner to find out their message
+    was in fact saved.
+
+    Checked against a socket that accepts and never replies: the 201 came back
+    in the same 1.8-3.0s as with notifications switched off, while the send sat
+    there for its full five-second timeout and then logged.
+    """
     service = PortfolioService(db)
-    return service.create_contact(contact)
+    created = service.create_contact(contact)
+
+    background_tasks.add_task(
+        send_contact_notification,
+        contact_id=created.id,
+        name=created.name,
+        email=created.email,
+        subject=created.subject,
+        message=created.message,
+    )
+    return created
 
 
 @router.put(
