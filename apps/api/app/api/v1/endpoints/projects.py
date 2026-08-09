@@ -1,10 +1,13 @@
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+
+from app.api.v1.dependencies import require_admin
 from app.core.constants import ErrorMessages, SuccessMessages
-from app.services.portfolio_service import PortfolioService
+from app.core.database import get_db
 from app.schemas.portfolio import Project, ProjectCreate, ProjectUpdate
+from app.services.portfolio_service import PortfolioService
 
 router = APIRouter()
 
@@ -26,13 +29,13 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=ErrorMessages.PROJECT_NOT_FOUND)
     return project
 
-@router.post("/", response_model=Project)
+@router.post("/", response_model=Project, dependencies=[Depends(require_admin)])
 def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
     """Create a new project"""
     service = PortfolioService(db)
     return service.create_project(project)
 
-@router.put("/{project_id}", response_model=Project)
+@router.put("/{project_id}", response_model=Project, dependencies=[Depends(require_admin)])
 def update_project(
     project_id: int,
     project: ProjectUpdate,
@@ -45,7 +48,7 @@ def update_project(
         raise HTTPException(status_code=404, detail=ErrorMessages.PROJECT_NOT_FOUND)
     return updated_project
 
-@router.delete("/{project_id}")
+@router.delete("/{project_id}", dependencies=[Depends(require_admin)])
 def delete_project(project_id: int, db: Session = Depends(get_db)):
     """Delete a project"""
     service = PortfolioService(db)

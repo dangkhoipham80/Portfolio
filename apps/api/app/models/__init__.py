@@ -1,9 +1,9 @@
 # Import all models
 from .base import Base
-from .user import User, UserStatus
+from .portfolio import Certificate, Contact, Project, Skill
+from .role import Permission, Role, RolePermission, UserRole
 from .token import Token, TokenType
-from .role import Role, Permission, UserRole, RolePermission
-from .portfolio import Contact, Project, Skill, Certificate
+from .user import User, UserStatus
 
 # Export all models
 __all__ = [

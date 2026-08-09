@@ -1,19 +1,28 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic[email]==2.5.0
-pydantic-settings==2.1.0
-sqlalchemy==2.0.23
-alembic==1.13.0
-# Sync driver — the app uses a synchronous SQLAlchemy engine/session throughout.
-# asyncpg was pinned here but nothing imports it and there is no async session.
-psycopg2-binary==2.9.9
-python-multipart==0.0.6
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-# passlib 1.7.4 reads bcrypt.__about__, which bcrypt removed in 4.1. With bcrypt
-# 5.x, CryptContext.hash() raises "password cannot be longer than 72 bytes" for
-# *any* password — registration and login break outright. Verified locally.
-# Pin until passlib is replaced (it has had no release since 2020).
-bcrypt==4.0.1
-python-dotenv==1.0.0
-httpx==0.25.2
+# Pinned exactly; regenerate deliberately, not by drift.
+# The previous pins were from Oct 2023 and carried several published CVEs — see
+# the notes below before loosening anything.
+
+fastapi==0.141.1          # < 0.115 floors starlette at 0.27.x: CVE-2026-48710
+                          # (Host-header auth bypass), CVE-2024-47874, CVE-2025-62727
+uvicorn[standard]==0.52.1
+
+pydantic[email]==2.13.4
+pydantic-settings==2.15.0
+
+sqlalchemy==2.0.51
+alembic==1.19.0
+psycopg2-binary==2.9.12   # sync driver; the engine and sessions are synchronous
+
+python-multipart==0.0.32  # < 0.0.18: CVE-2024-24762, CVE-2024-53981 (unauth DoS)
+
+# Auth. python-jose was replaced rather than bumped: it has had no release since
+# 2022 and CVE-2025-61152 (alg=none signature bypass) has no upstream fix.
+PyJWT==2.11.0
+# bcrypt directly rather than through passlib, which last shipped in 2020 and
+# breaks on bcrypt >= 4.1 (it reads the removed bcrypt.__about__).
+bcrypt==5.0.0
+
+slowapi==0.1.9            # rate limiting on the public contact endpoint
+
+python-dotenv==1.2.2
+# email-validator comes in via pydantic[email]; do not pin it separately.

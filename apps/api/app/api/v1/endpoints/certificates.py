@@ -1,10 +1,13 @@
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+
+from app.api.v1.dependencies import require_admin
 from app.core.constants import ErrorMessages, SuccessMessages
-from app.services.portfolio_service import PortfolioService
+from app.core.database import get_db
 from app.schemas.portfolio import Certificate, CertificateCreate, CertificateUpdate
+from app.services.portfolio_service import PortfolioService
 
 router = APIRouter()
 
@@ -23,13 +26,13 @@ def get_certificate(certificate_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=ErrorMessages.CERTIFICATE_NOT_FOUND)
     return certificate
 
-@router.post("/", response_model=Certificate)
+@router.post("/", response_model=Certificate, dependencies=[Depends(require_admin)])
 def create_certificate(certificate: CertificateCreate, db: Session = Depends(get_db)):
     """Create a new certificate"""
     service = PortfolioService(db)
     return service.create_certificate(certificate)
 
-@router.put("/{certificate_id}", response_model=Certificate)
+@router.put("/{certificate_id}", response_model=Certificate, dependencies=[Depends(require_admin)])
 def update_certificate(
     certificate_id: int,
     certificate: CertificateUpdate,
@@ -42,7 +45,7 @@ def update_certificate(
         raise HTTPException(status_code=404, detail=ErrorMessages.CERTIFICATE_NOT_FOUND)
     return updated_certificate
 
-@router.delete("/{certificate_id}")
+@router.delete("/{certificate_id}", dependencies=[Depends(require_admin)])
 def delete_certificate(certificate_id: int, db: Session = Depends(get_db)):
     """Delete a certificate"""
     service = PortfolioService(db)

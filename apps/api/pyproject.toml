@@ -1,0 +1,14 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [".venv", "alembic/versions"]
+
+[tool.ruff.lint]
+# Deliberately narrow for now: pyflakes (real bugs — undefined names, unused
+# imports), pycodestyle errors, and import sorting. The wider rule sets flag a
+# few hundred pre-existing style issues; widening is its own change, not
+# something to bundle into a security fix.
+select = ["E", "F", "I"]
+ignore = [
+    "E501",  # line length is handled by the formatter, not the linter
+]

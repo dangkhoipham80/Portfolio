@@ -1,33 +1,33 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Body, Depends
 from sqlalchemy.orm import Session
+
+from app.api.v1.dependencies import get_current_user_dependency
 from app.core.database import get_db
-from app.core.constants import ErrorMessages
 from app.schemas.user import (
-    UserCreate, UserLogin, GoogleLogin, TokenResponse, 
-    PasswordResetRequest, PasswordResetConfirm, EmailVerificationRequest
+    EmailVerificationRequest,
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    TokenResponse,
+    UserLogin,
 )
 from app.services.auth_service import AuthService
-from app.api.v1.dependencies import get_current_user_dependency
 
 router = APIRouter()
 
-@router.post("/register", response_model=dict)
-def register(user: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user"""
-    auth_service = AuthService(db)
-    return auth_service.register(user)
+# There is deliberately no POST /register and no POST /google here.
+#
+# This API backs a single-owner portfolio: the only account is the admin, and it
+# is created by the seed script. Public registration was pure attack surface —
+# anyone could create accounts and make the server send verification mail on
+# demand. Google OAuth verified ID tokens by calling Google's userinfo endpoint
+# from an unauthenticated route, which is more surface and more dependencies
+# than one admin login justifies.
 
 @router.post("/login", response_model=TokenResponse)
 def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     """Login with email and password"""
     auth_service = AuthService(db)
     return auth_service.login(user_credentials)
-
-@router.post("/google", response_model=TokenResponse)
-def google_login(google_data: GoogleLogin, db: Session = Depends(get_db)):
-    """Login with Google OAuth"""
-    auth_service = AuthService(db)
-    return auth_service.google_login(google_data)
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_token(refresh_token: str = Body(..., embed=True), db: Session = Depends(get_db)):

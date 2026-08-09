@@ -1,12 +1,14 @@
 from typing import Optional
+
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
-from app.core.database import get_db
-from app.core.security import get_current_user, verify_token
+
 from app.core.constants import ErrorMessages
-from app.services.user_service import UserService
+from app.core.database import get_db
+from app.core.security import get_current_user
 from app.models.token import TokenType
+from app.services.user_service import UserService
 
 # Security scheme
 security = HTTPBearer()
@@ -53,7 +55,7 @@ def get_optional_user(
         user_service = UserService(db)
         user = user_service.get_user_by_id(int(user_id))
         return user if user and user.is_active else None
-    except:
+    except Exception:
         return None
 
 def require_admin(current_user = Depends(get_current_user_dependency)):
