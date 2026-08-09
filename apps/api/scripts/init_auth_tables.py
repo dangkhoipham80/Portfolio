@@ -116,15 +116,16 @@ def assign_permissions_to_roles():
             except Exception as e:
                 print(f"⚠️  Failed to assign {permission_name} to {role_name}: {e}")
 
-def create_default_admin():
-    """Create default admin user"""
-    db = next(get_db())
-    user_service = UserService(db)
+def admin_credentials_from_env():
+    """Read and check the admin credentials, before anything else happens.
 
-    # Check if admin already exists
-    # Credentials come from the environment. This used to hardcode
-    # admin@example.com / admin123, so anyone who ran the script — or simply
-    # read the repository — knew how to log in as the administrator.
+    These used to be hardcoded as admin@example.com / admin123, so anyone who
+    ran the script — or simply read the repository — knew how to log in as the
+    administrator.
+
+    Validated up front, ahead of opening a database session, so a missing
+    variable fails immediately instead of after connecting.
+    """
     email = os.environ.get("ADMIN_EMAIL")
     password = os.environ.get("ADMIN_PASSWORD")
 
@@ -136,6 +137,16 @@ def create_default_admin():
 
     if len(password) < 12:
         raise SystemExit("ADMIN_PASSWORD must be at least 12 characters.")
+
+    return email, password
+
+
+def create_default_admin():
+    """Create default admin user"""
+    email, password = admin_credentials_from_env()
+
+    db = next(get_db())
+    user_service = UserService(db)
 
     admin_user = user_service.get_user_by_email(email)
     if admin_user:
@@ -190,10 +201,13 @@ def main():
         create_default_admin()
 
         print("\n✅ Authentication system initialized successfully!")
-        print("\n📝 Default admin credentials:")
-        print("   Email: admin@example.com")
-        print("   Password: admin123")
-        print("   ⚠️  Please change these credentials in production!")
+        # Deliberately does not echo the password back. This used to print
+        # "Email: admin@example.com / Password: admin123" unconditionally, which
+        # after the move to environment variables was simply untrue — it named
+        # credentials that would not log anyone in, while the real ones went
+        # unmentioned.
+        print(f"\n📝 Admin account: {os.environ['ADMIN_EMAIL']}")
+        print("   Password: the ADMIN_PASSWORD you supplied.")
 
     except Exception as e:
         print(f"\n❌ Initialization failed: {e}")

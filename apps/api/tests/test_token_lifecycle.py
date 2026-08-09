@@ -11,61 +11,17 @@ Needs whatever ``DATABASE_URL`` points at; each test cleans up the row it made.
 
 import pytest
 
-from app.core.database import SessionLocal
 from app.core.exceptions import UnauthorizedError
 from app.core.security import verify_token
 from app.models.token import Token, TokenType
-from app.models.user import User, UserStatus
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
 
 
 @pytest.fixture
-def db():
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
-
-
-TEST_EMAIL = "token-lifecycle@example.invalid"
-
-
-def _drop_test_user(db):
-    """Remove the row if it is there. Tokens cascade with it.
-
-    Called before as well as after: the email is unique, so a run that dies
-    mid-test (a dropped connection is enough) would otherwise poison every
-    later run with a UniqueViolation in the fixture.
-    """
-    existing = db.query(User).filter(User.email == TEST_EMAIL).first()
-    if existing:
-        db.delete(existing)
-        db.commit()
-
-
-@pytest.fixture
-def user(db):
+def user(make_user):
     """A throwaway active user. Tokens cascade-delete with the row."""
-    _drop_test_user(db)
-
-    record = User(
-        email=TEST_EMAIL,
-        username="token-lifecycle",
-        full_name="Token Lifecycle",
-        hashed_password="x",
-        is_active=True,
-        is_verified=True,
-        status=UserStatus.ACTIVE,
-    )
-    db.add(record)
-    db.commit()
-    db.refresh(record)
-
-    yield record
-
-    _drop_test_user(db)
+    return make_user("token-lifecycle@example.invalid")
 
 
 def test_a_live_refresh_token_mints_a_new_pair(db, user):
