@@ -115,8 +115,80 @@ def test_notification_is_sent_for_a_new_message(db, smtp_configured, smtp):
     # Replying answers the visitor. Without this the owner replies to themselves.
     assert sent["Reply-To"] == SENDER_ADDRESS
     assert PAYLOAD["subject"] in sent["Subject"]
-    assert PAYLOAD["message"] in sent.get_content()
-    assert PAYLOAD["name"] in sent.get_content()
+
+    text = sent.get_body(preferencelist=("plain",)).get_content()
+    assert PAYLOAD["message"] in text
+    assert PAYLOAD["name"] in text
+
+
+def test_mail_carries_both_a_text_and_an_html_part(smtp_configured, smtp):
+    """HTML is an alternative, not a replacement.
+
+    A client that will not render HTML — a terminal reader, or Gmail set to
+    plain text — must still get the message rather than an empty body. Asserting
+    the multipart type is not enough on its own: a message with only an HTML
+    part and no text one would still be a valid multipart/alternative.
+    """
+    _, server = smtp
+
+    assert client.post("/api/v1/contacts/", json=PAYLOAD).status_code == 201
+
+    sent = server.send_message.call_args.args[0]
+    assert sent.get_content_type() == "multipart/alternative"
+
+    text = sent.get_body(preferencelist=("plain",))
+    html = sent.get_body(preferencelist=("html",))
+    assert text is not None and html is not None
+    assert PAYLOAD["message"] in text.get_content()
+    assert PAYLOAD["subject"] in html.get_content()
+
+
+def test_html_escapes_what_the_visitor_typed(smtp_configured, smtp):
+    """All four fields come from a form anyone on the internet can post to.
+
+    Unescaped, a name of `<img src=x onerror=...>` is markup in a mail the owner
+    opens, and a stray `</td>` in a message body takes the layout apart by
+    accident. Mail clients strip most of it, which is exactly why this is easy
+    to leave broken and not notice.
+    """
+    _, server = smtp
+    hostile = {
+        **PAYLOAD,
+        "name": "<script>alert(1)</script>",
+        "subject": "Sales & <b>marketing</b>",
+        "message": "before</td></table>after",
+    }
+
+    assert client.post("/api/v1/contacts/", json=hostile).status_code == 201
+
+    html = server.send_message.call_args.args[0].get_body(preferencelist=("html",)).get_content()
+
+    assert "<script>" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert "Sales &amp; &lt;b&gt;marketing&lt;/b&gt;" in html
+    assert "</td></table>after" not in html
+    assert "&lt;/td&gt;&lt;/table&gt;after" in html
+
+
+def test_newlines_in_the_message_survive_as_line_breaks(smtp_configured, smtp):
+    """A paragraph typed as three lines should not arrive as one.
+
+    The escape has to happen first: escaping after inserting the `<br>` tags
+    would escape those too, and doing it in that order is the obvious mistake.
+    So a visitor who literally types `<br>` must see it as text.
+    """
+    _, server = smtp
+
+    assert (
+        client.post(
+            "/api/v1/contacts/", json={**PAYLOAD, "message": "one\ntwo\nliteral <br> here"}
+        ).status_code
+        == 201
+    )
+
+    html = server.send_message.call_args.args[0].get_body(preferencelist=("html",)).get_content()
+
+    assert "one<br>two<br>literal &lt;br&gt; here" in html
 
 
 def test_message_is_saved_when_smtp_fails(db, caplog, smtp_configured, smtp):
