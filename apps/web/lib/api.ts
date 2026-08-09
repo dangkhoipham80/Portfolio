@@ -25,7 +25,26 @@ const REVALIDATE_SECONDS = 300;
 /** A hung backend must not hang the page render along with it. */
 const TIMEOUT_MS = 5000;
 
-async function getJson<T>(path: string, fallback: T): Promise<T> {
+/**
+ * What the caller is prepared to receive.
+ *
+ * `response.json()` returns `any`, and the cast that follows it is a promise
+ * the API makes rather than something checked. When the API keeps that promise
+ * the cast is free; when something between here and it does not — a gateway
+ * answering 200 with `{"detail": ...}`, a tunnel serving its own JSON — the
+ * cast hands a list-shaped variable something that is not a list, and the page
+ * throws on `.map()`. That is a 500 caused by a *successful* request, which is
+ * the one failure mode the rest of this module is built to rule out.
+ */
+type ShapeCheck = (data: unknown) => boolean;
+
+const isList: ShapeCheck = (data) => Array.isArray(data);
+
+/** A detail route sends one object; an array or a bare string is not it. */
+const isRecord: ShapeCheck = (data) =>
+  typeof data === "object" && data !== null && !Array.isArray(data);
+
+async function getJson<T>(path: string, fallback: T, isExpectedShape: ShapeCheck): Promise<T> {
   const url = `${API_URL}/api/v1${path}`;
 
   try {
@@ -42,7 +61,14 @@ async function getJson<T>(path: string, fallback: T): Promise<T> {
       return fallback;
     }
 
-    return (await response.json()) as T;
+    const data = await response.json();
+
+    if (!isExpectedShape(data)) {
+      console.error(`[api] unexpected shape from ${url}:`, data);
+      return fallback;
+    }
+
+    return data as T;
   } catch (error) {
     // Covers DNS failure, connection refused, and the timeout above.
     console.error(`[api] request to ${url} failed:`, error);
@@ -51,21 +77,21 @@ async function getJson<T>(path: string, fallback: T): Promise<T> {
 }
 
 export async function getProjects(): Promise<Project[]> {
-  return getJson<Project[]>("/projects/", []);
+  return getJson<Project[]>("/projects/", [], isList);
 }
 
 export async function getProject(slug: string): Promise<Project | null> {
-  return getJson<Project | null>(`/projects/slug/${encodeURIComponent(slug)}`, null);
+  return getJson<Project | null>(`/projects/slug/${encodeURIComponent(slug)}`, null, isRecord);
 }
 
 export async function getSkills(): Promise<Skill[]> {
-  return getJson<Skill[]>("/skills/", []);
+  return getJson<Skill[]>("/skills/", [], isList);
 }
 
 export async function getCertificates(): Promise<Certificate[]> {
-  return getJson<Certificate[]>("/certificates/", []);
+  return getJson<Certificate[]>("/certificates/", [], isList);
 }
 
 export async function getCareerEntries(): Promise<CareerEntry[]> {
-  return getJson<CareerEntry[]>("/career/", []);
+  return getJson<CareerEntry[]>("/career/", [], isList);
 }
