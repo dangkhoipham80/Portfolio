@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "type-check": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "clsx": "^2.1.1",

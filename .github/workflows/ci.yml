@@ -1,0 +1,117 @@
+# What runs before anything reaches main.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first run's answer irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: api — ruff + pytest
+    runs-on: ubuntu-latest
+
+    # The suite inserts rows: it creates projects, users and contact messages
+    # against whatever DATABASE_URL names, and conftest.py says as much. Until
+    # now that was advice, and following it was on the person running the tests
+    # — which is how the contacts table ended up holding 138 rows of "Rate Test"
+    # in the database the site actually reads. A throwaway service container
+    # makes it structural: there is nothing else here to point at.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: portfolio_test
+          # No password at all, rather than a throwaway one. The container is
+          # reachable only from this job and is destroyed with it, so a password
+          # buys nothing — and a literal that looks like a credential in a
+          # committed file is worth avoiding on its own account. This repo has
+          # leaked a live database credential once already; secret scanners
+          # flagging CI fixtures is noise that trains people to ignore them.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        # Without this the first step can connect before Postgres is accepting
+        # connections, which fails as a confusing OperationalError in whichever
+        # step happens to run first.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres@localhost:5432/portfolio_test
+
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          # Matches runtime.txt and ruff's target-version, so a syntax feature
+          # that works locally on 3.13 but not in production fails here.
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: apps/api/requirements-dev.txt
+
+      - run: pip install -r requirements-dev.txt
+
+      - name: Generate a signing key for this run
+        # Minted here rather than written into the file. The app refuses to boot
+        # on a key shorter than 32 characters, so something has to satisfy that
+        # — and a 64-character hex literal sitting in a workflow is exactly what
+        # a secret scanner should complain about, whether or not it is real.
+        # This one exists for the life of the job and signs tokens for a
+        # database that is thrown away with it.
+        run: echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')" >> "$GITHUB_ENV"
+
+      - name: Apply migrations
+        # Alembic owns the schema; nothing creates tables implicitly. That makes
+        # this the step that proves the migrations actually run on an empty
+        # database, which a developer with an existing one never re-tests.
+        run: alembic upgrade head
+
+      - run: ruff check .
+
+      - run: pytest
+
+  web:
+    name: web — lint + type-check + build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm type-check
+
+      # No API is started for this job, and that is the test. Every read in
+      # lib/api.ts returns a fallback, so the build has to succeed against a
+      # backend that is not there — if it ever stops doing so, the site can be
+      # taken down by a sleeping free-tier server, which is the exact thing the
+      # fetch layer exists to prevent.
+      - run: pnpm build
