@@ -22,7 +22,8 @@ export function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label="Toggle dark mode"
-      className="rounded-full border border-border p-2 text-foreground transition-colors hover:bg-accent"
+      // Explicit box: padding alone measured 26x43, under the 44px target size.
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:bg-accent"
     >
       <span aria-hidden="true" className="dark:hidden">
         ☾

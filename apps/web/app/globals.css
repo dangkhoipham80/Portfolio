@@ -7,8 +7,8 @@
  * the `hsl(var(--x))` indirection below still works.
  *
  * The legacy stylesheet's decorative layer — meteors, drifting stars, the
- * fifteen keyframe animations — is deliberately not ported yet. It is a large
- * chunk of unrelated CSS and belongs in its own change.
+ * fifteen keyframe animations — is deliberately not ported. It is a large chunk
+ * of unrelated CSS and belongs in its own change.
  */
 
 @theme {
@@ -24,6 +24,30 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-ring: hsl(var(--ring));
+
+  /*
+   * One radius scale, derived from a single value. Cards, badges and buttons
+   * previously each picked their own `rounded-*`, which is the kind of drift
+   * that makes a set of components look like it came from three different
+   * sites.
+   */
+  --radius-card: 0.875rem;
+  --radius-control: 0.5rem;
+  --radius-pill: 9999px;
+
+  /*
+   * Three type roles, each doing one job.
+   *
+   * Display (Space Grotesk) has odd, slightly mechanical terminals — it reads
+   * as engineered rather than editorial, and it is not the Geist/Inter default
+   * every Next.js starter ships with. Body is IBM Plex Sans, drawn for
+   * technical documentation. Mono is used for eyebrows and meta rows, where it
+   * is doing real work: those lines are field names and timestamps, and setting
+   * them in mono says so.
+   */
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 }
 
 /*
@@ -34,19 +58,32 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  /*
+   * Light mode deviates from the Vite app's values in two places, both because
+   * the originals fail WCAG AA against this background.
+   *
+   * The background is a tinted green (120 60% 95%), not white, and that tint
+   * eats the contrast margin of any grey sitting on it. The legacy
+   * --muted-foreground measured 4.40:1 on it — under the 4.5:1 needed for body
+   * text — which covered the nav links, every eyebrow, and the hero paragraph.
+   * The legacy --primary measured 3.86:1 as text on the same background, and
+   * 3.99:1 for white-on-primary in the 404 button.
+   *
+   * Dark mode measured 7.4-7.8:1 and 5.2:1 and is left exactly as it was.
+   */
   :root {
     --background: 120 60% 95%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --primary: 120 60% 35%;
+    --primary: 120 60% 28%; /* was 35% — 3.86:1 as text on the page background */
     --primary-foreground: 210 40% 98%;
     --border: 120 20% 80%;
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted-foreground: 215.4 20% 43%; /* was 16.3% 46.9% — 4.40:1 */
     --accent: 210 40% 96.1%;
     --accent-foreground: 222 47% 11%;
     --destructive: 0 84.2% 60.2%;
-    --ring: 222 47% 11%;
+    --ring: 120 60% 28%;
   }
 
   .dark {
@@ -54,14 +91,20 @@
     --foreground: 213 31% 91%;
     --card: 222 47% 8%;
     --primary: 250 65% 65%;
-    --primary-foreground: 213 31% 91%;
+    /*
+     * Dark, not light. The dark primary is a mid-lightness purple, so the
+     * legacy near-white foreground on top of it measured 3.29:1 — light on
+     * light. Only the filled buttons (404, error boundary) use this pairing,
+     * which is why it survived unnoticed: nothing else puts the two together.
+     */
+    --primary-foreground: 222 47% 8%;
     --border: 217 33% 20%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
-    --ring: 217.2 32.6% 17.5%;
+    --ring: 250 65% 65%;
   }
 
   html {
@@ -73,5 +116,69 @@
     color: hsl(var(--foreground));
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /*
+   * Keyboard focus, applied once here rather than per component.
+   *
+   * There was no focus style at all: every link and button in the app was
+   * invisible to anyone navigating by keyboard, because Tailwind's preflight
+   * removes the browser default outline and nothing put one back. `:focus-visible`
+   * rather than `:focus` so a mouse click does not leave a ring behind.
+   */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Long titles in a narrow card should not blow out the layout. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    overflow-wrap: break-word;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /*
+   * The hero topology's "data on the wire".
+   *
+   * A dashed stroke whose offset animates reads as packets moving along an
+   * edge, and costs one CSS rule — no canvas, no WebGL, no client component,
+   * nothing competing with LCP. It also stops dead under reduced motion via
+   * the block below, which a SMIL <animateMotion> would not.
+   */
+  @keyframes wire-flow {
+    to {
+      stroke-dashoffset: -24;
+    }
+  }
+
+  .wire-flow {
+    stroke-dasharray: 3 9;
+    animation: wire-flow 1.6s linear infinite;
+  }
+
+  /*
+   * Respect a reduced-motion preference for everything, including the smooth
+   * scrolling above — vestibular triggers are not a per-component concern.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
