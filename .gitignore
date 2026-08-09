@@ -47,3 +47,11 @@ blob-report/
 *.njsproj
 *.sln
 *.sw?
+# Vercel CLI link metadata, and the .env.local it writes when linking. Both are
+# per-developer, not shared. `vercel link` appends its own entries here and its
+# suggestion is `.env*`, which is too broad for this repo: it matches the
+# .env.example files that are meant to be committed.
+.vercel
+.env
+.env.*
+!.env.example
