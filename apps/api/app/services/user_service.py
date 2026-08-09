@@ -1,4 +1,6 @@
+import hashlib
 import json
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -185,22 +187,43 @@ class UserService:
         return user
 
     # Token management
+    @staticmethod
+    def hash_token(token_string: str) -> str:
+        """Digest a token for storage.
+
+        The column is named token_hash but used to hold the raw JWT, with a
+        "# In production, hash this" note next to it. That meant read access to
+        the database handed over every live access, refresh and reset token in
+        directly usable form. A digest is enough: lookups are exact-match, so
+        there is nothing to compare fuzzily and no need to be reversible.
+        """
+        return hashlib.sha256(token_string.encode("utf-8")).hexdigest()
+
     def create_token(self, user_id: int, token_type: TokenType, expires_in_minutes: int = 30, metadata: Dict[str, Any] = None) -> str:
         """Create a new token"""
 
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=expires_in_minutes)
-        token_data = {"sub": str(user_id), "type": token_type.value}
+
+        # `jti` makes the JWT unique. Without it the payload is just sub/type/exp/iat,
+        # and exp/iat have one-second resolution — so two logins inside the same
+        # second produced byte-identical tokens and therefore two rows with the same
+        # hash. revoke_token() updates .first() of those, so logout would flip one row
+        # while get_valid_token() went on matching the other: the token stayed live.
+        token_data = {
+            "sub": str(user_id),
+            "type": token_type.value,
+            "jti": secrets.token_urlsafe(16),
+        }
 
         if metadata:
             token_data.update(metadata)
 
         token_string = create_access_token(token_data, timedelta(minutes=expires_in_minutes))
 
-        # Store token in database
         token = Token(
             user_id=user_id,
             token_type=token_type,
-            token_hash=token_string,  # In production, hash this
+            token_hash=self.hash_token(token_string),
             expires_at=expires_at,
             token_metadata=json.dumps(metadata) if metadata else None
         )
@@ -210,12 +233,14 @@ class UserService:
 
         return token_string
 
-    def revoke_token(self, token_hash: str) -> bool:
-        """Revoke a token"""
-        token = self.db.query(Token).filter(Token.token_hash == token_hash).first()
+    def revoke_token(self, token_string: str) -> bool:
+        """Revoke a token, given the token itself."""
+        token = self.db.query(Token).filter(
+            Token.token_hash == self.hash_token(token_string)
+        ).first()
         if not token:
             return False
-        
+
         token.is_revoked = True
         self.db.commit()
         return True
@@ -233,11 +258,11 @@ class UserService:
         self.db.commit()
         return True
 
-    def get_valid_token(self, token_hash: str, token_type: TokenType) -> Optional[Token]:
-        """Get a valid token"""
+    def get_valid_token(self, token_string: str, token_type: TokenType) -> Optional[Token]:
+        """Look up a token by its value; None if unknown, revoked or expired."""
         token = self.db.query(Token).filter(
             and_(
-                Token.token_hash == token_hash,
+                Token.token_hash == self.hash_token(token_string),
                 Token.token_type == token_type,
                 Token.is_revoked.is_(False),
                 Token.expires_at > datetime.now(timezone.utc)

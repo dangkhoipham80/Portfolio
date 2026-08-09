@@ -13,34 +13,51 @@ from app.services.user_service import UserService
 # Security scheme
 security = HTTPBearer()
 
+_UNAUTHORIZED = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail=ErrorMessages.UNAUTHORIZED,
+    headers={"WWW-Authenticate": "Bearer"},
+)
+
+
 def get_current_user_dependency(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    """Dependency to get current authenticated user"""
+    """Resolve the caller from a bearer access token."""
+    token = credentials.credentials
+
+    # Raises 401 on a bad signature, a wrong/missing type claim, or expiry.
+    user_id = get_current_user(token)
+
     try:
-        user_id = get_current_user(credentials.credentials)
-        user_service = UserService(db)
-        user = user_service.get_user_by_id(int(user_id))
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ErrorMessages.UNAUTHORIZED
-            )
-        
-        # Check if user is active
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User account is deactivated"
-            )
-        
-        return user
-    except HTTPException:
+        user_pk = int(user_id)
+    except (TypeError, ValueError):
+        # A forged token could carry a non-numeric `sub`; that is a rejected
+        # credential, not a 500.
+        raise _UNAUTHORIZED from None
+
+    user_service = UserService(db)
+
+    # Logout marks the row revoked. Checking only the JWT meant a stolen token
+    # kept working for its full lifetime after the user logged out, which made
+    # logout purely cosmetic.
+    if not user_service.get_valid_token(token, TokenType.ACCESS):
+        raise _UNAUTHORIZED
+
+    user = user_service.get_user_by_id(user_pk)
+    if not user:
+        raise _UNAUTHORIZED
+
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ErrorMessages.UNAUTHORIZED
+            detail="User account is deactivated",
+            headers={"WWW-Authenticate": "Bearer"},
         )
+
+    return user
+
 
 def get_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),

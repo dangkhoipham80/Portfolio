@@ -43,6 +43,13 @@ class AuthService:
         if not token_data:
             raise UnauthorizedError("Invalid refresh token")
 
+        # The signature alone is not enough: logout() and reset_password() revoke
+        # the row, not the JWT. Checking only the signature here left the other
+        # half of the logout hole open — a stolen refresh token kept minting
+        # fresh access tokens for its full 30 days after the user logged out.
+        if not self.user_service.get_valid_token(refresh_token, TokenType.REFRESH):
+            raise UnauthorizedError("Invalid refresh token")
+
         user_id = int(token_data["sub"])
         user = self.user_service.get_user_by_id(user_id)
         if not user or not user.is_active:
