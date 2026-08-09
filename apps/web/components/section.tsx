@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { cn } from "@/lib/cn";
 
 export function Section({
   id,
@@ -21,6 +22,13 @@ export function Section({
    * and stretching one to 5xl leaves a very long line and a lot of dead space.
    */
   width = "wide",
+  /**
+   * A one-step background tint. The page's sections were separated by nothing
+   * but a 1px rule, so four of them read as one undifferentiated column.
+   * Alternating a section onto `bg-muted` is the same convention as striping
+   * rows in a query result: it marks a layer boundary without decorating it.
+   */
+  tinted = false,
   children,
 }: {
   id?: string;
@@ -29,13 +37,20 @@ export function Section({
   title: string;
   description?: string;
   level?: "h1" | "h2";
-  width?: "wide" | "reading";
+  width?: "wide" | "layout" | "reading";
+  tinted?: boolean;
   children: ReactNode;
 }) {
   const Heading = level;
 
   return (
-    <section id={id} className="border-t border-border/60 py-16 sm:py-20">
+    <section
+      id={id}
+      className={cn(
+        "border-t border-border/60 py-16 sm:py-20 lg:py-24",
+        tinted && "bg-muted",
+      )}
+    >
       <Container width={width}>
         {eyebrow ? <Eyebrow className="mb-3">{eyebrow}</Eyebrow> : null}
         <Heading className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">

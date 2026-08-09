@@ -19,13 +19,16 @@ export default async function CertificatesPage() {
   return (
     <Section
       level="h1"
+      width="layout"
       eyebrow={`Certificates · ${certificates.length}`}
       title="Courses and certifications"
     >
       {certificates.length === 0 ? (
         <EmptyState>No certificates published yet.</EmptyState>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2">
+        // A dangling odd card spans the row — a half-filled last row reads as
+        // missing data. Three columns at lg, same as the project grid.
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 sm:max-lg:[&>*:nth-child(odd):last-child]:col-span-2">
           {certificates.map((certificate) => (
             <Card key={certificate.id} className="gap-3">
               <div className="flex items-start justify-between gap-3">

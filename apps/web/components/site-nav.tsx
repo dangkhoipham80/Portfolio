@@ -3,16 +3,19 @@ import Link from "next/link";
 import { ThemeToggle } from "./theme-toggle";
 import { Container } from "./ui/container";
 
+// `short` is the collapsed mobile label. Two letters, not one: "Career" and
+// "Certificates" share an initial, and a row reading P · C · C gives a sighted
+// thumb no way to tell the two apart.
 const LINKS = [
-  { href: "/#projects", label: "Projects" },
-  { href: "/career-journey", label: "Career" },
-  { href: "/certificates", label: "Certificates" },
+  { href: "/#projects", label: "Projects", short: "Pr" },
+  { href: "/career-journey", label: "Career", short: "Ca" },
+  { href: "/certificates", label: "Certificates", short: "Ce" },
 ];
 
 export function SiteNav() {
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
-      <Container className="flex items-center justify-between gap-4 py-4">
+      <Container width="layout" className="flex items-center justify-between gap-4 py-3">
         <Link
           href="/"
           className="font-display font-semibold tracking-tight text-foreground"
@@ -32,15 +35,16 @@ export function SiteNav() {
             <Link
               key={link.href}
               href={link.href}
-              // Padding, not just text: a 12px label is not a tap target.
-              className="rounded-[--radius-control] px-2.5 py-2.5 font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-primary sm:px-3"
+              // min 44×44: padding around a 12px initial only reached 28×36,
+              // which is a routine thumb-miss on a phone.
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[--radius-control] px-2.5 font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-primary sm:px-3"
             >
               {/*
                 aria-hidden on the initial: without it the accessible name is
                 computed from both spans and reads "P Projects".
               */}
               <span aria-hidden="true" className="sm:hidden">
-                {link.label.charAt(0)}
+                {link.short}
               </span>
               <span className="sr-only sm:not-sr-only">{link.label}</span>
             </Link>

@@ -72,10 +72,24 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body className="flex min-h-full flex-col font-sans">
+        {/*
+          First tab stop on every page. Without it a keyboard user walks all
+          five nav stops before any content — on the home page the form's
+          submit button was tab stop 23.
+        */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-[--radius-control] focus:border focus:border-border focus:bg-card focus:px-4 focus:py-3 focus:font-mono focus:text-xs focus:uppercase focus:tracking-[0.18em] focus:text-foreground"
+        >
+          Skip to content
+        </a>
         <SiteNav />
-        <main className="flex-1">{children}</main>
+        <main id="main" className="flex-1">{children}</main>
         <footer className="border-t border-border py-8">
-          <Container className="flex flex-col gap-1 text-center font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground sm:flex-row sm:justify-between sm:text-left">
+          <Container
+            width="layout"
+            className="flex flex-col gap-1 text-center font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground sm:flex-row sm:justify-between sm:text-left"
+          >
             <span>© {new Date().getFullYear()} Phạm Đăng Khôi</span>
             <span>Ho Chi Minh City, Vietnam</span>
           </Container>
