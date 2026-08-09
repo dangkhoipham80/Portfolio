@@ -31,7 +31,7 @@ export function ContactSection() {
       // where the text is under this component's control.
       eyebrow="Contact"
       title="Send me a message"
-      description="Open to internships and graduate roles in backend, data and AI engineering. Anything that lands here reaches my inbox."
+      description="Open to mid-level roles and above in backend, data and AI engineering. Anything that lands here reaches my inbox."
     >
       {/*
         A description list, because that is what this is: a stable key and its

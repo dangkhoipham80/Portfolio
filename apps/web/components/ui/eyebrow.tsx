@@ -20,11 +20,18 @@ export const eyebrowClasses =
   "font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground";
 
 export function Eyebrow({
+  as: Tag = "p",
   className,
   children,
 }: {
+  /**
+   * `h2` where the label is a real section heading — the project detail
+   * page's Stack/Features/Challenges labels are the only structure below its
+   * h1, and as <p> they were invisible to heading navigation.
+   */
+  as?: "p" | "h2";
   className?: string;
   children: ReactNode;
 }) {
-  return <p className={cn(eyebrowClasses, className)}>{children}</p>;
+  return <Tag className={cn(eyebrowClasses, className)}>{children}</Tag>;
 }

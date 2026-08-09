@@ -39,7 +39,7 @@ function DetailList({ title, items }: { title: string; items: string[] }) {
 
   return (
     <div>
-      <Eyebrow>{title}</Eyebrow>
+      <Eyebrow as="h2">{title}</Eyebrow>
       <ul className="mt-4 space-y-2.5">
         {items.map((item) => (
           <li key={item} className="flex gap-2.5 text-sm text-foreground">
@@ -103,7 +103,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
 
         {project.technologies.length > 0 ? (
           <>
-            <Eyebrow className="mt-10">Stack</Eyebrow>
+            <Eyebrow as="h2" className="mt-10">Stack</Eyebrow>
             <ul className="mt-4 flex flex-wrap gap-1.5">
               {project.technologies.map((tech) => (
                 <li key={tech}>

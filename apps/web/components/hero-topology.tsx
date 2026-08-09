@@ -45,7 +45,10 @@ export function HeroTopology({ className }: { className?: string }) {
     <svg
       viewBox="0 0 400 240"
       aria-hidden="true"
-      className={cn("h-auto w-full max-w-md", className)}
+      // Capped only while the hero is a single column. Once the two-column
+      // grid is active the diagram fills its column — at that scale it reads
+      // as the architecture it depicts, not as an icon beside the text.
+      className={cn("h-auto w-full max-w-lg lg:max-w-none", className)}
     >
       {/* Static rails, so the graph still reads as connected when motion is off. */}
       {EDGES.map((edge) => (

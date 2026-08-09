@@ -14,7 +14,14 @@ export default async function CareerJourneyPage() {
   const entries = await getCareerEntries();
 
   return (
-    <Section level="h1" eyebrow="Career" title="Where I have worked and studied">
+    <Section
+      level="h1"
+      // layout so the page shares the nav's outer edge; the max-w on the list
+      // keeps the highlight lines at a reading measure inside it.
+      width="layout"
+      eyebrow="Career"
+      title="Where I have worked and studied"
+    >
       {entries.length === 0 ? (
         <EmptyState>No career entries published yet.</EmptyState>
       ) : (
@@ -23,7 +30,7 @@ export default async function CareerJourneyPage() {
          * history is genuinely a sequence — the order carries meaning a reader
          * needs. Projects are not, which is why they are an unordered grid.
          */
-        <ol className="relative space-y-12 border-l border-border pl-7">
+        <ol className="relative max-w-3xl space-y-12 border-l border-border pl-7">
           {entries.map((entry) => (
             <li key={entry.id} className="relative">
               <span

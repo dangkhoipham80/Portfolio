@@ -19,7 +19,9 @@ import { cn } from "@/lib/cn";
  */
 
 const controlClasses = cn(
-  "w-full rounded-[--radius-control] border border-border bg-card px-3.5 py-2.5 text-sm text-foreground",
+  // min-h-11: py-2.5 around 14px text measures 41px — 3px under the 44px
+  // touch-target floor the buttons already meet.
+  "min-h-11 w-full rounded-[--radius-control] border border-border bg-card px-3.5 py-2.5 text-sm text-foreground",
   "transition-colors placeholder:text-muted-foreground/60 hover:border-primary/40",
   "aria-[invalid=true]:border-destructive",
   // No `focus:outline-none` here. It was written to "avoid fighting" the

@@ -5,11 +5,26 @@ import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { ExternalLink } from "@/components/ui/external-link";
 import { ProjectMedia } from "@/components/ui/project-media";
+import { cn } from "@/lib/cn";
 import { formatPeriod } from "@/lib/format";
-import type { Project } from "@/lib/types";
+import type { Project, ProjectStatus } from "@/lib/types";
 
 /** Beyond this the tag row wraps to three lines and swamps the card. */
 const VISIBLE_TAGS = 5;
+
+/*
+ * The card's top edge in the status colour — the same signal the StatusBadge
+ * carries, in a second position, the way a CI pipeline paints a build row.
+ * With no project images this is what makes a text-only card read as designed
+ * rather than as a card whose image failed to load. Spelled out per status
+ * because Tailwind scans source for complete class names.
+ */
+const STATUS_BORDER: Record<ProjectStatus, string> = {
+  completed: "border-t-green-700 dark:border-t-green-400",
+  in_progress: "border-t-blue-700 dark:border-t-blue-400",
+  on_hold: "border-t-yellow-700 dark:border-t-yellow-400",
+  dropped: "border-t-red-700 dark:border-t-red-400",
+};
 
 export function ProjectCard({ project }: { project: Project }) {
   const period = formatPeriod(project.started_on, project.ended_on);
@@ -17,7 +32,7 @@ export function ProjectCard({ project }: { project: Project }) {
   const overflow = project.technologies.length - shown.length;
 
   return (
-    <Card interactive className="gap-4">
+    <Card interactive className={cn("gap-4 border-t-2", STATUS_BORDER[project.status])}>
       <ProjectMedia
         slug={project.slug}
         title={project.title}
