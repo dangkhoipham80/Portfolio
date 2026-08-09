@@ -38,9 +38,45 @@ uvicorn app.main:app --reload --port 8000
 If port 8000 is taken, run the API elsewhere and set `API_URL` to match — the
 web app has no other way to find it.
 
-Root scripts: `pnpm dev` / `build` / `lint` / `type-check` for the web app, and
-`pnpm api:dev` / `api:lint` / `api:test` for the API — the API ones invoke
-`python -m ...`, so **activate the virtualenv first** or they will not resolve.
+Root scripts: `pnpm dev` / `build` / `lint` / `type-check` / `test` / `test:e2e`
+for the web app, and `pnpm api:dev` / `api:lint` / `api:test` for the API — the
+API ones invoke `python -m ...`, so **activate the virtualenv first** or they
+will not resolve.
+
+## Tests
+
+87 on the API, 72 on the web app, split across three runners that each answer a
+question the others cannot.
+
+```bash
+pnpm test          # vitest — 46 unit tests, under a second, no browser
+pnpm test:e2e      # playwright — 26 tests in Chromium against a production build
+pnpm api:test      # pytest — 87 tests, needs the virtualenv and a scratch database
+```
+
+**Vitest covers the modules that are plain functions**: every way a request in
+`lib/api.ts` can fail, and the contact form's field rules in `lib/contact.ts`.
+One of those tests reads `apps/api/app/schemas/portfolio.py` and compares the
+field limits directly, because the comment saying they mirror the API is not
+something a comment can enforce.
+
+**Playwright covers what only exists once a page is rendered**: the empty
+states, and the contact form's 429 and outage notices. It builds the app against
+a port it has checked is closed, then serves that build with `API_URL` pointing
+at a stub. That split is the whole design — every page here is prerendered, so
+the fallback is chosen at *build* time, while the Server Action behind the
+contact form runs per request and reaches the stub. One build, both states, and
+no real API is ever contacted.
+
+**There are no component tests, and that is a decision.** The jsdom layer
+between these two would need a faked DOM, a faked `useActionState` and a stubbed
+Server Action to ask a question Playwright already answers against the real
+thing.
+
+The e2e servers default to ports 3142 and 8142, and fail immediately rather than
+reuse anything already listening — a port quietly answered by another project is
+how a suite ends up testing software that is not this one. Override with
+`E2E_WEB_PORT` and `E2E_STUB_PORT`.
 
 ## Database
 
@@ -126,15 +162,17 @@ pointer check so phones do not pay for it.
   with the service keys inline. `VITE_API_URL` is declared in `env.example` and
   read by nothing. `apps/web` is the replacement, but Vercel's root directory
   has not been switched over yet.
-- `apps/web` has no contact form. The API's `POST /contacts/` endpoint is rate
-  limited and ready; nothing posts to it.
 - The legacy decorative layer — meteors, drifting stars, the fifteen keyframe
   animations in `portfolio/frontend/src/index.css` — is not ported. Only the
   colour tokens are.
-- `apps/web` has no tests. The API has 69; the web app has none.
-- There is no CI. `ruff check .` and `pytest` are run by hand.
-- Tests and the seed script both write to whatever `DATABASE_URL` names; there
-  is no separate test database.
+- Project images are unused: `image_url` is null on every row, so
+  `ProjectMedia` renders its generated placeholder everywhere.
+- The contact form stores a message and nothing else happens. There is no email
+  notification, so a message is only seen by someone opening the admin endpoint.
+- Locally, the API tests and the seed script still write to whatever
+  `DATABASE_URL` names. CI runs them against a throwaway Postgres service
+  container; on a development machine, pointing `DATABASE_URL` at a scratch
+  database is still a matter of remembering to.
 
 ## Environment
 

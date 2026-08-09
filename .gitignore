@@ -31,6 +31,12 @@ venv/
 # Browser-automation scratch output (screenshots, page snapshots)
 .playwright-mcp/
 
+# Playwright's own output: traces and screenshots kept from a failing run, and
+# the HTML report built from them. Useful locally, meaningless in a diff.
+test-results/
+playwright-report/
+blob-report/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
