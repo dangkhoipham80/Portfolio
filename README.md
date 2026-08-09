@@ -53,7 +53,14 @@ The site is at **https://khoipham.vercel.app**. The API is at
 | | where | how it gets there |
 |---|---|---|
 | `apps/web` | Vercel, root directory `apps/web` | pushing to `main` |
-| `apps/api` | Fly.io, `khoi-portfolio-api`, one 256MB machine in `iad` | `fly deploy` from `apps/api` |
+| `apps/api` | Fly.io, `khoi-portfolio-api`, one 256MB machine in `iad` | pushing to `main`, if `apps/api` changed and CI passed |
+
+The API deploy is a job in `ci.yml` rather than a workflow of its own, so that
+`needs: api` can hold it behind ruff, the migrations and all 93 tests on that
+same commit. It skips when nothing under `apps/api` changed — there is one
+machine, so a needless rollout is a few seconds during which the contact form
+gets a connection refused — and it finishes by asking the deployed API for real
+content, because a passing health check only proves the process started.
 
 `iad` is deliberate. No browser ever contacts the API — `lib/api.ts` is
 `server-only` — so every caller is a Vercel build, an ISR revalidation or the
@@ -185,10 +192,6 @@ pointer check so phones do not pay for it.
 
 ## Known issues being worked through
 
-- Nothing deploys the API automatically. Vercel rebuilds on a push to `main`;
-  Fly does not, so a merged change under `apps/api` leaves the running API
-  untouched until someone runs `fly deploy`. This has already bitten once —
-  the contact-form email notification sat merged and undeployed.
 - The legacy decorative layer — meteors, drifting stars, the fifteen keyframe
   animations the Vite app carried — is not ported. Only the colour tokens are.
 - Project images are unused: `image_url` is null on every row, so

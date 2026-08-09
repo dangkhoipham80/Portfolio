@@ -164,3 +164,76 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report/
           retention-days: 7
+
+  # Vercel redeploys apps/web on every push to main by itself. Fly does not, and
+  # the gap is not theoretical: the contact-form email notification was merged,
+  # reported as shipped, and sat undeployed on a machine still running the
+  # previous image. Nothing failed — the deploy simply never happened, which is
+  # the kind of gap that gets quieter each time rather than louder.
+  deploy-api:
+    name: api — deploy to Fly
+    needs: api
+    runs-on: ubuntu-latest
+    # `needs: api` is the point: this job cannot start until ruff, the
+    # migrations and all 93 tests have passed on this exact commit. Deploying
+    # from a workflow of its own would have been simpler and would have removed
+    # that guarantee.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    # A second push while the first is mid-deploy would have two `fly deploy`
+    # runs competing for the same machine. Queue rather than cancel: cancelling
+    # a deploy half-way is how a release_command runs without the rollout that
+    # was supposed to follow it.
+    concurrency:
+      group: deploy-api
+      cancel-in-progress: false
+
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Need the previous commit to see what changed; the default shallow
+          # clone has only this one.
+          fetch-depth: 2
+
+      # A web-only push should not roll the API machine. There is one machine,
+      # so every restart is a few seconds during which the contact form's
+      # Server Action gets a connection refused rather than a 201.
+      - id: changed
+        working-directory: .
+        run: |
+          before='${{ github.event.before }}'
+          # All-zero SHA means the branch was just created and there is nothing
+          # to diff against; deploy rather than silently skip.
+          if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            echo "api=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$before" "${{ github.sha }}" | grep -q '^apps/api/'; then
+            echo "api=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "api=false" >> "$GITHUB_OUTPUT"
+            echo "No changes under apps/api — skipping deploy." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - if: steps.changed.outputs.api == 'true'
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # --remote-only builds on Fly's builder rather than needing Docker here.
+      # fly.toml supplies the app name, the region and the release_command that
+      # runs the migrations, so there is nothing to repeat on this line.
+      - if: steps.changed.outputs.api == 'true'
+        run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # The deploy reports success when the machine passes its health check,
+      # which only proves the process started. This asks the running API for
+      # real content, which is what the site actually depends on.
+      - if: steps.changed.outputs.api == 'true'
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            https://khoi-portfolio-api.fly.dev/api/v1/projects/)
+          echo "GET /api/v1/projects/ -> $code"
+          test "$code" = "200"
