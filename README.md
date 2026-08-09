@@ -8,12 +8,14 @@ Personal portfolio of Phạm Đăng Khôi — a full-stack app, not a static sit
 apps/
 ├── web/                Next.js 16 (App Router, React 19, Tailwind v4)
 └── api/                FastAPI + SQLAlchemy + Alembic, Postgres (Neon)
-portfolio/frontend/     the legacy Vite SPA — still what production serves
 ```
 
-`apps/web` is being built to replace `portfolio/frontend`. The Vite app stays
-deployed until the Next.js one passes its smoke tests, then Vercel's root
-directory switches over and `portfolio/` is deleted.
+There was a third directory here, `portfolio/frontend` — a Vite SPA whose
+content was hardcoded arrays inside the components and whose contact form posted
+to EmailJS with the keys inline. It served production until the cutover on
+2026-08-09 and has been deleted. Its EmailJS credentials are still in the git
+history of a public repository, so that template was disabled rather than
+trusted to be unreachable.
 
 `apps/web` reads its content from the API. Pages are React Server Components, so
 the fetch happens on the server: the browser never calls the API, CORS does not
@@ -43,15 +45,37 @@ for the web app, and `pnpm api:dev` / `api:lint` / `api:test` for the API — th
 API ones invoke `python -m ...`, so **activate the virtualenv first** or they
 will not resolve.
 
+## Deployment
+
+The site is at **https://khoipham.vercel.app**. The API is at
+**https://khoi-portfolio-api.fly.dev**.
+
+| | where | how it gets there |
+|---|---|---|
+| `apps/web` | Vercel, root directory `apps/web` | pushing to `main` |
+| `apps/api` | Fly.io, `khoi-portfolio-api`, one 256MB machine in `iad` | `fly deploy` from `apps/api` |
+
+`iad` is deliberate. No browser ever contacts the API — `lib/api.ts` is
+`server-only` — so every caller is a Vercel build, an ISR revalidation or the
+contact Server Action, all us-east, and the Neon database is in `us-east-2`. The
+same endpoint measured 51ms from `iad` and roughly 0.8s from Singapore, which is
+a meaningful share of the 5s budget in `lib/api.ts`.
+
+Fly runs `alembic upgrade head` as a `release_command` on a separate machine, so
+a failed migration aborts the deploy instead of taking the running version with
+it. Secrets are set with `fly secrets`, never committed; `ENVIRONMENT` and
+`DEBUG` come from `fly.toml` instead, because a secret would override them and
+`.env` has them set to development values.
+
 ## Tests
 
-87 on the API, 72 on the web app, split across three runners that each answer a
+93 on the API, 72 on the web app, split across three runners that each answer a
 question the others cannot.
 
 ```bash
 pnpm test          # vitest — 46 unit tests, under a second, no browser
 pnpm test:e2e      # playwright — 26 tests in Chromium against a production build
-pnpm api:test      # pytest — 87 tests, needs the virtualenv and a scratch database
+pnpm api:test      # pytest — 93 tests, needs the virtualenv and a scratch database
 ```
 
 **Vitest covers the modules that are plain functions**: every way a request in
@@ -93,9 +117,14 @@ python -m ruff check .
 Migrations are committed. Point `DATABASE_URL` at a scratch database when
 running the tests — the contact-form and content cases insert rows.
 
-The `Procfile` runs uvicorn only. Migrations belong in a release/pre-deploy
-step, not the web process — a failed one there takes every instance down, and
-concurrent instances race for the lock on rollout.
+Neither the `Dockerfile` nor the `Procfile` runs migrations. They belong in a
+release/pre-deploy step — a failed one in the web process takes every instance
+down, and concurrent instances race for the lock on rollout. `fly.toml` runs
+them as its `release_command`.
+
+`Procfile` and `runtime.txt` are kept although Fly uses neither: together they
+are all a buildpack host needs, so moving to Railway or Render stays a decision
+rather than a rewrite.
 
 ## Content
 
@@ -156,19 +185,14 @@ pointer check so phones do not pay for it.
 
 ## Known issues being worked through
 
-- `portfolio/frontend` is still what production serves, and it does not call
-  this API at all — its projects, skills, certificates and career entries are
-  hardcoded arrays inside the components, and the contact form posts to EmailJS
-  with the service keys inline. `VITE_API_URL` is declared in `env.example` and
-  read by nothing. `apps/web` is the replacement, but Vercel's root directory
-  has not been switched over yet.
+- Nothing deploys the API automatically. Vercel rebuilds on a push to `main`;
+  Fly does not, so a merged change under `apps/api` leaves the running API
+  untouched until someone runs `fly deploy`. This has already bitten once —
+  the contact-form email notification sat merged and undeployed.
 - The legacy decorative layer — meteors, drifting stars, the fifteen keyframe
-  animations in `portfolio/frontend/src/index.css` — is not ported. Only the
-  colour tokens are.
+  animations the Vite app carried — is not ported. Only the colour tokens are.
 - Project images are unused: `image_url` is null on every row, so
   `ProjectMedia` renders its generated placeholder everywhere.
-- The contact form stores a message and nothing else happens. There is no email
-  notification, so a message is only seen by someone opening the admin endpoint.
 - Locally, the API tests and the seed script still write to whatever
   `DATABASE_URL` names. CI runs them against a throwaway Postgres service
   container; on a development machine, pointing `DATABASE_URL` at a scratch
@@ -176,6 +200,11 @@ pointer check so phones do not pay for it.
 
 ## Environment
 
-Secrets live in `.env` files, never in git. See `apps/api/.env.example` and
-`portfolio/frontend/env.example`. `VITE_CV_URL` must be set in Vercel or the
-CV download 404s — the PDF is deliberately not committed.
+Secrets live in `.env` files, never in git — see `apps/api/.env.example` and
+`apps/web/.env.example`. In production they are Fly secrets and Vercel
+environment variables; nothing reads a `.env` there.
+
+`.dockerignore` is doing security work rather than housekeeping: `COPY` does not
+consult `.gitignore`, so without it `apps/api/.env` — the database URL, the
+signing key and the SMTP password — is baked into an image layer and survives
+any later layer that deletes the file.
