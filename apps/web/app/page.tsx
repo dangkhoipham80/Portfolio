@@ -32,7 +32,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="py-20 sm:py-28 lg:py-36">
+      <section className="hero-atmosphere py-20 sm:py-28 lg:py-36">
         {/*
           Two columns at lg, not md: at exactly 768px the h1 wraps against a
           half-width diagram and both look cramped. Stacked-until-1024 gives

@@ -103,6 +103,20 @@
      */
     --destructive-text: 0 72% 38%;
     --ring: 120 60% 28%;
+    /*
+     * The page grid's line colour, per mode rather than derived from
+     * --border with one shared alpha: the light border sits on a 95%
+     * background and the dark one on 4%, so a single opacity reads loud in
+     * one mode and invisible in the other.
+     */
+    --grid-line: hsl(120 20% 80% / 0.45);
+    /*
+     * Hero glow, per mode. Light mode cannot reuse --primary: the same green
+     * over the green-tinted page blends to a ~7% darkening nobody perceives.
+     * Nudged toward cyan and up in alpha it reads as a cool light source;
+     * dark mode's purple over near-black needs far less to do the same.
+     */
+    --hero-glow: hsl(150 60% 28% / 0.14);
   }
 
   .dark {
@@ -126,18 +140,48 @@
     /* Light rather than dark, for the same reason the light mode's is dark. 7.93:1. */
     --destructive-text: 0 85% 75%;
     --ring: 250 65% 65%;
+    --grid-line: hsl(217 33% 20% / 0.55);
+    --hero-glow: hsl(250 65% 65% / 0.08);
   }
 
   html {
     scroll-behavior: smooth;
   }
 
+  /*
+   * Engineering graph paper, page-wide.
+   *
+   * The flat background read as unfinished next to everything else on the
+   * page speaking in monitoring vocabulary — a dashboard's charts sit on
+   * gridlines. Two 1px repeating gradients cost nothing to composite, adapt
+   * to each mode through --grid-line, and give the opaque layers on top
+   * (cards, the tinted Skills band, the nav's blur) something to be layers
+   * *on*. Static by definition, so reduced motion is untouched.
+   */
   body {
-    background: hsl(var(--background));
+    background-color: hsl(var(--background));
+    background-image:
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 40px 40px;
     color: hsl(var(--foreground));
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+  }
+
+  /*
+   * A single soft radial in the primary tint, seated behind the topology's
+   * column. It gives the hero a light source — green in light mode, purple
+   * in dark — without introducing a second decorative system; the grid
+   * stays the only texture.
+   */
+  .hero-atmosphere {
+    background-image: radial-gradient(
+      48rem 32rem at 72% 34%,
+      var(--hero-glow),
+      transparent 70%
+    );
   }
 
   /*
