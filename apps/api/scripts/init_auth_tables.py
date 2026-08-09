@@ -122,17 +122,31 @@ def create_default_admin():
     user_service = UserService(db)
 
     # Check if admin already exists
-    admin_user = user_service.get_user_by_email("admin@example.com")
+    # Credentials come from the environment. This used to hardcode
+    # admin@example.com / admin123, so anyone who ran the script — or simply
+    # read the repository — knew how to log in as the administrator.
+    email = os.environ.get("ADMIN_EMAIL")
+    password = os.environ.get("ADMIN_PASSWORD")
+
+    if not email or not password:
+        raise SystemExit(
+            "Set ADMIN_EMAIL and ADMIN_PASSWORD before running this script. Generate one with:\n"
+            '  python -c "import secrets; print(secrets.token_urlsafe(24))"'
+        )
+
+    if len(password) < 12:
+        raise SystemExit("ADMIN_PASSWORD must be at least 12 characters.")
+
+    admin_user = user_service.get_user_by_email(email)
     if admin_user:
         print("⚠️  Admin user already exists")
         return admin_user
 
-    # Create admin user
     admin_data = UserCreate(
-        email="admin@example.com",
+        email=email,
         username="admin",
         full_name="System Administrator",
-        password="admin123"  # Change this in production!
+        password=password,
     )
 
     try:

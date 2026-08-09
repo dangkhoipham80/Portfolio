@@ -146,16 +146,15 @@ class AuthService:
         return True
 
     def resend_verification_email(self, email: str) -> bool:
-        """Resend email verification"""
+        """Resend email verification.
+
+        Returns quietly for unknown or already-verified addresses. It used to
+        raise "User not found", which let anyone enumerate registered emails —
+        request_password_reset() one method up already got this right.
+        """
         user = self.user_service.get_user_by_email(email)
-        if not user:
-            raise ValidationError("User not found")
-
-        if user.is_verified:
-            raise ValidationError("Email is already verified")
-
-        if user.google_id:
-            raise ValidationError("OAuth users don't need email verification")
+        if not user or user.is_verified:
+            return True
 
         # Create new verification token
         verification_token = self.user_service.create_token(
