@@ -61,14 +61,19 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
-def verify_token(token: str) -> Optional[dict]:
+def verify_token(token: str, expected_type: Optional[str] = None) -> Optional[dict]:
     """Decode and verify a JWT, returning its claims or None.
 
     ``algorithms`` is an allow-list, so a token whose header advertises
     ``none`` — or any algorithm other than HS256 — is rejected outright.
+
+    ``expected_type`` checks the ``type`` claim that user_service.create_token
+    stamps on every token. Without it a 30-day refresh token authenticated
+    every bearer-protected route, which defeats the point of issuing a
+    60-minute access token alongside it.
     """
     try:
-        return jwt.decode(
+        payload = jwt.decode(
             token,
             settings.SECRET_KEY,
             algorithms=[ALGORITHM],
@@ -77,16 +82,21 @@ def verify_token(token: str) -> Optional[dict]:
     except jwt.PyJWTError:
         return None
 
+    if expected_type is not None and payload.get("type") != expected_type:
+        return None
+
+    return payload
+
 
 def get_current_user(token: str) -> str:
-    """Return the subject claim of a valid token, or raise 401."""
+    """Return the subject of a valid *access* token, or raise 401."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    payload = verify_token(token)
+    payload = verify_token(token, expected_type="access")
     if payload is None:
         raise credentials_exception
 

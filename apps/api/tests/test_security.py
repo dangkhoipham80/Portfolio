@@ -17,6 +17,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.security import create_access_token
 from app.main import app
 
 client = TestClient(app)
@@ -83,6 +84,17 @@ def test_alg_none_token_is_rejected():
 
 def test_malformed_token_is_rejected():
     r = _call("post", "/api/v1/projects/", headers={"Authorization": "Bearer garbage.token.here"})
+    assert r.status_code in (401, 403)
+
+
+def test_refresh_token_cannot_be_used_as_an_access_token():
+    """A refresh token lives for 30 days; an access token for 60 minutes.
+
+    Without a check on the `type` claim the long-lived one authenticated every
+    protected route, which made the short access-token lifetime meaningless.
+    """
+    refresh = create_access_token({"sub": "1", "type": "refresh"})
+    r = _call("post", "/api/v1/projects/", headers={"Authorization": f"Bearer {refresh}"})
     assert r.status_code in (401, 403)
 
 
