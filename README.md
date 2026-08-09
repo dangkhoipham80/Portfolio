@@ -45,20 +45,46 @@ python -m ruff check .
 ```
 
 Migrations are committed. Point `DATABASE_URL` at a scratch database when
-running the tests — the contact-form cases insert rows.
+running the tests — the contact-form and content cases insert rows.
+
+The `Procfile` runs uvicorn only. Migrations belong in a release/pre-deploy
+step, not the web process — a failed one there takes every instance down, and
+concurrent instances race for the lock on rollout.
+
+## Content
+
+The API owns the portfolio content: projects, skills, certificates and career
+history. Every content row carries a `slug` and a `published` flag. Public
+callers see published rows only; an admin bearer token also returns drafts. An
+unpublished row 404s rather than 403s, so whether a draft exists at that id
+stays private.
+
+```bash
+cd apps/api
+ADMIN_EMAIL=... ADMIN_PASSWORD=... python scripts/init_auth_tables.py  # roles + admin
+python scripts/seed_content.py --dry-run                               # preview
+python scripts/seed_content.py                                         # load content
+```
+
+`seed_content.py` carries the real portfolio content and is idempotent — rows
+are keyed on slug, so re-running updates in place rather than duplicating.
+
+`Skill.level` is a named enum (`beginner` … `expert`), not the old unlabelled
+1-5 integer. `Project.status` is `completed` / `in_progress` / `on_hold` /
+`dropped`. A career entry with a null `ended_on` is the current one.
 
 ## Known issues being worked through
 
-- `scripts/init_auth_tables.py` bootstraps an admin with the literal password
-  `admin123`. It must read from the environment before anything is deployed.
-  The seed script that replaces it is not written yet.
-- The content models are still the originals: no `slug`, no draft/published
-  state, no career-history table, and `Skill.level` is an integer while the
-  frontend uses strings.
-- `portfolio/frontend` is still what production serves; `apps/web` is an empty
-  Next.js scaffold.
-- The `Procfile` runs uvicorn only. Migrations belong in a release/pre-deploy
-  step, not the web process — a failed one there takes every instance down.
+- `portfolio/frontend` is still what production serves, and it does not call
+  this API at all — its projects, skills, certificates and career entries are
+  hardcoded arrays inside the components, and the contact form posts to EmailJS
+  with the service keys inline. `VITE_API_URL` is declared in `env.example` and
+  read by nothing.
+- `apps/web` is an empty Next.js scaffold. Pointing it at the content endpoints
+  above is the next piece of work.
+- There is no CI. `ruff check .` and `pytest` are run by hand.
+- Tests and the seed script both write to whatever `DATABASE_URL` names; there
+  is no separate test database.
 
 ## Environment
 

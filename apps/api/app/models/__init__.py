@@ -1,6 +1,14 @@
 # Import all models
 from .base import Base
-from .portfolio import Certificate, Contact, Project, Skill
+from .portfolio import (
+    CareerEntry,
+    Certificate,
+    Contact,
+    Project,
+    ProjectStatus,
+    Skill,
+    SkillLevel,
+)
 from .role import Permission, Role, RolePermission, UserRole
 from .token import Token, TokenType
 from .user import User, UserStatus
@@ -9,7 +17,8 @@ from .user import User, UserStatus
 __all__ = [
     "Base",
     "User", "UserStatus",
-    "Token", "TokenType", 
+    "Token", "TokenType",
     "Role", "Permission", "UserRole", "RolePermission",
-    "Contact", "Project", "Skill", "Certificate"
+    "Contact", "Project", "ProjectStatus", "Skill", "SkillLevel",
+    "Certificate", "CareerEntry"
 ] 
