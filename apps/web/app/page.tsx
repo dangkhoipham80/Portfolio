@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import { ContactSection } from "@/components/contact-section";
 import { HeroTopology } from "@/components/hero-topology";
 import { ProjectCard } from "@/components/project-card";
@@ -38,11 +40,11 @@ export default async function HomePage() {
         */}
         <Container width="layout" className="grid items-start gap-12 lg:grid-cols-[1.1fr_1fr]">
           <div>
-            <Eyebrow>Backend · Data · AI</Eyebrow>
-            <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            <Eyebrow className="hero-item">Backend · Data · AI</Eyebrow>
+            <h1 className="hero-item mt-4 font-display text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl [animation-delay:80ms]">
               Phạm Đăng Khôi
             </h1>
-            <p className="mt-5 max-w-xl text-lg text-muted-foreground">
+            <p className="hero-item mt-5 max-w-xl text-lg text-muted-foreground [animation-delay:180ms]">
               I build the parts you do not see: APIs, schemas, queues and the
               services between them. Software engineering student at FPT
               University, working in Python and Java, moving toward data and AI
@@ -53,8 +55,8 @@ export default async function HomePage() {
               uses: the one fact a recruiter scans for, styled as a health check
               rather than a banner.
             */}
-            <p className="mt-8 flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-primary">
-              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-primary" />
+            <p className="hero-item mt-8 flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-primary [animation-delay:280ms]">
+              <span aria-hidden="true" className="status-dot h-1.5 w-1.5 rounded-full bg-primary" />
               Open to mid-level+ roles
             </p>
           </div>
@@ -108,13 +110,26 @@ export default async function HomePage() {
                           {levelLabel(skill.level)}
                         </span>
                       </div>
+                      {/*
+                        overflow-clip, not overflow-hidden: `hidden` makes the
+                        track a scroll container, and the fill's view() timeline
+                        then measures entry into this 4px track instead of the
+                        viewport — the scroll fill silently never runs.
+                      */}
                       <div
-                        className="mt-1.5 h-1 overflow-hidden rounded-full bg-accent"
+                        className="mt-1.5 h-1 overflow-clip rounded-full bg-accent"
                         role="presentation"
                       >
+                        {/*
+                          Level via custom property, not a width style: the
+                          skill-fill keyframe scales the bar up to var(--bar-w)
+                          as it scrolls into view, and the base rule rests at
+                          the same value where scroll-driven animation is
+                          unsupported or motion is reduced.
+                        */}
                         <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: LEVEL_WIDTH[skill.level] }}
+                          className="skill-bar-fill h-full rounded-full bg-primary"
+                          style={{ "--bar-w": LEVEL_WIDTH[skill.level] } as CSSProperties}
                         />
                       </div>
                     </li>
