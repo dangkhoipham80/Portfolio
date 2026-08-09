@@ -35,4 +35,9 @@ def client_ip(request: Request) -> str:
     return fallback
 
 
-limiter = Limiter(key_func=client_ip)
+# ``headers_enabled`` makes slowapi attach ``Retry-After`` (and the
+# ``X-RateLimit-*`` trio) to the 429. It defaults to False, and without it the
+# contact form can only tell someone they have been rate limited, not when they
+# may try again — leaving them to refresh and find out. The window is an hour,
+# so "try again later" is not usable guidance.
+limiter = Limiter(key_func=client_ip, headers_enabled=True)

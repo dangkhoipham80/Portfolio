@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict
+from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, StringConstraints
 
 from app.models.portfolio import ProjectStatus, SkillLevel
 
@@ -165,7 +165,30 @@ class ContactBase(BaseModel):
     message: str
 
 class ContactCreate(ContactBase):
-    pass
+    """The public contact form's payload — the only unauthenticated write.
+
+    Constraints live here rather than on ``ContactBase`` on purpose. ``Contact``
+    is the *response* model and inherits the same base, so a stricter base would
+    validate on the way out too: any row already in the table with a malformed
+    address — every row is one, since nothing validated until now — would 500
+    the admin ``GET /contacts`` instead of being readable.
+
+    The max lengths are the column widths from ``models/portfolio.py``, not
+    invented numbers. Without them an over-long name reached Postgres and came
+    back as a DataError 500; ``message`` is a TEXT column with no width, so the
+    5000 is a judgement about what a contact form is for and is the one figure
+    here the database does not dictate.
+
+    ``str_strip_whitespace`` runs before the length checks, so a field of spaces
+    fails ``min_length`` rather than storing blank.
+    """
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: Annotated[str, StringConstraints(min_length=1, max_length=100)]
+    email: Annotated[EmailStr, StringConstraints(max_length=255)]
+    subject: Annotated[str, StringConstraints(min_length=1, max_length=255)]
+    message: Annotated[str, StringConstraints(min_length=1, max_length=5000)]
 
 class Contact(ContactBase):
     model_config = ConfigDict(from_attributes=True)

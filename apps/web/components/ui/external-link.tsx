@@ -24,8 +24,11 @@ export function ExternalLink({
       target="_blank"
       rel="noreferrer noopener"
       className={cn(
-        // py-1.5 so the row is a usable tap target, not a 20px-tall hairline.
-        "inline-flex items-center gap-1 py-1.5 text-sm text-muted-foreground transition-colors hover:text-primary",
+        // py-3, not the py-1.5 this started with: that measured 32px tall, under
+        // the ~44px a fingertip needs. Used for the contact channels as well as
+        // the repo and demo links on a project card, so it is among the most
+        // tapped things on the site.
+        "inline-flex items-center gap-1 py-3 text-sm text-muted-foreground transition-colors hover:text-primary",
         className,
       )}
     >

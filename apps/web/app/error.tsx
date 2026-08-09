@@ -5,6 +5,7 @@
 
 import { useEffect } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
 
@@ -34,13 +35,9 @@ export default function Error({
       <p className="mt-4 text-muted-foreground">
         Something went wrong while rendering. Trying again usually works.
       </p>
-      <button
-        type="button"
-        onClick={reset}
-        className="mt-8 rounded-[--radius-control] bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-      >
+      <Button onClick={reset} className="mt-8">
         Try again
-      </button>
+      </Button>
     </Container>
   );
 }

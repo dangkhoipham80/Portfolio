@@ -15,6 +15,12 @@ export function Section({
    * outline starting at level 2.
    */
   level = "h2",
+  /**
+   * Passed through to Container. Sections of cards want the wide measure; a
+   * section that is mostly text or a single column of form fields does not,
+   * and stretching one to 5xl leaves a very long line and a lot of dead space.
+   */
+  width = "wide",
   children,
 }: {
   id?: string;
@@ -23,13 +29,14 @@ export function Section({
   title: string;
   description?: string;
   level?: "h1" | "h2";
+  width?: "wide" | "reading";
   children: ReactNode;
 }) {
   const Heading = level;
 
   return (
     <section id={id} className="border-t border-border/60 py-16 sm:py-20">
-      <Container>
+      <Container width={width}>
         {eyebrow ? <Eyebrow className="mb-3">{eyebrow}</Eyebrow> : null}
         <Heading className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
           {title}
