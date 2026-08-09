@@ -49,6 +49,14 @@
   --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  /*
+   * Motion tokens for the hero boot sequence — one duration, one easing,
+   * so every entering element arrives the same way. The easing decelerates
+   * hard: elements "arrive" rather than drift.
+   */
+  --dur-enter: 400ms;
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /*
@@ -178,6 +186,118 @@
   }
 
   /*
+   * The hero boot sequence.
+   *
+   * One keyframe, one direction, applied to every entering element; the
+   * stagger comes from per-element animation-delay at the call site. The
+   * narrative is the site's subject: text registers, the topology's rails
+   * appear, nodes come online one by one, then data flows. `both` matters —
+   * it holds the `from` state through each element's delay, and under
+   * reduced motion (where the block below zeroes both duration and delay)
+   * it snaps everything straight to the resting state.
+   */
+  @keyframes hero-enter {
+    from {
+      opacity: 0;
+      translate: 0 10px;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  .hero-item {
+    animation: hero-enter var(--dur-enter) var(--ease-enter) both;
+  }
+
+  /*
+   * The availability dot, in the vocabulary of a live-status indicator.
+   * 2.8s reads as calm telemetry, not urgency. Keyframe 0 is the fully
+   * visible state, so the single forced iteration under reduced motion
+   * leaves the dot resting visible at full size.
+   */
+  @keyframes status-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      scale: 1;
+    }
+    50% {
+      opacity: 0.35;
+      scale: 0.7;
+    }
+  }
+
+  .status-dot {
+    animation: status-pulse 2.8s ease-in-out infinite;
+  }
+
+  /*
+   * Skill bars fill to their level as they scroll into view — a gauge
+   * coming up to reading, not a chart screenshot.
+   *
+   * The base rule always sets the final width, so the two guards fail
+   * closed: browsers without scroll-driven animations and users with
+   * reduced motion both get a full bar immediately. Nobody ever sees an
+   * empty bar.
+   */
+  /*
+   * Animates `scale`, not `width`: scroll-driven animation of layout
+   * properties silently fails to apply its before-entry state in current
+   * Chromium, so a width-based version never actually fills — it just sits
+   * at its final width. `scale` runs on the compositor and takes the
+   * percentage straight from --bar-w ("75%" reads as 0.75), so LEVEL_WIDTH
+   * stays the single source of the level scale.
+   */
+  @keyframes skill-fill {
+    from {
+      scale: 0 1;
+    }
+    to {
+      scale: var(--bar-w) 1;
+    }
+  }
+
+  .skill-bar-fill {
+    width: 100%;
+    transform-origin: left;
+    scale: var(--bar-w) 1;
+  }
+
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .skill-bar-fill {
+        animation: skill-fill linear both;
+        animation-timeline: view();
+        /* Finishes while the bar is still in the lower third — visible fill, no waiting. */
+        animation-range: entry 0% cover 35%;
+      }
+    }
+  }
+
+  /*
+   * Topology nodes respond to the pointer the way a service-mesh dashboard's
+   * do: the hovered node joins the data path's colour. Class selectors
+   * outrank SVG presentation attributes, so this overrides the inline
+   * stroke/fill without touching the markup. Sighted-only by design — the
+   * whole SVG is aria-hidden.
+   */
+  .topology-node rect,
+  .topology-node text {
+    transition: stroke 200ms, fill 200ms;
+  }
+
+  .topology-node:hover rect {
+    stroke: hsl(var(--primary));
+    fill: hsl(var(--primary) / 0.08);
+  }
+
+  .topology-node:hover text {
+    fill: hsl(var(--primary));
+  }
+
+  /*
    * Respect a reduced-motion preference for everything, including the smooth
    * scrolling above — vestibular triggers are not a per-component concern.
    */
@@ -190,6 +310,14 @@
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
+      /*
+       * Delay too, not just duration: the boot sequence staggers elements up
+       * to ~750ms, and `hero-enter`'s fill-mode holds them invisible through
+       * their delay. Without this line a reduced-motion visitor would watch
+       * the hero pop in piece by piece — the exact choreography they asked
+       * not to see.
+       */
+      animation-delay: 0s !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }

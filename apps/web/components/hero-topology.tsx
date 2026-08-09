@@ -10,9 +10,10 @@ import { cn } from "@/lib/cn";
  * says the whole thing at a glance.
  *
  * Inline SVG on the server: no canvas, no WebGL, no client component, no
- * hydration, nothing competing with LCP. The motion is one CSS keyframe on the
- * edge strokes, so `prefers-reduced-motion` stops it through the global rule
- * rather than needing its own escape hatch.
+ * hydration, nothing competing with LCP. All motion is CSS — the boot-order
+ * entrance (`hero-enter`) and the packet flow on the edges — so
+ * `prefers-reduced-motion` stops the lot through the global rule rather than
+ * needing its own escape hatch.
  *
  * Decorative by definition — the information is in the prose beside it — so the
  * whole graphic is hidden from assistive tech instead of narrating a diagram
@@ -40,6 +41,22 @@ const EDGES = [
   { d: "M237,120 C272,120 276,195 306,195", delay: "1.05s" },
 ];
 
+/*
+ * The boot order, one delay per node in NODES order: Client registers, the
+ * API comes up, then its dependencies. Inline style rather than a Tailwind
+ * arbitrary class because the values are indexed at render time and the
+ * scanner would never see them.
+ */
+const NODE_BOOT_DELAY_MS = [450, 525, 600, 675, 750];
+
+/*
+ * When the wires start flowing. Kafka's entrance technically runs until
+ * 1.15s, but the deceleration easing has it visually settled well before
+ * that — 0.8s starts the first flow the moment the graph reads as complete,
+ * without a dead beat at the end of the boot.
+ */
+const FLOW_START = "0.8s";
+
 export function HeroTopology({ className }: { className?: string }) {
   return (
     <svg
@@ -51,31 +68,41 @@ export function HeroTopology({ className }: { className?: string }) {
       className={cn("h-auto w-full max-w-lg lg:max-w-none", className)}
     >
       {/* Static rails, so the graph still reads as connected when motion is off. */}
-      {EDGES.map((edge) => (
-        <path
-          key={`rail-${edge.d}`}
-          d={edge.d}
-          fill="none"
-          stroke="hsl(var(--border))"
-          strokeWidth="1.5"
-        />
-      ))}
+      <g className="hero-item [animation-delay:350ms]">
+        {EDGES.map((edge) => (
+          <path
+            key={`rail-${edge.d}`}
+            d={edge.d}
+            fill="none"
+            stroke="hsl(var(--border))"
+            strokeWidth="1.5"
+          />
+        ))}
+      </g>
 
-      {EDGES.map((edge) => (
-        <path
-          key={`flow-${edge.d}`}
-          d={edge.d}
-          fill="none"
-          stroke="hsl(var(--primary))"
-          strokeWidth="2"
-          strokeLinecap="round"
-          className="wire-flow"
-          style={{ animationDelay: edge.delay }}
-        />
-      ))}
+      <g className="hero-item [animation-delay:350ms]">
+        {EDGES.map((edge) => (
+          <path
+            key={`flow-${edge.d}`}
+            d={edge.d}
+            fill="none"
+            stroke="hsl(var(--primary))"
+            strokeWidth="2"
+            strokeLinecap="round"
+            className="wire-flow"
+            // Held until the last node's entrance lands — flow through a
+            // half-built graph would break the boot narrative.
+            style={{ animationDelay: `calc(${FLOW_START} + ${edge.delay})` }}
+          />
+        ))}
+      </g>
 
-      {NODES.map((node) => (
-        <g key={node.id}>
+      {NODES.map((node, i) => (
+        <g
+          key={node.id}
+          className="topology-node hero-item"
+          style={{ animationDelay: `${NODE_BOOT_DELAY_MS[i]}ms` }}
+        >
           <rect
             x={node.x}
             y={node.y}
