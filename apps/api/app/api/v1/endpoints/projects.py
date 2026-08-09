@@ -3,7 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.v1.dependencies import require_admin
+from app.api.v1.dependencies import get_optional_admin, require_admin
 from app.core.constants import ErrorMessages, SuccessMessages
 from app.core.database import get_db
 from app.schemas.portfolio import Project, ProjectCreate, ProjectUpdate
@@ -14,17 +14,40 @@ router = APIRouter()
 @router.get("/", response_model=List[Project])
 def get_projects(
     featured_only: bool = Query(False, description="Get only featured projects"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    viewer = Depends(get_optional_admin)
 ):
-    """Get all projects, optionally filtered by featured status"""
+    """Get published projects; admins also see drafts"""
     service = PortfolioService(db)
-    return service.get_projects(featured_only=featured_only)
+    return service.get_projects(
+        featured_only=featured_only,
+        include_unpublished=viewer is not None,
+    )
+
+@router.get("/slug/{slug}", response_model=Project)
+def get_project_by_slug(
+    slug: str,
+    db: Session = Depends(get_db),
+    viewer = Depends(get_optional_admin)
+):
+    """Get a specific project by slug"""
+    service = PortfolioService(db)
+    project = service.get_project_by_slug(slug, include_unpublished=viewer is not None)
+    if not project:
+        raise HTTPException(status_code=404, detail=ErrorMessages.PROJECT_NOT_FOUND)
+    return project
 
 @router.get("/{project_id}", response_model=Project)
-def get_project(project_id: int, db: Session = Depends(get_db)):
+def get_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    viewer = Depends(get_optional_admin)
+):
     """Get a specific project by ID"""
     service = PortfolioService(db)
-    project = service.get_project(project_id)
+    # A draft 404s for anonymous callers rather than 403ing: whether an
+    # unpublished project exists at that id is itself not public.
+    project = service.get_project(project_id, include_unpublished=viewer is not None)
     if not project:
         raise HTTPException(status_code=404, detail=ErrorMessages.PROJECT_NOT_FOUND)
     return project

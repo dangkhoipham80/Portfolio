@@ -1,9 +1,9 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.v1.dependencies import require_admin
+from app.api.v1.dependencies import get_optional_admin, require_admin
 from app.core.constants import ErrorMessages, SuccessMessages
 from app.core.database import get_db
 from app.schemas.portfolio import Certificate, CertificateCreate, CertificateUpdate
@@ -12,16 +12,44 @@ from app.services.portfolio_service import PortfolioService
 router = APIRouter()
 
 @router.get("/", response_model=List[Certificate])
-def get_certificates(db: Session = Depends(get_db)):
-    """Get all certificates"""
+def get_certificates(
+    category: str = Query(None, description="Filter certificates by category"),
+    db: Session = Depends(get_db),
+    viewer = Depends(get_optional_admin)
+):
+    """Get published certificates; admins also see drafts"""
     service = PortfolioService(db)
-    return service.get_certificates()
+    return service.get_certificates(
+        category=category,
+        include_unpublished=viewer is not None,
+    )
+
+@router.get("/slug/{slug}", response_model=Certificate)
+def get_certificate_by_slug(
+    slug: str,
+    db: Session = Depends(get_db),
+    viewer = Depends(get_optional_admin)
+):
+    """Get a specific certificate by slug"""
+    service = PortfolioService(db)
+    certificate = service.get_certificate_by_slug(
+        slug, include_unpublished=viewer is not None
+    )
+    if not certificate:
+        raise HTTPException(status_code=404, detail=ErrorMessages.CERTIFICATE_NOT_FOUND)
+    return certificate
 
 @router.get("/{certificate_id}", response_model=Certificate)
-def get_certificate(certificate_id: int, db: Session = Depends(get_db)):
+def get_certificate(
+    certificate_id: int,
+    db: Session = Depends(get_db),
+    viewer = Depends(get_optional_admin)
+):
     """Get a specific certificate by ID"""
     service = PortfolioService(db)
-    certificate = service.get_certificate(certificate_id)
+    certificate = service.get_certificate(
+        certificate_id, include_unpublished=viewer is not None
+    )
     if not certificate:
         raise HTTPException(status_code=404, detail=ErrorMessages.CERTIFICATE_NOT_FOUND)
     return certificate

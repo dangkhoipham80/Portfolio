@@ -58,11 +58,35 @@ def get_current_user_dependency(
     return user
 
 
-# get_optional_user() was removed. It took `Depends(security)` from the shared
+# The previous get_optional_user() took `Depends(security)` from the shared
 # HTTPBearer(), which defaults to auto_error=True and so raises 403 before the
-# body runs — its `if not credentials: return None` branch was unreachable.
-# Nothing used it, and left in place it would have silently rejected anonymous
-# callers on the first public route it was attached to.
+# body runs — its `if not credentials: return None` branch was unreachable, and
+# attaching it to a public route would have rejected every anonymous caller. It
+# was deleted. What follows is the working shape: its own HTTPBearer with
+# auto_error off, so a missing header reaches the body as None.
+optional_security = HTTPBearer(auto_error=False)
+
+
+def get_optional_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(optional_security),
+    db: Session = Depends(get_db),
+):
+    """Resolve an admin caller if there is one, otherwise None.
+
+    Used by the public content routes to decide whether drafts are visible. A
+    missing *or bad* token means anonymous here, not 401 — these routes are
+    public, and an expired token should still render the published portfolio
+    rather than break the page.
+    """
+    if credentials is None:
+        return None
+
+    try:
+        user = get_current_user_dependency(credentials=credentials, db=db)
+    except HTTPException:
+        return None
+
+    return user if user.is_admin else None
 
 
 def require_admin(current_user = Depends(get_current_user_dependency)):
