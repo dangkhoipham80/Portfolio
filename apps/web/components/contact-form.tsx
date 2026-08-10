@@ -18,6 +18,7 @@ import { submitContact } from "@/app/actions/contact";
 import { Button } from "@/components/ui/button";
 import { Wire } from "@/components/ui/wire";
 import { TextAreaField, TextField } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
 import {
   CONTACT_FIELDS,
   CONTACT_LIMITS,
@@ -89,14 +90,6 @@ function StatusLine({
   // The endpoint this posts to, and the budget, stated up front. It is the one
   // line on the page that says the owner wrote the backend as well as the form.
   return <p className={`${mono} text-muted-foreground`}>POST /contacts · 5 per hour</p>;
-}
-
-function Notice({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="rounded-[--radius-control] border border-border bg-card px-4 py-3 text-sm text-foreground">
-      {children}
-    </p>
-  );
 }
 
 function MailLink() {

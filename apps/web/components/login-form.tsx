@@ -16,10 +16,12 @@ import { useActionState, useRef, useState } from "react";
 import { signIn } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
 import { Wire } from "@/components/ui/wire";
 import { formatWait } from "@/lib/retry-after";
 import {
   type SignInErrors,
+  type SignInField,
   type SignInState,
   INITIAL_SIGN_IN_STATE,
   readSignInForm,
@@ -88,14 +90,6 @@ function StatusLine({
   return <p className={`${mono} text-muted-foreground`}>POST /auth/login · 10 per 15 min</p>;
 }
 
-function Notice({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="rounded-[--radius-control] border border-border bg-card px-4 py-3 text-sm text-foreground">
-      {children}
-    </p>
-  );
-}
-
 export function LoginForm({ next }: { next: string }) {
   const [state, formAction, isPending] = useActionState(signIn, INITIAL_SIGN_IN_STATE);
   const formRef = useRef<HTMLFormElement>(null);
@@ -133,6 +127,27 @@ export function LoginForm({ next }: { next: string }) {
     formRef.current?.querySelector<HTMLElement>(`[name="${firstBad}"]`)?.focus();
   }
 
+  /**
+   * Clear a field's error when it is left.
+   *
+   * Deletes the key rather than setting it to undefined. `{ ...prev, email:
+   * undefined }` keeps `email` in the object, so Object.keys().length still
+   * counted it and the live region announced "1 field needs filling in" after a
+   * single Tab off the autofocused field — with nothing marked invalid, since
+   * aria-invalid is only set for a non-empty message. Same shape as
+   * handleBlur in contact-form.tsx.
+   *
+   * Nothing is validated on blur here: both fields are a claim about an
+   * existing account, so there is nothing to check until they are submitted.
+   */
+  function clearError(field: SignInField) {
+    setClientErrors((current) => {
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
+
   const errorCount = Object.keys(clientErrors).length;
 
   return (
@@ -151,7 +166,7 @@ export function LoginForm({ next }: { next: string }) {
         autoFocus
         defaultValue={email}
         error={clientErrors.email}
-        onBlur={() => setClientErrors((prev) => ({ ...prev, email: undefined }))}
+        onBlur={() => clearError("email")}
       />
 
       <TextField
@@ -160,7 +175,7 @@ export function LoginForm({ next }: { next: string }) {
         type="password"
         autoComplete="current-password"
         error={clientErrors.password}
-        onBlur={() => setClientErrors((prev) => ({ ...prev, password: undefined }))}
+        onBlur={() => clearError("password")}
       />
 
       <Wire active={isPending} />

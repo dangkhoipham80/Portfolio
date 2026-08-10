@@ -68,7 +68,9 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
             it.
           */}
           <form action={signOut} className="ms-auto">
-            <Button variant="quiet" type="submit" className="px-4 py-2 text-xs">
+            {/* min-h-11 keeps the 44px tap target the base Button gets from
+                py-3; the compact padding here would otherwise leave it at 33px. */}
+            <Button variant="quiet" type="submit" className="min-h-11 px-4 py-2 text-xs">
               Sign out
             </Button>
           </form>

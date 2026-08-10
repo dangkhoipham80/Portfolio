@@ -77,6 +77,28 @@ test.describe("signing in", () => {
     await expect(page.getByText(/no such (account|user)/i)).toHaveCount(0);
   });
 
+  test("tabbing past an untouched field does not invent an error", async ({ page }) => {
+    // The blur handler cleared its field by spreading `{ ...prev, email:
+    // undefined }`, which keeps the key — so Object.keys().length counted it and
+    // the live region announced "1 field needs filling in" after a single Tab
+    // off the autofocused field, with no field marked invalid to match.
+    await page.goto("/login");
+    await page.getByLabel("Email", { exact: true }).focus();
+    await page.keyboard.press("Tab");
+
+    await expect(page.getByText(/field.? need/)).toHaveCount(0);
+    await expect(page.getByText("POST /auth/login · 10 per 15 min")).toBeVisible();
+  });
+
+  test("an empty submit is answered without spending an attempt", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    await expect(page.getByText("2 fields need filling in")).toBeVisible();
+    // Focus lands on the first field that needs fixing.
+    await expect(page.getByLabel("Email", { exact: true })).toBeFocused();
+  });
+
   test("the right password opens the inbox", async ({ page }) => {
     await signIn(page);
 

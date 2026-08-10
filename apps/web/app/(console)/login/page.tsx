@@ -3,7 +3,8 @@ import Link from "next/link";
 
 import { LoginForm } from "@/components/login-form";
 import { Container } from "@/components/ui/container";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
+import { cn } from "@/lib/cn";
 import { safeNextPath } from "@/lib/session";
 
 export const metadata: Metadata = {
@@ -42,7 +43,9 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           page opens with.
         */}
         <div className="max-w-md">
-          <Eyebrow as="h2">Restricted</Eyebrow>
+          {/* Not as="h2": this label sits *above* the page h1, so making it a
+              heading would give the page an h2 before its h1. */}
+          <Eyebrow>Restricted</Eyebrow>
           <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
             Console access
           </h1>
@@ -55,7 +58,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             <LoginForm next={next} />
           </div>
 
-          <p className="mt-10 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          <p className={cn(eyebrowClasses, "mt-10")}>
             <Link href="/" className="underline underline-offset-4 hover:text-primary">
               Back to the site
             </Link>

@@ -3,7 +3,9 @@ import type { Metadata } from "next";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Container } from "@/components/ui/container";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
+import { Notice } from "@/components/ui/notice";
+import { cn } from "@/lib/cn";
 import { requireAdmin } from "@/lib/admin-guard";
 import { fetchContacts } from "@/lib/console-api";
 
@@ -50,8 +52,12 @@ export default async function AdminInboxPage() {
   const result = await fetchContacts(accessToken);
 
   return (
-    <Container width="layout" className="py-12 sm:py-16">
-      <Eyebrow as="h2">Inbox</Eyebrow>
+    // "wide" rather than "layout": these cards are a column of prose, and the
+    // full layout width stretched a message body past 1200px on a large screen
+    // — a line length nobody reads comfortably.
+    <Container width="wide" className="py-12 sm:py-16">
+      {/* Not as="h2" — it labels the h1 below it rather than a section. */}
+      <Eyebrow>Inbox</Eyebrow>
       <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight text-foreground">
         Contact messages
       </h1>
@@ -64,17 +70,17 @@ export default async function AdminInboxPage() {
           written to you" as the same picture, and the second one reads as
           working.
         */
-        <p className="mt-8 rounded-[--radius-control] border border-border bg-card px-4 py-3 text-sm text-foreground">
+        <Notice className="mt-8">
           These messages could not be loaded — the API did not answer. Nothing
           has been lost; reload once it is back.
-        </p>
+        </Notice>
       ) : result.data.length === 0 ? (
         <p className="mt-8 text-muted-foreground">
           No messages yet. The contact form on the home page writes here.
         </p>
       ) : (
         <>
-          <p className="mt-4 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          <p className={cn(eyebrowClasses, "mt-4")}>
             {result.data.length} message{result.data.length === 1 ? "" : "s"} ·{" "}
             {result.data.filter((contact) => !contact.read).length} unread
           </p>
@@ -105,9 +111,13 @@ export default async function AdminInboxPage() {
                     </a>
                   </p>
 
-                  {/* whitespace-pre-line so the paragraphs someone typed survive
-                      — the API stores the text exactly as sent. */}
-                  <p className="mt-4 whitespace-pre-line text-sm text-foreground">
+                  {/*
+                    whitespace-pre-line so the paragraphs someone typed survive
+                    — the API stores the text exactly as sent. max-w-prose caps
+                    the measure independently of the card, which has a header
+                    row that wants the full width.
+                  */}
+                  <p className="mt-4 max-w-prose whitespace-pre-line text-sm text-foreground">
                     {contact.message}
                   </p>
                 </Card>
