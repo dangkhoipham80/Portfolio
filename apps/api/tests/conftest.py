@@ -7,7 +7,26 @@ it at a scratch database.
 import pytest
 
 from app.core.database import SessionLocal
+from app.core.rate_limit import limiter
 from app.models.user import User, UserStatus
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Empty the rate-limit buckets before every test.
+
+    slowapi's default storage is a dict living in the process, shared by every
+    test in the run and never cleared between them. Without this, whether a test
+    sees a 429 depends on which tests ran before it — the login cases spend ten
+    attempts each, so the second one to run would fail on a limit it never
+    tripped itself, and only when the whole file is run rather than the test
+    alone.
+
+    It also lets the contact-form case assert the actual boundary instead of
+    "a 429 turned up somewhere".
+    """
+    limiter.reset()
+    yield
 
 
 @pytest.fixture

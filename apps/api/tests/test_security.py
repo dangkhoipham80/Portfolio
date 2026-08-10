@@ -124,6 +124,8 @@ def test_public_signup_surface_is_gone(path):
 
 
 CONTACT_TEST_ADDRESS = "ratelimit{}@example.com"
+CONTACT_LIMIT = 5
+CONTACT_ATTEMPTS = CONTACT_LIMIT + 1
 
 
 @pytest.fixture
@@ -138,7 +140,7 @@ def clean_contact_rows(db):
     """
     yield
 
-    addresses = [CONTACT_TEST_ADDRESS.format(i) for i in range(7)]
+    addresses = [CONTACT_TEST_ADDRESS.format(i) for i in range(CONTACT_ATTEMPTS)]
     db.query(Contact).filter(Contact.email.in_(addresses)).delete(synchronize_session=False)
     db.commit()
 
@@ -158,12 +160,16 @@ def test_contact_form_is_public_but_rate_limited(clean_contact_rows):
                 "message": "hello",
             },
         )
-        for i in range(7)
+        for i in range(CONTACT_ATTEMPTS)
     ]
     codes = [r.status_code for r in responses]
 
-    assert codes[0] == 201, codes
-    assert 429 in codes, codes
+    # The exact boundary, not "a 429 showed up somewhere". That weaker assertion
+    # was all this could claim while the limiter carried state in from whatever
+    # ran before it; the autouse reset in conftest is what makes the precise
+    # version reliable, and the precise version is the one that would notice the
+    # limit silently changing to 3/hour.
+    assert codes == [201] * CONTACT_LIMIT + [429], codes
 
     # The form tells the visitor when they may try again, which it can only do
     # if the 429 carries Retry-After. slowapi omits those headers unless the
