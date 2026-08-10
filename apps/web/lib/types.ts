@@ -66,6 +66,35 @@ export interface Certificate {
   updated_at: string | null;
 }
 
+/**
+ * A contact-form submission, as the admin inbox reads it.
+ *
+ * `Contact` in the API, not `ContactCreate`: the response model deliberately
+ * inherits the loose base rather than the validated one, because rows predating
+ * validation would otherwise 500 the list on the way out.
+ */
+export interface Contact {
+  id: number;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  read: boolean;
+  created_at: string;
+  updated_at: string | null;
+}
+
+/** What POST /auth/login and POST /auth/refresh return. */
+export interface TokenPair {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  /** Seconds until the access token expires. Drives the cookie's max-age. */
+  expires_in: number;
+  user_id: number;
+  email: string;
+}
+
 export interface CareerEntry {
   id: number;
   slug: string;
