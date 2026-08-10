@@ -46,6 +46,67 @@ function project(slug) {
   };
 }
 
+/**
+ * Tokens shaped like the real ones, so the console's own parsing is exercised.
+ *
+ * The signature is a fixed string and nothing here verifies it — that is the
+ * API's job, and this stub stands in for the API. What matters is that the
+ * payload is a real base64url JSON object with a real `exp`, because the
+ * console decodes it to show when the session ends, and a spec needs to be able
+ * to hand it an expired one.
+ */
+const b64url = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+
+function makeToken({ type, role = "admin", secondsFromNow }) {
+  const exp = Math.floor(Date.now() / 1000) + secondsFromNow;
+  return `${b64url({ alg: "HS256", typ: "JWT" })}.${b64url({ sub: "1", type, role, exp })}.stub-signature`;
+}
+
+function readToken(value) {
+  try {
+    const payload = JSON.parse(Buffer.from(String(value).split(".")[1], "base64url").toString());
+    // An expired token is refused here rather than accepted, because that is
+    // the whole point of the renewal path the console has to walk.
+    if (typeof payload.exp !== "number" || payload.exp * 1000 < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function bearer(request) {
+  const header = request.headers.authorization ?? "";
+  return header.startsWith("Bearer ") ? readToken(header.slice(7)) : null;
+}
+
+function tokenPair(role = "admin") {
+  return {
+    access_token: makeToken({ type: "access", role, secondsFromNow: 3600 }),
+    refresh_token: makeToken({ type: "refresh", role, secondsFromNow: 30 * 24 * 3600 }),
+    token_type: "bearer",
+    expires_in: 3600,
+    user_id: 1,
+    email: role === "admin" ? "admin@example.com" : "viewer@example.com",
+  };
+}
+
+/** The password the stub accepts. Anything else is a 401, as the API does. */
+const GOOD_PASSWORD = "correct-horse-battery-staple";
+
+function contact(id, overrides = {}) {
+  return {
+    id,
+    name: "Ada Lovelace",
+    email: "ada@example.com",
+    subject: `Stubbed message ${id}`,
+    message: "The analytical engine weaves algebraic patterns.",
+    read: false,
+    created_at: "2026-08-09T10:30:00Z",
+    updated_at: null,
+    ...overrides,
+  };
+}
+
 function send(response, status, body, headers = {}) {
   const payload = JSON.stringify(body);
   response.writeHead(status, {
@@ -94,6 +155,80 @@ const server = createServer(async (request, response) => {
 
   if (pathname === "/__requests") {
     return send(response, 200, received);
+  }
+
+  if (request.method === "POST" && pathname === "/api/v1/auth/login") {
+    const body = await readBody(request);
+    received.push({ body: { email: body.email }, forwardedFor: request.headers["x-forwarded-for"] ?? null });
+
+    const email = String(body.email ?? "");
+
+    if (email.includes("stub:429")) {
+      // 900s = 15 minutes, which the form should render as "about 15 minutes".
+      return send(response, 429, { error: "Rate limit exceeded" }, { "retry-after": "900" });
+    }
+    if (email.includes("stub:503")) {
+      return send(response, 503, { detail: "Service unavailable" });
+    }
+    if (email.includes("stub:hangup")) {
+      return hangUp(response);
+    }
+
+    if (body.password !== GOOD_PASSWORD) {
+      // One answer for every kind of bad credential, exactly as the API does,
+      // so the screen cannot be used to find out which addresses exist.
+      return send(response, 401, { detail: "Invalid email or password" });
+    }
+
+    // A signed-in account that is not an admin — enough to hold a session and
+    // still be refused the inbox.
+    return send(response, 200, tokenPair(email.includes("stub:viewer") ? "viewer" : "admin"));
+  }
+
+  if (request.method === "POST" && pathname === "/api/v1/auth/refresh") {
+    const body = await readBody(request);
+    const payload = readToken(body.refresh_token);
+
+    if (!payload || payload.type !== "refresh") {
+      return send(response, 401, { detail: "Invalid refresh token" });
+    }
+    return send(response, 200, tokenPair(payload.role));
+  }
+
+  if (request.method === "POST" && pathname === "/api/v1/auth/logout") {
+    return send(response, 200, { message: "Logged out successfully" });
+  }
+
+  if (pathname === "/api/v1/auth/me") {
+    const payload = bearer(request);
+    if (!payload || payload.type !== "access") {
+      return send(response, 401, { detail: "Could not validate credentials" });
+    }
+    return send(response, 200, {
+      id: 1,
+      email: payload.role === "admin" ? "admin@example.com" : "viewer@example.com",
+      username: "admin",
+      full_name: "Stub Admin",
+      avatar_url: null,
+      is_active: true,
+      is_verified: true,
+      status: "active",
+      roles: [payload.role],
+      created_at: "2026-01-01T00:00:00Z",
+      last_login_at: null,
+    });
+  }
+
+  if (request.method === "GET" && pathname === "/api/v1/contacts/") {
+    const payload = bearer(request);
+    if (!payload || payload.type !== "access") {
+      return send(response, 401, { detail: "Could not validate credentials" });
+    }
+    // What require_admin answers a valid token that is not an admin's.
+    if (payload.role !== "admin") {
+      return send(response, 403, { detail: "Forbidden" });
+    }
+    return send(response, 200, [contact(1), contact(2, { read: true })]);
   }
 
   if (request.method === "POST" && pathname === "/api/v1/contacts/") {

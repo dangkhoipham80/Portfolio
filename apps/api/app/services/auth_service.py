@@ -36,7 +36,9 @@ class AuthService:
 
     # google_login() and register() were removed along with their endpoints —
     # see the note in app/api/v1/endpoints/auth.py. The admin account comes from
-    # the seed script, so nothing needs a public signup path.
+    # the seed script, so nothing needs a public signup path. The rest of the
+    # Google scaffolding (service method, schemas, two columns) went with the
+    # migration that drops google_id and google_email.
 
     def refresh_token(self, refresh_token: str) -> TokenResponse:
         """Exchange a refresh token for a new token pair."""
@@ -79,8 +81,12 @@ class AuthService:
             # Don't reveal if user exists - security best practice
             return
 
+        # Kept after the OAuth removal, which is what made the column nullable in
+        # the first place. Every account now has a password, so this should be
+        # unreachable — but a null here would otherwise reach reset_password()
+        # and fail on a hash comparison against None. Refuse rather than raise.
         if not user.hashed_password:
-            raise ValidationError("This account uses OAuth login")
+            raise ValidationError("This account cannot reset its password")
         
         # Create password reset token
         reset_token = self.user_service.create_token(

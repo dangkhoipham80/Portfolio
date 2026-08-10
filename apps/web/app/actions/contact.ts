@@ -8,6 +8,7 @@ import {
   readContactForm,
   validateContact,
 } from "@/lib/contact";
+import { retryAfterSeconds } from "@/lib/retry-after";
 
 /**
  * The contact form's write path.
@@ -98,22 +99,6 @@ function fieldErrorsFrom422(body: unknown): ContactErrors {
   }
 
   return errors;
-}
-
-/** Seconds from a `Retry-After` header, or null when it is missing or odd. */
-function retryAfterSeconds(response: Response): number | null {
-  const header = response.headers.get("retry-after");
-  if (!header) return null;
-
-  // slowapi sends a delta in seconds by default. An HTTP-date is also legal, so
-  // parse defensively rather than rendering "NaN minutes" at someone.
-  const seconds = Number(header);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds);
-
-  const date = Date.parse(header);
-  if (Number.isNaN(date)) return null;
-
-  return Math.max(0, Math.round((date - Date.now()) / 1000));
 }
 
 export async function submitContact(

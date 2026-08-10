@@ -7,10 +7,19 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dotenv import dotenv_values
+
+from app.core.constants import MIN_PASSWORD_LENGTH
 from app.core.database import get_db
 from app.models.user import UserStatus
 from app.schemas.user import PermissionCreate, RoleCreate, UserCreate
 from app.services.user_service import UserService
+
+# apps/api/.env — the same file app.core.config reads, and the one that already
+# holds the DATABASE_URL this script writes to.
+ENV_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"
+)
 
 
 def create_default_roles():
@@ -116,18 +125,37 @@ def assign_permissions_to_roles():
             except Exception as e:
                 print(f"⚠️  Failed to assign {permission_name} to {role_name}: {e}")
 
-def admin_credentials_from_env():
+def admin_credentials_from_env(env_file=ENV_FILE):
     """Read and check the admin credentials, before anything else happens.
 
     These used to be hardcoded as admin@example.com / admin123, so anyone who
     ran the script — or simply read the repository — knew how to log in as the
     administrator.
 
+    The shell environment wins, and ``apps/api/.env`` is the fallback. The
+    fallback exists because that file already holds the ``DATABASE_URL`` this
+    script writes to, so it is the obvious place to put the matching admin
+    credentials — and reading only ``os.environ`` silently missed them, because
+    pydantic-settings loads ``.env`` into ``settings`` and never into the
+    process environment. "I put them in .env and nothing happened" is not a
+    failure anyone should have to debug.
+
+    ``dotenv_values`` rather than ``load_dotenv``: this reads the file without
+    exporting the password into the process environment, where every subprocess
+    would inherit it.
+
+    ``env_file`` is a parameter so the tests can point at a path that does not
+    exist. Without that, whether the "refuses to run without credentials" case
+    passes would depend on whether the developer running it happens to have
+    ADMIN_PASSWORD in their own untracked .env.
+
     Validated up front, ahead of opening a database session, so a missing
     variable fails immediately instead of after connecting.
     """
-    email = os.environ.get("ADMIN_EMAIL")
-    password = os.environ.get("ADMIN_PASSWORD")
+    from_file = dotenv_values(env_file) if os.path.exists(env_file) else {}
+
+    email = os.environ.get("ADMIN_EMAIL") or from_file.get("ADMIN_EMAIL")
+    password = os.environ.get("ADMIN_PASSWORD") or from_file.get("ADMIN_PASSWORD")
 
     if not email or not password:
         raise SystemExit(
@@ -135,8 +163,10 @@ def admin_credentials_from_env():
             '  python -c "import secrets; print(secrets.token_urlsafe(24))"'
         )
 
-    if len(password) < 12:
-        raise SystemExit("ADMIN_PASSWORD must be at least 12 characters.")
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise SystemExit(
+            f"ADMIN_PASSWORD must be at least {MIN_PASSWORD_LENGTH} characters."
+        )
 
     return email, password
 
@@ -198,7 +228,7 @@ def main():
 
         # Create default admin user
         print("\n👤 Creating default admin user...")
-        create_default_admin()
+        admin_user = create_default_admin()
 
         print("\n✅ Authentication system initialized successfully!")
         # Deliberately does not echo the password back. This used to print
@@ -206,8 +236,11 @@ def main():
         # after the move to environment variables was simply untrue — it named
         # credentials that would not log anyone in, while the real ones went
         # unmentioned.
-        print(f"\n📝 Admin account: {os.environ['ADMIN_EMAIL']}")
-        print("   Password: the ADMIN_PASSWORD you supplied.")
+        # From the created row rather than os.environ, which raised a KeyError
+        # once the credentials were allowed to come from .env instead.
+        if admin_user:
+            print(f"\n📝 Admin account: {admin_user.email}")
+            print("   Password: the ADMIN_PASSWORD you supplied.")
 
     except Exception as e:
         print(f"\n❌ Initialization failed: {e}")

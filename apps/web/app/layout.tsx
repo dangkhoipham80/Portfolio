@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
 
-import { SiteNav } from "@/components/site-nav";
-import { Container } from "@/components/ui/container";
-
 import "./globals.css";
 
 // Display. Mechanical terminals, reads as engineered rather than editorial —
@@ -59,6 +56,15 @@ try {
 } catch (e) {}
 `;
 
+/**
+ * Everything both route groups share, and nothing either one does not.
+ *
+ * The nav, `<main>` and footer used to live here. They moved down into
+ * `(site)/layout.tsx` when the console arrived: `SiteNav` was rendered
+ * unconditionally, and a server component cannot read the pathname to opt out,
+ * so a login screen would have carried the public site's Projects/Career/
+ * Certificates header. Route groups do not affect the URL, so no path changed.
+ */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -71,30 +77,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body className="flex min-h-full flex-col font-sans">
-        {/*
-          First tab stop on every page. Without it a keyboard user walks all
-          five nav stops before any content — on the home page the form's
-          submit button was tab stop 23.
-        */}
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-[--radius-control] focus:border focus:border-border focus:bg-card focus:px-4 focus:py-3 focus:font-mono focus:text-xs focus:uppercase focus:tracking-[0.18em] focus:text-foreground"
-        >
-          Skip to content
-        </a>
-        <SiteNav />
-        <main id="main" className="flex-1">{children}</main>
-        <footer className="border-t border-border py-8">
-          <Container
-            width="layout"
-            className="flex flex-col gap-1 text-center font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground sm:flex-row sm:justify-between sm:text-left"
-          >
-            <span>© {new Date().getFullYear()} Phạm Đăng Khôi</span>
-            <span>Ho Chi Minh City, Vietnam</span>
-          </Container>
-        </footer>
-      </body>
+      <body className="flex min-h-full flex-col font-sans">{children}</body>
     </html>
   );
 }

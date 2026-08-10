@@ -1,0 +1,70 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+
+import { LoginForm } from "@/components/login-form";
+import { Container } from "@/components/ui/container";
+import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
+import { cn } from "@/lib/cn";
+import { safeNextPath } from "@/lib/session";
+
+export const metadata: Metadata = {
+  title: "Console access",
+};
+
+/**
+ * The way in to the admin area.
+ *
+ * Composed as a panel sitting on the site's own grid rather than a card
+ * floating in the middle of an empty screen. The centred-card login is the
+ * default answer everywhere, and here it would read as a different product
+ * bolted on — the graph paper, the atmosphere glow and the mono status line all
+ * carry over from the public pages, so the console looks like the same machine
+ * seen from the back.
+ *
+ * The animated wire under the fields is the tie: it is the device the contact
+ * form uses to show a visitor's message going out to the API, and this is the
+ * same wire carrying credentials to the same backend.
+ */
+export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+  const params = await searchParams;
+  const raw = params.next;
+  // Never rendered into an href — it is a hidden form value the action
+  // re-validates — but sanitised here too so nothing downstream inherits an
+  // attacker-chosen string.
+  const next = safeNextPath(typeof raw === "string" ? raw : null);
+
+  return (
+    <section className="hero-atmosphere flex flex-1 items-center py-16 sm:py-24">
+      <Container width="layout">
+        {/*
+          Left-aligned on the same rail the hero uses, and capped at a readable
+          measure rather than stretched. On a wide screen the panel sits against
+          the grid with the glow behind it, which is the composition the home
+          page opens with.
+        */}
+        <div className="max-w-md">
+          {/* Not as="h2": this label sits *above* the page h1, so making it a
+              heading would give the page an h2 before its h1. */}
+          <Eyebrow>Restricted</Eyebrow>
+          <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            Console access
+          </h1>
+          <p className="mt-4 text-muted-foreground">
+            This area manages the site&rsquo;s content. There is no public
+            sign-up — the one account is created from the command line.
+          </p>
+
+          <div className="mt-10">
+            <LoginForm next={next} />
+          </div>
+
+          <p className={cn(eyebrowClasses, "mt-10")}>
+            <Link href="/" className="underline underline-offset-4 hover:text-primary">
+              Back to the site
+            </Link>
+          </p>
+        </div>
+      </Container>
+    </section>
+  );
+}

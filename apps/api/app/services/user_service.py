@@ -33,23 +33,16 @@ class UserService:
         if existing_user:
             raise ConflictError("User with this email already exists")
         
-        # Hash password if provided
-        hashed_password = None
-        if user_data.password:
-            hashed_password = get_password_hash(user_data.password)
-        
-        # Create user
         user = User(
             email=user_data.email,
             username=user_data.username,
             full_name=user_data.full_name,
-            hashed_password=hashed_password,
+            hashed_password=get_password_hash(user_data.password),
             avatar_url=user_data.avatar_url,
-            google_id=user_data.google_id,
-            google_email=user_data.google_email,
-            status=UserStatus.ACTIVE if user_data.google_id else UserStatus.PENDING_VERIFICATION
+            status=UserStatus.PENDING_VERIFICATION,
         )
-        
+
+
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
@@ -66,10 +59,6 @@ class UserService:
     def get_user_by_email(self, email: str) -> Optional[User]:
         """Get user by email"""
         return self.db.query(User).filter(User.email == email).first()
-
-    def get_user_by_google_id(self, google_id: str) -> Optional[User]:
-        """Get user by Google ID"""
-        return self.db.query(User).filter(User.google_id == google_id).first()
 
     def get_users(self, skip: int = 0, limit: int = 100, filters: Dict[str, Any] = None) -> List[User]:
         """Get users with pagination and filters"""
@@ -155,36 +144,11 @@ class UserService:
         
         return user
 
-    def authenticate_google_user(self, google_user_info: Dict[str, Any]) -> User:
-        """Authenticate or create user with Google OAuth"""
-        # Check if user exists by Google ID
-        user = self.get_user_by_google_id(google_user_info["id"])
-        
-        if not user:
-            # Check if user exists by email
-            user = self.get_user_by_email(google_user_info["email"])
-            if user:
-                # Link existing user with Google account
-                user.google_id = google_user_info["id"]
-                user.google_email = google_user_info["email"]
-                user.is_verified = True
-                user.status = UserStatus.ACTIVE
-            else:
-                # Create new user
-                user_data = UserCreate(
-                    email=google_user_info["email"],
-                    full_name=google_user_info["name"],
-                    avatar_url=google_user_info.get("picture"),
-                    google_id=google_user_info["id"],
-                    google_email=google_user_info["email"]
-                )
-                user = self.create_user(user_data)
-
-        # Update last login
-        user.last_login_at = datetime.now(timezone.utc)
-        self.db.commit()
-
-        return user
+    # authenticate_google_user() was removed with the rest of the Google OAuth
+    # scaffolding. The POST /auth/google endpoint that called it had already
+    # gone; this method, get_user_by_google_id(), the two schemas and the two
+    # columns stayed behind and were reachable from nothing. Unreachable code
+    # that mints sessions is the kind that gets wired back up by accident.
 
     # Token management
     @staticmethod

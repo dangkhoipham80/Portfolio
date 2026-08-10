@@ -16,7 +16,9 @@ import { useActionState, useRef, useState } from "react";
 
 import { submitContact } from "@/app/actions/contact";
 import { Button } from "@/components/ui/button";
+import { Wire } from "@/components/ui/wire";
 import { TextAreaField, TextField } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
 import {
   CONTACT_FIELDS,
   CONTACT_LIMITS,
@@ -29,48 +31,7 @@ import {
   readContactForm,
   validateContact,
 } from "@/lib/contact";
-
-/** "about 43 minutes" — vague on purpose, since the exact second is not useful. */
-function formatWait(seconds: number | null): string {
-  if (seconds === null) return "in a little while";
-  if (seconds < 60) return "in under a minute";
-
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `in about ${minutes} minute${minutes === 1 ? "" : "s"}`;
-
-  const hours = Math.round(minutes / 60);
-  return `in about ${hours} hour${hours === 1 ? "" : "s"}`;
-}
-
-/**
- * The section's one animated element.
- *
- * It is the rule that separates the fields from the submit button, and while a
- * request is in flight it becomes the hero's wire: the same dashed stroke and
- * the same `wire-flow` keyframes from globals.css, which already reads as
- * packets moving along an edge. Reusing it costs one <svg> and no JavaScript,
- * and it stops under `prefers-reduced-motion` because the global rule in
- * globals.css covers every animation on the site.
- */
-function Wire({ active }: { active: boolean }) {
-  return (
-    <svg
-      // aria-hidden alone. It already removes the element from the
-      // accessibility tree, so role="presentation" alongside it does nothing.
-      aria-hidden="true"
-      className={`h-px w-full ${active ? "text-primary" : "text-border"}`}
-    >
-      <line
-        x1="0"
-        y1="0.5"
-        x2="100%"
-        y2="0.5"
-        stroke="currentColor"
-        className={active ? "wire-flow" : undefined}
-      />
-    </svg>
-  );
-}
+import { formatWait } from "@/lib/retry-after";
 
 /**
  * Everything the form has to say lands here, in one place under the fields.
@@ -129,14 +90,6 @@ function StatusLine({
   // The endpoint this posts to, and the budget, stated up front. It is the one
   // line on the page that says the owner wrote the backend as well as the form.
   return <p className={`${mono} text-muted-foreground`}>POST /contacts · 5 per hour</p>;
-}
-
-function Notice({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="rounded-[--radius-control] border border-border bg-card px-4 py-3 text-sm text-foreground">
-      {children}
-    </p>
-  );
 }
 
 function MailLink() {

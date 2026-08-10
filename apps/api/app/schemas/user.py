@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, Field
 
+from app.core.constants import MIN_PASSWORD_LENGTH
 from app.models.token import TokenType
 from app.models.user import UserStatus
 
@@ -26,22 +27,25 @@ class PermissionBase(BaseModel):
 
 # Create schemas
 class UserCreate(UserBase):
-    password: Optional[str] = None  # Optional for OAuth users
-    google_id: Optional[str] = None
-    google_email: Optional[EmailStr] = None
-
-    @validator('password')
-    def validate_password(cls, v, values):
-        if not v and not values.get('google_id'):
-            raise ValueError('Password is required for non-OAuth users')
-        return v
+    # Required, where it used to be Optional with a validator that let it
+    # through when a google_id was present. With OAuth gone there is no such
+    # account, so the constraint says so directly instead of via a validator
+    # reading a sibling field.
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
 
 class UserLogin(BaseModel):
     email: EmailStr
+    # No min_length here, deliberately, and it should stay that way.
+    #
+    # Every other password field on this API enforces MIN_PASSWORD_LENGTH. This
+    # one is a guess at an existing secret, not a new one. Constraining it would
+    # answer a short guess with a 422 while a long guess gets a 401, which tells
+    # an attacker where the length floor is and marks their wrong guesses as
+    # differently-wrong. It would also lock out any account whose password
+    # predates the rule, by refusing the login rather than the password.
+    #
+    # Every login failure returns the same 401.
     password: str
-
-class GoogleLogin(BaseModel):
-    google_token: str
 
 class RoleCreate(RoleBase):
     pass
@@ -58,8 +62,10 @@ class UserUpdate(BaseModel):
     status: Optional[UserStatus] = None
 
 class UserPasswordUpdate(BaseModel):
+    # The old password is a guess, so it is unconstrained for the same reason
+    # UserLogin.password is. The new one has to clear the floor.
     current_password: str
-    new_password: str
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
 
 class RoleUpdate(BaseModel):
     name: Optional[str] = None
@@ -90,8 +96,6 @@ class UserResponse(UserBase):
 
 class UserDetailResponse(UserResponse):
     email_verified_at: Optional[datetime] = None
-    google_id: Optional[str] = None
-    google_email: Optional[EmailStr] = None
 
 class RoleResponse(RoleBase):
     id: int
@@ -149,21 +153,13 @@ class PermissionListResponse(BaseModel):
     page: int
     size: int
 
-# OAuth schemas
-class GoogleUserInfo(BaseModel):
-    id: str
-    email: str
-    name: str
-    picture: Optional[str] = None
-    verified_email: bool = False
-
 # Password reset schemas
 class PasswordResetRequest(BaseModel):
     email: EmailStr
 
 class PasswordResetConfirm(BaseModel):
     token: str
-    new_password: str
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
 
 # Email verification schemas
 class EmailVerificationRequest(BaseModel):
