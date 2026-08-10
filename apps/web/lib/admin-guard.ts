@@ -35,6 +35,24 @@ import {
 export type AdminSession = { user: CurrentUser; accessToken: string };
 
 /**
+ * Whether the caller already holds a usable admin session.
+ *
+ * Used by the sign-in screen to send someone straight to /admin rather than
+ * show them a form they do not need. It asks the API instead of trusting the
+ * presence of a cookie, so a stale one renders the form rather than starting a
+ * bounce between /login and /admin.
+ */
+export async function hasLiveSession(): Promise<boolean> {
+  const jar = await cookies();
+  const accessToken = jar.get(ACCESS_COOKIE)?.value;
+  if (!accessToken) return false;
+
+  const result = await fetchCurrentUser(accessToken);
+
+  return result.ok && result.data.roles.includes("admin");
+}
+
+/**
  * Resolve the caller, or redirect. Never returns for a signed-out visitor.
  *
  * `path` is where they were trying to go, carried through the sign-in so they

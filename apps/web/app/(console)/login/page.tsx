@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/login-form";
 import { Container } from "@/components/ui/container";
 import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
+import { hasLiveSession } from "@/lib/admin-guard";
 import { cn } from "@/lib/cn";
-import { safeNextPath } from "@/lib/session";
+import { ADMIN_PATH, safeNextPath } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Console access",
@@ -26,6 +28,17 @@ export const metadata: Metadata = {
  * same wire carrying credentials to the same backend.
  */
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+  // Already signed in? Go straight through.
+  //
+  // This is what lets the header's console control be a plain static link. The
+  // alternative — having the header ask who is signed in — means calling
+  // cookies() in a component every page renders, which opts the entire public
+  // site out of static rendering to answer a question only the owner ever asks.
+  //
+  // The check is the real one rather than "is there a cookie", so a stale
+  // cookie shows the form instead of bouncing to /admin and being sent back.
+  if (await hasLiveSession()) redirect(ADMIN_PATH);
+
   const params = await searchParams;
   const raw = params.next;
   // Never rendered into an href — it is a hidden form value the action
