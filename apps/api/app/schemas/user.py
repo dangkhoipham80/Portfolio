@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field
 
 from app.core.constants import MIN_PASSWORD_LENGTH
 from app.models.token import TokenType
@@ -27,15 +27,11 @@ class PermissionBase(BaseModel):
 
 # Create schemas
 class UserCreate(UserBase):
-    password: Optional[str] = None  # Optional for OAuth users
-    google_id: Optional[str] = None
-    google_email: Optional[EmailStr] = None
-
-    @validator('password')
-    def validate_password(cls, v, values):
-        if not v and not values.get('google_id'):
-            raise ValueError('Password is required for non-OAuth users')
-        return v
+    # Required, where it used to be Optional with a validator that let it
+    # through when a google_id was present. With OAuth gone there is no such
+    # account, so the constraint says so directly instead of via a validator
+    # reading a sibling field.
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -50,9 +46,6 @@ class UserLogin(BaseModel):
     #
     # Every login failure returns the same 401.
     password: str
-
-class GoogleLogin(BaseModel):
-    google_token: str
 
 class RoleCreate(RoleBase):
     pass
@@ -103,8 +96,6 @@ class UserResponse(UserBase):
 
 class UserDetailResponse(UserResponse):
     email_verified_at: Optional[datetime] = None
-    google_id: Optional[str] = None
-    google_email: Optional[EmailStr] = None
 
 class RoleResponse(RoleBase):
     id: int
@@ -161,14 +152,6 @@ class PermissionListResponse(BaseModel):
     total: int
     page: int
     size: int
-
-# OAuth schemas
-class GoogleUserInfo(BaseModel):
-    id: str
-    email: str
-    name: str
-    picture: Optional[str] = None
-    verified_email: bool = False
 
 # Password reset schemas
 class PasswordResetRequest(BaseModel):

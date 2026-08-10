@@ -20,12 +20,12 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     username = Column(String(100), unique=True, index=True, nullable=True)
     full_name = Column(String(255), nullable=True)
-    hashed_password = Column(String(255), nullable=True)  # Null for OAuth users
+    # Nullable because the column outlived the Google OAuth sign-in it was made
+    # nullable for. Every account now has a password; the paths that read this
+    # still check for null rather than assume, because a null here must refuse
+    # the operation and not raise.
+    hashed_password = Column(String(255), nullable=True)
     avatar_url = Column(String(500), nullable=True)
-
-    # OAuth fields
-    google_id = Column(String(255), unique=True, index=True, nullable=True)
-    google_email = Column(String(255), nullable=True)
 
     # Status and verification
     is_active = Column(Boolean, default=True)
