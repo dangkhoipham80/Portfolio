@@ -1,3 +1,16 @@
+# Minimum length for any password this API accepts.
+#
+# The seed script has refused anything shorter since it stopped shipping a
+# hardcoded "admin123", but that was the only place the rule existed: the reset
+# and change-password schemas took `str` and accepted a single character, so the
+# 12-character admin password could be replaced with "a" through the reset flow
+# the script was trying to protect.
+#
+# Length only. No character-class rules — they push people towards "Password1!"
+# and NIST dropped the recommendation in SP 800-63B.
+MIN_PASSWORD_LENGTH = 12
+
+
 # Error Messages
 class ErrorMessages:
     # User related

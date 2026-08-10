@@ -7,6 +7,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.core.constants import MIN_PASSWORD_LENGTH
 from app.core.database import get_db
 from app.models.user import UserStatus
 from app.schemas.user import PermissionCreate, RoleCreate, UserCreate
@@ -135,8 +136,10 @@ def admin_credentials_from_env():
             '  python -c "import secrets; print(secrets.token_urlsafe(24))"'
         )
 
-    if len(password) < 12:
-        raise SystemExit("ADMIN_PASSWORD must be at least 12 characters.")
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise SystemExit(
+            f"ADMIN_PASSWORD must be at least {MIN_PASSWORD_LENGTH} characters."
+        )
 
     return email, password
 

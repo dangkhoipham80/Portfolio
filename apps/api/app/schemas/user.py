@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, Field, validator
 
+from app.core.constants import MIN_PASSWORD_LENGTH
 from app.models.token import TokenType
 from app.models.user import UserStatus
 
@@ -38,6 +39,16 @@ class UserCreate(UserBase):
 
 class UserLogin(BaseModel):
     email: EmailStr
+    # No min_length here, deliberately, and it should stay that way.
+    #
+    # Every other password field on this API enforces MIN_PASSWORD_LENGTH. This
+    # one is a guess at an existing secret, not a new one. Constraining it would
+    # answer a short guess with a 422 while a long guess gets a 401, which tells
+    # an attacker where the length floor is and marks their wrong guesses as
+    # differently-wrong. It would also lock out any account whose password
+    # predates the rule, by refusing the login rather than the password.
+    #
+    # Every login failure returns the same 401.
     password: str
 
 class GoogleLogin(BaseModel):
@@ -58,8 +69,10 @@ class UserUpdate(BaseModel):
     status: Optional[UserStatus] = None
 
 class UserPasswordUpdate(BaseModel):
+    # The old password is a guess, so it is unconstrained for the same reason
+    # UserLogin.password is. The new one has to clear the floor.
     current_password: str
-    new_password: str
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
 
 class RoleUpdate(BaseModel):
     name: Optional[str] = None
@@ -163,7 +176,7 @@ class PasswordResetRequest(BaseModel):
 
 class PasswordResetConfirm(BaseModel):
     token: str
-    new_password: str
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
 
 # Email verification schemas
 class EmailVerificationRequest(BaseModel):
