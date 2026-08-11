@@ -157,6 +157,40 @@ class CareerEntry(CareerEntryBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
+# Post Schemas
+class PostBase(BaseModel):
+    title: str
+    excerpt: Optional[str] = None
+    # Markdown. See the note on the model: the API neither renders nor
+    # sanitises it, because it is not HTML on the way in or the way out.
+    body: str
+    tags: StringList = []
+    cover_image: Optional[str] = None
+    published: bool = False
+    # Writable so a post can be backdated to when it was actually written. Left
+    # out, the service stamps it the first time the post is published.
+    published_at: Optional[datetime] = None
+
+class PostCreate(PostBase):
+    slug: Optional[str] = None
+
+class PostUpdate(BaseModel):
+    title: Optional[str] = None
+    excerpt: Optional[str] = None
+    body: Optional[str] = None
+    tags: Optional[List[str]] = None
+    cover_image: Optional[str] = None
+    published: Optional[bool] = None
+    published_at: Optional[datetime] = None
+
+class Post(PostBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
 # Contact Schemas
 class ContactBase(BaseModel):
     name: str

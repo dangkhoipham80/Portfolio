@@ -84,6 +84,32 @@ class CareerEntry(BaseModel):
     published = Column(Boolean, nullable=False, default=False)
 
 
+class Post(BaseModel):
+    """A blog post.
+
+    ``body`` holds Markdown, not HTML. The API stores and returns it verbatim
+    and never renders it — the web app does that server-side through a
+    sanitising pipeline, so no untrusted HTML is stored here waiting to be
+    trusted by whatever reads the column next.
+    """
+
+    __tablename__ = "posts"
+
+    slug = Column(String(255), unique=True, index=True, nullable=False)
+    title = Column(String(255), nullable=False)
+    # Shown on the index card and used as the meta description. Optional: a
+    # post without one falls back to the opening of the body.
+    excerpt = Column(Text)
+    body = Column(Text, nullable=False)
+    tags = Column(JSON)  # list[str]
+    cover_image = Column(String(500))
+    published = Column(Boolean, nullable=False, default=False)
+    # When the post first went live, which is not `created_at` — that is when
+    # the draft row was made, and a post written over a fortnight would carry
+    # the wrong date into the feed and the sitemap. Null until it is published.
+    published_at = Column(DateTime(timezone=True))
+
+
 class Contact(BaseModel):
     __tablename__ = "contacts"
 

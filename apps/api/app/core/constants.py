@@ -35,6 +35,9 @@ class ErrorMessages:
     # Career related
     CAREER_ENTRY_NOT_FOUND = "Career entry not found"
 
+    # Blog related
+    POST_NOT_FOUND = "Post not found"
+
     # Role & Permission related
     ROLE_NOT_FOUND = "Role not found"
     PERMISSION_NOT_FOUND = "Permission not found"
@@ -61,3 +64,4 @@ class SuccessMessages:
     SKILL_DELETED = "Skill deleted successfully"
     CERTIFICATE_DELETED = "Certificate deleted successfully"
     CAREER_ENTRY_DELETED = "Career entry deleted successfully"
+    POST_DELETED = "Post deleted successfully"

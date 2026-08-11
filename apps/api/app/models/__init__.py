@@ -4,6 +4,7 @@ from .portfolio import (
     CareerEntry,
     Certificate,
     Contact,
+    Post,
     Project,
     ProjectStatus,
     Skill,
@@ -20,5 +21,5 @@ __all__ = [
     "Token", "TokenType",
     "Role", "Permission", "UserRole", "RolePermission",
     "Contact", "Project", "ProjectStatus", "Skill", "SkillLevel",
-    "Certificate", "CareerEntry"
+    "Certificate", "CareerEntry", "Post"
 ] 

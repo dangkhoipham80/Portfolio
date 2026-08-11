@@ -19,9 +19,6 @@ from fastapi.testclient import TestClient
 from app.core.slugs import slugify, unique_slug
 from app.main import app
 from app.models.portfolio import CareerEntry, Certificate, Project, ProjectStatus, Skill, SkillLevel
-from app.models.role import Role, UserRole
-from app.models.token import TokenType
-from app.services.user_service import UserService
 
 client = TestClient(app)
 
@@ -51,25 +48,6 @@ def make_project(db):
     for project_id in made:
         db.query(Project).filter(Project.id == project_id).delete()
     db.commit()
-
-
-@pytest.fixture
-def admin_token(db, make_user):
-    """A bearer token for a real admin user.
-
-    Goes through UserService.create_token rather than signing a JWT by hand,
-    because get_current_user_dependency also checks the token has a live row —
-    a hand-signed token is rejected before the admin check is ever reached.
-    """
-    admin_role = db.query(Role).filter(Role.name == "admin").first()
-    if admin_role is None:
-        pytest.skip("no admin role in this database; run scripts/init_auth_tables.py")
-
-    user = make_user("content-admin@example.invalid")
-    db.add(UserRole(user_id=user.id, role_id=admin_role.id))
-    db.commit()
-
-    return UserService(db).create_token(user.id, TokenType.ACCESS, expires_in_minutes=10)
 
 
 def _auth(token):

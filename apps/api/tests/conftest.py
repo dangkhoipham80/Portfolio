@@ -8,7 +8,10 @@ import pytest
 
 from app.core.database import SessionLocal
 from app.core.rate_limit import limiter
+from app.models.role import Role, UserRole
+from app.models.token import TokenType
 from app.models.user import User, UserStatus
+from app.services.user_service import UserService
 
 
 @pytest.fixture(autouse=True)
@@ -85,3 +88,25 @@ def make_user(db):
 
     for email in made:
         _drop_user(db, email)
+
+
+@pytest.fixture
+def admin_token(db, make_user):
+    """A bearer token for a real admin user.
+
+    Goes through UserService.create_token rather than signing a JWT by hand,
+    because get_current_user_dependency also checks the token has a live row —
+    a hand-signed token is rejected before the admin check is ever reached.
+
+    Lives here rather than beside one test file: both the content tests and the
+    blog tests need an admin, and the second copy is where the two drift.
+    """
+    admin_role = db.query(Role).filter(Role.name == "admin").first()
+    if admin_role is None:
+        pytest.skip("no admin role in this database; run scripts/init_auth_tables.py")
+
+    user = make_user("content-admin@example.invalid")
+    db.add(UserRole(user_id=user.id, role_id=admin_role.id))
+    db.commit()
+
+    return UserService(db).create_token(user.id, TokenType.ACCESS, expires_in_minutes=10)

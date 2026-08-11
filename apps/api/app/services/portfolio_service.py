@@ -1,15 +1,18 @@
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
 from app.core.slugs import unique_slug
-from app.models.portfolio import CareerEntry, Certificate, Contact, Project, Skill
+from app.models.portfolio import CareerEntry, Certificate, Contact, Post, Project, Skill
 from app.schemas.portfolio import (
     CareerEntryCreate,
     CareerEntryUpdate,
     CertificateCreate,
     CertificateUpdate,
     ContactCreate,
+    PostCreate,
+    PostUpdate,
     ProjectCreate,
     ProjectUpdate,
     SkillCreate,
@@ -28,13 +31,19 @@ class PortfolioService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _create_with_slug(self, model, payload, title_field: str = "title"):
-        """Insert a slugged row, deriving the slug from its title if absent."""
+    def _create_with_slug(self, model, payload, title_field: str = "title", prepare=None):
+        """Insert a slugged row, deriving the slug from its title if absent.
+
+        ``prepare`` runs on the built row before it is added, for fields the
+        payload does not carry — the publication stamp is the only one so far.
+        """
         data = payload.model_dump()
         requested = data.pop("slug", None) or getattr(payload, title_field)
         data["slug"] = unique_slug(self.db, model, requested)
 
         record = model(**data)
+        if prepare is not None:
+            prepare(record)
         self.db.add(record)
         self.db.commit()
         self.db.refresh(record)
@@ -225,6 +234,78 @@ class PortfolioService:
             return False
 
         self.db.delete(db_entry)
+        self.db.commit()
+        return True
+
+    # Post methods
+    @staticmethod
+    def _stamp_publication(record) -> None:
+        """Record when a post first went live.
+
+        Set once and never moved. Unpublishing a post to fix a typo and
+        publishing it again keeps the original date, so the index does not
+        reshuffle and a date already sitting in someone's feed reader stays
+        true. An explicit ``published_at`` in the payload wins over this — that
+        is how a post gets backdated.
+        """
+        if record.published and record.published_at is None:
+            record.published_at = datetime.now(timezone.utc)
+
+    def get_posts(
+        self,
+        tag: Optional[str] = None,
+        include_unpublished: bool = False,
+    ) -> List[Post]:
+        query = self.db.query(Post)
+        if not include_unpublished:
+            query = query.filter(Post.published.is_(True))
+        # Newest first. Drafts have no publication date and sort to the end,
+        # which is where the admin list wants them.
+        posts = query.order_by(Post.published_at.desc().nullslast(), Post.id.desc()).all()
+
+        if tag:
+            # In Python, not SQL. `tags` is a plain JSON column, and Postgres
+            # has no containment operator for `json` — only `jsonb` — so the
+            # SQL form would need a cast that SQLite could not run in the test
+            # suite. There are tens of posts, not thousands.
+            posts = [post for post in posts if tag in (post.tags or [])]
+
+        return posts
+
+    def get_post(self, post_id: int, include_unpublished: bool = False) -> Optional[Post]:
+        query = self.db.query(Post).filter(Post.id == post_id)
+        if not include_unpublished:
+            query = query.filter(Post.published.is_(True))
+        return query.first()
+
+    def get_post_by_slug(
+        self, slug: str, include_unpublished: bool = False
+    ) -> Optional[Post]:
+        query = self.db.query(Post).filter(Post.slug == slug)
+        if not include_unpublished:
+            query = query.filter(Post.published.is_(True))
+        return query.first()
+
+    def create_post(self, post: PostCreate) -> Post:
+        return self._create_with_slug(Post, post, prepare=self._stamp_publication)
+
+    def update_post(self, post_id: int, post: PostUpdate) -> Optional[Post]:
+        db_post = self.get_post(post_id, include_unpublished=True)
+        if not db_post:
+            return None
+
+        self._apply_update(db_post, post)
+        self._stamp_publication(db_post)
+        self.db.commit()
+        self.db.refresh(db_post)
+        return db_post
+
+    def delete_post(self, post_id: int) -> bool:
+        db_post = self.get_post(post_id, include_unpublished=True)
+        if not db_post:
+            return False
+
+        self.db.delete(db_post)
         self.db.commit()
         return True
 
