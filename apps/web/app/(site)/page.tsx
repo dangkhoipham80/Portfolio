@@ -79,7 +79,7 @@ export default async function HomePage() {
             layout container. In the two-column range a dangling odd card spans
             the row — half-filled last rows read as missing data, not layout.
           */
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 sm:max-lg:[&>*:nth-child(odd):last-child]:col-span-2">
+          <div className="reveal-row grid gap-6 sm:grid-cols-2 lg:grid-cols-3 sm:max-lg:[&>*:nth-child(odd):last-child]:col-span-2">
             {projects.map((project) => (
               <ProjectCard key={project.id} project={project} />
             ))}
@@ -97,7 +97,7 @@ export default async function HomePage() {
         {skills.length === 0 ? (
           <EmptyState>No skills published yet.</EmptyState>
         ) : (
-          <div className="grid gap-x-12 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="reveal-row grid gap-x-12 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
             {groupByCategory(skills).map(([category, entries]) => (
               <div key={category}>
                 <Eyebrow>{category}</Eyebrow>

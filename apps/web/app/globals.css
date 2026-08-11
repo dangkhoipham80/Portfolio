@@ -568,3 +568,312 @@
     }
   }
 }
+
+/* ==========================================================================
+ * The console.
+ *
+ * A different product from the site in front of it, and deliberately so. The
+ * public pages are a portfolio: graph paper, a green tint, generous measure,
+ * hairlines. Wearing that costume, the admin area read as a page of the
+ * portfolio rather than a tool — sparse, centred, unfinished. Nobody but the
+ * owner ever sees these screens and they are already `noindex`, so there is
+ * nothing to be gained by making them match.
+ *
+ * ## How this works, and why it is short
+ *
+ * The console does not fork Button, Card, Notice or Field. It remaps the
+ * variables those primitives already read, inside `.console-theme` only. A
+ * `bg-card` inside the console resolves to a dark panel; a
+ * `rounded-[var(--radius-card)]` picks up the larger radius below. So the whole
+ * component set changes surface without a single component knowing about it,
+ * and the two themes cannot drift apart because there is only one set of
+ * components.
+ *
+ * Always dark, and not wired to the site's theme toggle. The toggle lives in
+ * the public header, which the console does not render; a console that followed
+ * a preference set somewhere it cannot be changed from would just be a console
+ * that is sometimes wrong.
+ * ========================================================================== */
+
+.console-theme {
+  /* Slightly blue-black rather than neutral: a pure grey app surface reads as
+     unfinished next to any saturated accent, and the cast gives the violet
+     something to sit on. */
+  --console-bg: 225 18% 7%;
+  --console-panel: 225 15% 10%;
+  --console-raised: 225 14% 14%;
+  --console-line: 225 12% 19%;
+  --console-accent: 255 88% 72%;
+  --console-text: 225 22% 96%;
+  --console-muted: 225 12% 68%;
+
+  /*
+   * Both halves are needed, and the reason is the whole trick.
+   *
+   * The bare `--card`/`--foreground` channels are what this file's own
+   * `hsl(var(--x) / alpha)` rules read. The `--color-*` names are what Tailwind
+   * utilities read. Setting only the first looked correct in the source and did
+   * nothing on screen: `@theme` declares `--color-card: hsl(var(--card))` *on
+   * :root*, so the substitution happens there, and overriding `--card` further
+   * down the tree never recomputes it. The site's own dark mode gets away with
+   * the short version only because `.dark` sits on <html> — the same element as
+   * :root. A nested scope has to name the variables the utilities actually use.
+   */
+  --background: var(--console-bg);
+  --foreground: var(--console-text);
+  --card: var(--console-panel);
+  --border: var(--console-line);
+  --muted: var(--console-raised);
+  --muted-foreground: var(--console-muted);
+  --accent: var(--console-raised);
+  --accent-foreground: var(--console-text);
+  --primary: var(--console-accent);
+  /* Dark on the accent: the violet is mid-lightness, so near-white on it is
+     light-on-light — the same trap the site's dark palette documents. */
+  --primary-foreground: 225 18% 9%;
+  --ring: var(--console-accent);
+  --destructive: 0 72% 58%;
+  --destructive-text: 0 90% 78%;
+
+  --color-background: hsl(var(--console-bg));
+  --color-foreground: hsl(var(--console-text));
+  --color-card: hsl(var(--console-panel));
+  --color-border: hsl(var(--console-line));
+  --color-muted: hsl(var(--console-raised));
+  --color-muted-foreground: hsl(var(--console-muted));
+  --color-accent: hsl(var(--console-raised));
+  --color-accent-foreground: hsl(var(--console-text));
+  --color-primary: hsl(var(--console-accent));
+  --color-primary-foreground: hsl(225 18% 9%);
+  --color-ring: hsl(var(--console-accent));
+  --color-destructive: hsl(0 72% 58%);
+  --color-destructive-text: hsl(0 90% 78%);
+
+  /* Rounder than the site. The larger radius is most of what separates a 2026
+     app surface from a 2016 one, and these are read at the point of use, so
+     overriding them here does work. */
+  --radius-card: 0.875rem;
+  --radius-control: 0.625rem;
+
+  color-scheme: dark;
+  background-color: hsl(var(--console-bg));
+  /* The body paints graph paper. This is the layer that stops it. */
+  background-image: none;
+  color: hsl(var(--console-text));
+}
+
+@layer components {
+  /*
+   * A panel. Border plus a one-pixel inner highlight along the top edge — the
+   * cheapest way to make a flat dark rectangle read as a raised surface rather
+   * than a hole, and what almost every dark app interface is doing when it
+   * looks "lit".
+   */
+  .console-theme .c-panel {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-card);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.04),
+      0 1px 2px hsl(0 0% 0% / 0.4);
+  }
+
+  .console-theme .c-row {
+    transition:
+      border-color 160ms,
+      background-color 160ms,
+      transform 160ms;
+  }
+
+  .console-theme .c-row:hover,
+  .console-theme .c-row:focus-within {
+    border-color: hsl(var(--primary) / 0.45);
+    background-color: hsl(var(--muted) / 0.6);
+  }
+
+  /*
+   * The current section. A filled pill rather than an underline, because a
+   * vertical list has no baseline to underline against — and the accent stays
+   * out of the *text*: violet on a violet tint measures badly, so the fill
+   * carries the colour and the label stays plain.
+   */
+  .console-theme .c-nav-item {
+    border-radius: var(--radius-control);
+    transition:
+      background-color 140ms,
+      color 140ms;
+  }
+
+  .console-theme .c-nav-item[aria-current] {
+    background-color: hsl(var(--primary) / 0.16);
+    color: hsl(var(--foreground));
+  }
+
+  .console-theme .c-nav-item:not([aria-current]):hover {
+    background-color: hsl(var(--muted) / 0.7);
+    color: hsl(var(--foreground));
+  }
+
+  /*
+   * A state dot with a halo. Two pixels of colour say "live" faster than a word
+   * does, and the halo is what stops it reading as dust on the screen.
+   */
+  .console-theme .c-dot {
+    width: 0.4375rem;
+    height: 0.4375rem;
+    border-radius: 9999px;
+    flex: none;
+  }
+
+  .console-theme .c-dot-live {
+    background-color: hsl(152 65% 55%);
+    box-shadow: 0 0 0 3px hsl(152 65% 55% / 0.16);
+  }
+
+  .console-theme .c-dot-draft {
+    background-color: hsl(38 95% 62%);
+    box-shadow: 0 0 0 3px hsl(38 95% 62% / 0.16);
+  }
+
+  /*
+   * A wash of accent behind the top of the sidebar. One soft light source, so
+   * the shell has a direction rather than being uniformly flat — the single
+   * decorative move in here, and the reason the column does not look like a
+   * grey box.
+   */
+  .console-theme .c-sidebar {
+    background-image: radial-gradient(
+      22rem 18rem at 0% 0%,
+      hsl(var(--primary) / 0.1),
+      transparent 70%
+    );
+  }
+}
+
+/*
+ * Motion in the console.
+ *
+ * Rows arrive rather than appear, and the stagger is small and finite — 40ms
+ * apart, capped so a list of forty does not take two seconds to finish landing.
+ * The whole thing is one keyframe and a delay; there is no library, no canvas
+ * and nothing on the main thread after the first frame, because a tool is a
+ * place where you are trying to get something done and motion that costs
+ * responsiveness is motion that is in the way.
+ *
+ * Behind `no-preference`, and `both` so the resting state is what a reduced
+ * motion visitor gets immediately rather than a row stuck invisible.
+ */
+@keyframes console-enter {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .console-theme .c-enter {
+    animation: console-enter 300ms var(--ease-enter) both;
+    animation-delay: calc(var(--i, 0) * 40ms);
+  }
+}
+
+/* ==========================================================================
+ * Scroll as the narrator.
+ *
+ * The page introduces itself in order: a section's rule draws in, its label
+ * and heading arrive, then its contents follow row by row as they reach the
+ * viewport. Read top to bottom it plays as a sequence rather than as one flat
+ * document that was always there.
+ *
+ * Every element is driven by its own `view()` timeline, which is why there is
+ * no orchestration code and no library. An element animates on where *it* is
+ * relative to the viewport, so a grid staggers itself as it scrolls in, the
+ * sequence survives someone landing halfway down the page from a link, and
+ * scrubbing backwards plays it backwards. A JavaScript version of this is an
+ * IntersectionObserver, a class toggle and a list of timeouts that all have to
+ * agree; this is a keyframe and a range.
+ *
+ * The two guards are the ones the skill gauges already use, for the reasons
+ * recorded there. `@supports` because a browser without scroll-driven
+ * animations must get the finished state rather than a permanently hidden one —
+ * the base rules below leave everything visible, so the animation only ever
+ * takes things away and puts them back. And `prefers-reduced-motion` because
+ * the block at the top of this file forces `animation-duration` to 0.01ms on
+ * everything, which a scroll-driven animation reads as "already finished".
+ * ========================================================================== */
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+}
+
+@keyframes rule-draw {
+  from {
+    scale: 0 1;
+  }
+}
+
+@layer base {
+  /*
+   * The hairline at the top of a section, as an element rather than a border,
+   * so it can be drawn. Full width by default: if nothing below animates it,
+   * it is exactly the border it replaced.
+   */
+  .section-rule {
+    position: relative;
+  }
+
+  .section-rule::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background-color: hsl(var(--border) / 0.6);
+    transform-origin: left;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .section-rule::before {
+        animation: rule-draw linear both;
+        animation-timeline: view();
+        /* Finished well before the heading lands, so the rule reads as the
+           thing that introduces the section rather than as a late arrival. */
+        animation-range: entry 0% entry 70%;
+      }
+
+      .reveal {
+        animation: reveal-in linear both;
+        animation-timeline: view();
+        animation-range: entry 5% cover 26%;
+      }
+
+      /*
+       * The row animates its children rather than itself: a parent fading
+       * while its children fade multiplies the opacity and drags the block
+       * along with the child's translate. This also means a grid needs one
+       * class, not one per card.
+       *
+       * Members of a row share a scroll position, so they would otherwise
+       * arrive together. Nudging the range per column walks them in from the
+       * left — the same reading direction as the text above them.
+       */
+      .reveal-row > * {
+        animation: reveal-in linear both;
+        animation-timeline: view();
+        animation-range: entry 5% cover 26%;
+      }
+
+      .reveal-row > *:nth-child(2n) {
+        animation-range: entry 9% cover 30%;
+      }
+
+      .reveal-row > *:nth-child(3n) {
+        animation-range: entry 13% cover 34%;
+      }
+    }
+  }
+}

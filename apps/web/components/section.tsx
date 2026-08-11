@@ -47,17 +47,20 @@ export function Section({
     <section
       id={id}
       className={cn(
-        "border-t border-border/60 py-16 sm:py-20 lg:py-24",
+        // section-rule replaces the top border with a line that can be drawn
+        // as the section arrives; see globals.css. Without scroll-driven
+        // animation support it renders as exactly the border it replaced.
+        "section-rule py-16 sm:py-20 lg:py-24",
         tinted && "bg-muted",
       )}
     >
       <Container width={width}>
-        {eyebrow ? <Eyebrow className="mb-3">{eyebrow}</Eyebrow> : null}
-        <Heading className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+        {eyebrow ? <Eyebrow className="reveal mb-3">{eyebrow}</Eyebrow> : null}
+        <Heading className="reveal font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
           {title}
         </Heading>
         {description ? (
-          <p className="mt-3 max-w-2xl text-muted-foreground">{description}</p>
+          <p className="reveal mt-3 max-w-2xl text-muted-foreground">{description}</p>
         ) : null}
         <div className="mt-10">{children}</div>
       </Container>

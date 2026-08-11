@@ -19,13 +19,22 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * `console-theme` is applied here so both screens behind the door share it — a
+ * light sign-in leading to a dark console is a seam in the one place a person
+ * sees both in the same second.
+ *
+ * There is no `<main>` here any more. It used to wrap `children`, which was
+ * fine while the console was a single column; the admin area now has a sidebar,
+ * and a nav rendered inside `<main>` is both the wrong landmark and a broken
+ * skip link — "skip to content" would land *before* the navigation and skip
+ * nothing. Each area owns its own `<main>` and puts it where content starts.
+ */
 export default function ConsoleLayout({ children }: LayoutProps<"/">) {
   return (
-    <>
+    <div className="console-theme flex flex-1 flex-col">
       <SkipLink />
-      <main id="main" className="flex flex-1 flex-col">
-        {children}
-      </main>
-    </>
+      {children}
+    </div>
   );
 }
