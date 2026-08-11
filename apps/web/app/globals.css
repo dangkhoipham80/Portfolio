@@ -342,6 +342,207 @@
   }
 
   /*
+   * A post body, which is the only HTML on this site the app does not write
+   * itself — it comes out of lib/markdown.ts as a string.
+   *
+   * Hand-written rather than @tailwindcss/typography. That plugin ships a
+   * complete type system of its own: its own scale, its own greys, its own
+   * spacing rhythm, none of which are these tokens. Adopting it would mean
+   * overriding nearly all of it to get back to the site's own values, and the
+   * bits that were missed would be the places the blog stopped looking like
+   * the rest of the site. Everything below is expressed in tokens.
+   */
+  .article-prose {
+    color: hsl(var(--foreground));
+  }
+
+  .article-prose > * + * {
+    margin-top: 1.25em;
+  }
+
+  .article-prose h2,
+  .article-prose h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    /* A heading belongs to what follows it, so it sits closer to that. */
+    margin-top: 2.5em;
+    margin-bottom: -0.5em;
+  }
+
+  .article-prose h2 {
+    font-size: 1.375rem;
+  }
+
+  .article-prose h3 {
+    font-size: 1.125rem;
+  }
+
+  .article-prose a {
+    color: hsl(var(--primary));
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .article-prose strong {
+    font-weight: 600;
+  }
+
+  .article-prose ul,
+  .article-prose ol {
+    padding-left: 1.5rem;
+  }
+
+  .article-prose ul {
+    list-style: disc;
+  }
+
+  .article-prose ol {
+    list-style: decimal;
+  }
+
+  .article-prose li::marker {
+    color: hsl(var(--primary));
+  }
+
+  .article-prose li + li {
+    margin-top: 0.5em;
+  }
+
+  .article-prose blockquote {
+    border-left: 2px solid hsl(var(--primary));
+    padding-left: 1.25rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .article-prose hr {
+    border: 0;
+    border-top: 1px solid hsl(var(--border));
+    margin-block: 2.5em;
+  }
+
+  /* Inline code, distinguished from the prose by face and surface, not colour. */
+  .article-prose :not(pre) > code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background-color: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-control);
+    padding: 0.1em 0.35em;
+  }
+
+  /*
+   * Code blocks carry no syntax highlighting, and that is a decision rather
+   * than a gap. A highlighter introduces eight or so colours that answer to
+   * nothing in this palette, in a page whose whole scheme is one accent on one
+   * neutral, and it needs a second theme to survive dark mode. What a reader
+   * actually needs from a block — where it starts, where it ends, and what
+   * language it is — the surface and the label below give them.
+   */
+  .article-prose pre {
+    position: relative;
+    overflow-x: auto;
+    background-color: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-card);
+    padding: 1.25rem;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+  }
+
+  /* Room for the label, and only where there is a label to make room for. */
+  .article-prose pre[data-lang] {
+    padding-top: 2.25rem;
+  }
+
+  .article-prose pre code {
+    font-family: var(--font-mono);
+  }
+
+  /*
+   * The fence's language, in the same mono-uppercase treatment as every other
+   * field name on the site. `data-lang` is written by lib/markdown.ts from a
+   * className the sanitiser has already vetted.
+   */
+  .article-prose pre[data-lang]::before {
+    content: attr(data-lang);
+    position: absolute;
+    top: 0.625rem;
+    right: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .article-prose img {
+    border-radius: var(--radius-card);
+    border: 1px solid hsl(var(--border));
+  }
+
+  .article-prose table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .article-prose th,
+  .article-prose td {
+    border: 1px solid hsl(var(--border));
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+  }
+
+  .article-prose th {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: hsl(var(--muted-foreground));
+    font-weight: 500;
+  }
+
+  /*
+   * How far through the post you are, as a line across the top of the window.
+   *
+   * Scroll-driven, so it costs no JavaScript — the same technique the skill
+   * gauges use, and the reason neither of them is a client component. The
+   * guards are the same too, and for the same reason: the base rule leaves it
+   * at zero width, so a browser without scroll timelines shows an empty track
+   * rather than a bar stuck at the wrong value.
+   *
+   * Behind `prefers-reduced-motion: no-preference` to match the gauges. The
+   * bar only moves when the reader moves the page, so it is arguably not the
+   * kind of motion that preference is about — but the reduced-motion block
+   * below forces `animation-duration` to 0.01ms on everything, and a
+   * scroll-driven animation with a fixed duration completes immediately and
+   * pins itself full. Opting out is what keeps that from happening.
+   */
+  @keyframes reading-progress {
+    from {
+      scale: 0 1;
+    }
+    to {
+      scale: 1 1;
+    }
+  }
+
+  .reading-progress {
+    transform-origin: left;
+    scale: 0 1;
+  }
+
+  @supports (animation-timeline: scroll()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .reading-progress {
+        animation: reading-progress linear both;
+        animation-timeline: scroll(root block);
+      }
+    }
+  }
+
+  /*
    * Respect a reduced-motion preference for everything, including the smooth
    * scrolling above — vestibular triggers are not a per-component concern.
    */

@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { CareerEntry, Certificate, Project, Skill } from "./types";
+import type { CareerEntry, Certificate, Post, Project, Skill } from "./types";
 
 /**
  * Server-side reader for the content API.
@@ -94,4 +94,21 @@ export async function getCertificates(): Promise<Certificate[]> {
 
 export async function getCareerEntries(): Promise<CareerEntry[]> {
   return getJson<CareerEntry[]>("/career/", [], isList);
+}
+
+/**
+ * Published posts, newest first — the API decides the order, not the caller.
+ *
+ * No tag parameter, though the API takes one. The index has to know every tag
+ * that exists in order to draw the facets, and a response already filtered to
+ * one tag cannot tell it about the others; so the page fetches the whole list
+ * once and narrows it itself. One request, complete facets, and the filtered
+ * view costs no second round trip.
+ */
+export async function getPosts(): Promise<Post[]> {
+  return getJson<Post[]>("/posts/", [], isList);
+}
+
+export async function getPost(slug: string): Promise<Post | null> {
+  return getJson<Post | null>(`/posts/slug/${encodeURIComponent(slug)}`, null, isRecord);
 }

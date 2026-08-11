@@ -46,6 +46,23 @@ function project(slug) {
   };
 }
 
+/** A post whose body is real Markdown, so the render pipeline is exercised too. */
+function post(slug) {
+  return {
+    id: 1,
+    slug,
+    title: "Stubbed Post",
+    excerpt: "A post served by the e2e stub.",
+    body: "## Stubbed heading\n\nA paragraph with `code` in it.\n",
+    tags: ["FastAPI", "Next.js"],
+    cover_image: null,
+    published: true,
+    published_at: "2026-08-09T00:00:00Z",
+    created_at: "2026-08-01T00:00:00Z",
+    updated_at: null,
+  };
+}
+
 /**
  * Tokens shaped like the real ones, so the console's own parsing is exercised.
  *
@@ -277,6 +294,25 @@ const server = createServer(async (request, response) => {
     if (slug === "stub-wrong-shape") return send(response, 200, []);
 
     return send(response, 200, project(slug));
+  }
+
+  // The same five failures as the project route above. A post detail page has
+  // one thing a project page does not — it renders Markdown into the DOM — so
+  // "the API answered, but not with a post" has to land on the 404 page rather
+  // than reaching the renderer with something that is not a post.
+  if (pathname.startsWith("/api/v1/posts/slug/")) {
+    const slug = decodeURIComponent(pathname.slice("/api/v1/posts/slug/".length));
+
+    if (slug === "stub-500") return send(response, 500, { detail: "Internal error" });
+    if (slug === "stub-missing") return send(response, 404, { detail: "Not found" });
+    if (slug === "stub-hangup") return hangUp(response);
+    if (slug === "stub-not-json") {
+      response.writeHead(200, { "content-type": "application/json" });
+      return response.end("<html>Service suspended</html>");
+    }
+    if (slug === "stub-wrong-shape") return send(response, 200, []);
+
+    return send(response, 200, post(slug));
   }
 
   // The list routes are only reached during the e2e build, which deliberately

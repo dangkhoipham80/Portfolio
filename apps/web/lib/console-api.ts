@@ -29,6 +29,13 @@ export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; reason: "unauthorized" }
   | { ok: false; reason: "rate_limited"; response: Response }
+  /**
+   * The row is not there. Distinguished from `error` because it is the one
+   * failure with a specific, common and completely benign cause — the thing was
+   * deleted since the page rendered — and collapsing it into "the API did not
+   * answer" makes the console report an outage that did not happen.
+   */
+  | { ok: false; reason: "missing" }
   | { ok: false; reason: "error" };
 
 async function call(
@@ -68,6 +75,10 @@ async function toResult<T>(response: Response | null, url: string): Promise<ApiR
   }
 
   if (response.status === 429) return { ok: false, reason: "rate_limited", response };
+
+  // Not logged: a 404 on a write means the row went away, which is an ordinary
+  // race between two tabs rather than something wrong with the system.
+  if (response.status === 404) return { ok: false, reason: "missing" };
 
   if (!response.ok) {
     console.error(`[console] ${response.status} ${response.statusText} from ${url}`);
@@ -158,4 +169,28 @@ export async function fetchContacts(token: string): Promise<ApiResult<Contact[]>
   }
 
   return result;
+}
+
+/**
+ * Mark a message read.
+ *
+ * One-way, because the API is: it exposes `PUT /contacts/{id}/read` and nothing
+ * that clears the flag. That is the right shape — the flag records having seen
+ * a message, and there is no version of "I have not seen this" that becomes
+ * true again afterwards.
+ */
+export async function markContactRead(
+  token: string,
+  id: number,
+): Promise<ApiResult<Contact>> {
+  const path = `/contacts/${id}/read`;
+  const response = await call(path, { method: "PUT", token });
+  return toResult<Contact>(response, path);
+}
+
+/** Delete a message. There is no soft delete on the API; the row goes. */
+export async function deleteContact(token: string, id: number): Promise<ApiResult<unknown>> {
+  const path = `/contacts/${id}`;
+  const response = await call(path, { method: "DELETE", token });
+  return toResult<unknown>(response, path);
 }

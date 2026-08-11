@@ -19,6 +19,7 @@ import { cn } from "@/lib/cn";
 // thumb no way to tell the two apart.
 const LINKS = [
   { href: "/#projects", label: "Projects", short: "Pr" },
+  { href: "/blog", label: "Blog", short: "Bl" },
   { href: "/career-journey", label: "Career", short: "Ca" },
   { href: "/certificates", label: "Certificates", short: "Ce" },
 ];
@@ -28,15 +29,29 @@ function pathOf(href: string): string {
   return href.split("#")[0] || "/";
 }
 
+/**
+ * Whether `pathname` is this entry's page, or a page underneath it.
+ *
+ * Exact match stopped being enough when one entry got children: a reader on
+ * `/blog/some-post` is still in Blog, and a nav that drops its marker the
+ * moment you click through tells you less than one that keeps it.
+ *
+ * `/` is excluded from the prefix half. It is a prefix of every path, and a nav
+ * that highlights Projects on every page says nothing — which is what the exact
+ * match was guarding against in the first place.
+ */
+function isCurrent(pathname: string, href: string): boolean {
+  const path = pathOf(href);
+  return pathname === path || (path !== "/" && pathname.startsWith(`${path}/`));
+}
+
 export function NavLinks() {
   const pathname = usePathname();
 
   return (
     <>
       {LINKS.map((link) => {
-        // Exact match rather than prefix: `/` is a prefix of everything, and a
-        // nav that highlights Projects on every page tells you nothing.
-        const current = pathname === pathOf(link.href);
+        const current = isCurrent(pathname, link.href);
 
         return (
           <Link
