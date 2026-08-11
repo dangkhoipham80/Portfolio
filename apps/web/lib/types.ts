@@ -84,6 +84,26 @@ export interface Contact {
   updated_at: string | null;
 }
 
+export interface Post {
+  id: number;
+  slug: string;
+  title: string;
+  /** Card blurb and meta description. Null falls back to the body's opening. */
+  excerpt: string | null;
+  /** Markdown. The API never renders it; lib/markdown.ts does, server-side. */
+  body: string;
+  tags: string[];
+  cover_image: string | null;
+  published: boolean;
+  /**
+   * When the post went live — not `created_at`, which is when the draft row was
+   * made. Null only on a draft, which the public API never returns.
+   */
+  published_at: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 /** What POST /auth/login and POST /auth/refresh return. */
 export interface TokenPair {
   access_token: string;

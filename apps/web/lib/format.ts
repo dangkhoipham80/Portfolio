@@ -24,6 +24,33 @@ export function formatMonthYear(value: string | null): string | null {
   return `${monthName} ${year}`;
 }
 
+/**
+ * The date part of an API timestamp, as `2026-08-09`.
+ *
+ * Sliced, not parsed, for the same reason as above and then some:
+ * `published_at` is a full instant with an offset, so `new Date()` would move
+ * the day for any reader whose timezone crosses midnight relative to it — a
+ * post published on the 9th would be dated the 8th in Los Angeles. The stored
+ * UTC day is the day it was published, and it reads the same for everyone.
+ *
+ * Also the format `<time datetime>` wants.
+ */
+export function isoDay(value: string | null): string | null {
+  return value ? value.slice(0, 10) : null;
+}
+
+/** "9 August 2026" — a post is dated to the day, unlike a role or a project. */
+export function formatFullDate(value: string | null): string | null {
+  const day = isoDay(value);
+  if (!day) return null;
+
+  const [year, month, date] = day.split("-");
+  const monthName = MONTHS[Number(month) - 1];
+  if (!monthName || !year || !date) return day;
+
+  return `${Number(date)} ${monthName} ${year}`;
+}
+
 /** "December 2024 — March 2025", or "… — Present" while it is still running. */
 export function formatPeriod(startedOn: string | null, endedOn: string | null): string {
   const start = formatMonthYear(startedOn);
