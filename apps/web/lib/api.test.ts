@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getCareerEntries,
   getCertificates,
+  getPost,
+  getPosts,
   getProject,
   getProjects,
   getSkills,
@@ -31,6 +33,7 @@ const LIST_READERS = [
   ["getSkills", getSkills],
   ["getCertificates", getCertificates],
   ["getCareerEntries", getCareerEntries],
+  ["getPosts", getPosts],
 ] as const;
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -63,6 +66,12 @@ describe("when the API is unreachable", () => {
     fetchMock.mockRejectedValue(new TypeError("fetch failed"));
 
     await expect(getProject("portfolio")).resolves.toBeNull();
+  });
+
+  it("getPost returns null", async () => {
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(getPost("square-corners")).resolves.toBeNull();
   });
 
   it("says so on the server log", async () => {

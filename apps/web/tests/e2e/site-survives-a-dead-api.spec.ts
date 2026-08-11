@@ -31,6 +31,13 @@ const PAGES = [
     heading: "Courses and certifications",
     empty: ["No certificates published yet."],
   },
+  {
+    // Stronger than the three above: /blog reads searchParams, so it renders
+    // per request rather than at build time — this failure happens live.
+    path: "/blog",
+    heading: "Notes from building this",
+    empty: ["No posts published yet."],
+  },
 ];
 
 test.describe("pages built with no API behind them", () => {
@@ -114,5 +121,42 @@ test.describe("a project detail page when the read fails", () => {
     expect(response?.status()).toBe(200);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Stubbed Project");
     await expect(page.getByText("A project served by the e2e stub.")).toBeVisible();
+  });
+});
+
+/**
+ * The same five failures for a post. Worth repeating rather than trusting the
+ * project route to stand for both, because this one does something no other
+ * page does: it renders API-supplied Markdown into the DOM through
+ * `dangerouslySetInnerHTML`. A malformed read must stop at the 404 page, well
+ * before anything reaches that renderer.
+ */
+test.describe("a post page when the read fails", () => {
+  const FAILURES = [
+    { slug: "stub-missing", why: "the API says 404" },
+    { slug: "stub-500", why: "the API 500s" },
+    { slug: "stub-hangup", why: "the connection drops mid-request" },
+    { slug: "stub-not-json", why: "the body is not JSON" },
+    { slug: "stub-wrong-shape", why: "the body is JSON of the wrong shape" },
+  ];
+
+  for (const { slug, why } of FAILURES) {
+    test(`404s, not 500s, when ${why}`, async ({ page }) => {
+      const response = await page.goto(`/blog/${slug}`);
+
+      expect(response?.status(), `${why} must not surface as a server error`).toBe(404);
+    });
+  }
+
+  test("renders the post, and its Markdown, when the read works", async ({ page }) => {
+    const response = await page.goto("/blog/a-real-slug");
+
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Stubbed Post");
+
+    // The body arrived as Markdown and left as HTML: this heading and this
+    // <code> only exist if the pipeline ran.
+    await expect(page.getByRole("heading", { name: "Stubbed heading", level: 2 })).toBeVisible();
+    await expect(page.locator(".article-prose code")).toHaveText("code");
   });
 });
