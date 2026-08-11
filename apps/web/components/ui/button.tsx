@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 /**
  * The filled action, in one place.
  *
- * `rounded-[--radius-control] bg-primary px-5 py-2.5 …` was written out
+ * `rounded-[var(--radius-control)] bg-primary px-5 py-2.5 …` was written out
  * identically in app/not-found.tsx and app/error.tsx, and the contact form
  * would have been the third copy. Three sites is how the padding on one of them
  * quietly drifts.
@@ -31,7 +31,7 @@ export function buttonClasses(
     // each call site re-inventing the alignment.
     // py-3 rather than the py-2.5 the inlined versions used: that came to 40px,
     // just under a comfortable touch target.
-    "inline-flex items-center justify-center gap-2 rounded-[--radius-control] px-5 py-3 text-sm font-medium transition-opacity",
+    "inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] px-5 py-3 text-sm font-medium transition-opacity",
     // A disabled submit still has to read as the same control, just inert —
     // and it must not keep the pointer affordance of something clickable.
     "disabled:cursor-not-allowed disabled:opacity-70",

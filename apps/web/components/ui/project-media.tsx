@@ -56,7 +56,7 @@ export function ProjectMedia({
   return (
     <div
       className={cn(
-        "relative flex aspect-[16/7] items-end overflow-hidden rounded-[--radius-control] border border-border bg-cover bg-center",
+        "relative flex aspect-[16/7] items-end overflow-hidden rounded-[var(--radius-control)] border border-border bg-cover bg-center",
         className,
       )}
       style={{ backgroundImage }}

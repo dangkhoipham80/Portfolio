@@ -30,6 +30,46 @@ async function sessionCookies(context: BrowserContext) {
   return all.filter((cookie) => cookie.name === "pf_access" || cookie.name === "pf_refresh");
 }
 
+test.describe("the way in", () => {
+  test("the header offers the console", async ({ page }) => {
+    await page.goto("/");
+    await page.locator('header a[href="/login"]').click();
+
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Console access" })).toBeVisible();
+  });
+
+  test("on a phone it moves to the footer, and is still there", async ({ page }) => {
+    // The header runs out of room at 375px — six 44px targets plus the name do
+    // not fit — so the control is dropped from the row and the footer link is
+    // the way in. If both ever disappear at once, the console is unreachable
+    // without typing the URL.
+    await page.setViewportSize({ width: 375, height: 760 });
+    await page.goto("/");
+
+    await expect(page.locator('header a[href="/login"]')).toBeHidden();
+    await expect(page.locator('footer a[href="/login"]')).toBeVisible();
+  });
+
+  test("the footer link works", async ({ page }) => {
+    await page.goto("/");
+    await page.locator('footer a[href="/login"]').click();
+
+    await expect(page).toHaveURL(/\/login$/);
+  });
+
+  test("a live session skips the form entirely", async ({ page }) => {
+    // What lets the header control be a plain static link: it always points at
+    // /login, and /login decides. Without this the owner would meet a sign-in
+    // form while already signed in.
+    await signIn(page);
+    await expect(page).toHaveURL(/\/admin$/);
+
+    await page.goto("/login");
+    await expect(page).toHaveURL(/\/admin$/);
+  });
+});
+
 test.describe("signed out", () => {
   test("the admin area is closed, and remembers where you were going", async ({ page }) => {
     await page.goto("/admin");

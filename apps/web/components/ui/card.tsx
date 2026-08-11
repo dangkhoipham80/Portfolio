@@ -22,7 +22,7 @@ export function Card({
     <div
       className={cn(
         // `relative` so a child link can stretch itself over the whole card.
-        "relative flex flex-col rounded-[--radius-card] border border-border bg-card p-5",
+        "relative flex flex-col rounded-[var(--radius-card)] border border-border bg-card p-5",
         interactive &&
           // The focus-within half matters: the card's link is stretched over the
           // whole tile, but its focus ring draws only around the title text, so

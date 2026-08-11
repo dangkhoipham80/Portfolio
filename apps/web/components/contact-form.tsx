@@ -185,7 +185,7 @@ export function ContactForm() {
 
   if (state.status === "sent") {
     return (
-      <div className="rounded-[--radius-card] border border-border bg-card p-6">
+      <div className="rounded-[var(--radius-card)] border border-border bg-card p-6">
         <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">
           Message sent
         </h3>
