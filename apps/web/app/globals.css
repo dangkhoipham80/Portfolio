@@ -776,3 +776,104 @@
     animation-delay: calc(var(--i, 0) * 40ms);
   }
 }
+
+/* ==========================================================================
+ * Scroll as the narrator.
+ *
+ * The page introduces itself in order: a section's rule draws in, its label
+ * and heading arrive, then its contents follow row by row as they reach the
+ * viewport. Read top to bottom it plays as a sequence rather than as one flat
+ * document that was always there.
+ *
+ * Every element is driven by its own `view()` timeline, which is why there is
+ * no orchestration code and no library. An element animates on where *it* is
+ * relative to the viewport, so a grid staggers itself as it scrolls in, the
+ * sequence survives someone landing halfway down the page from a link, and
+ * scrubbing backwards plays it backwards. A JavaScript version of this is an
+ * IntersectionObserver, a class toggle and a list of timeouts that all have to
+ * agree; this is a keyframe and a range.
+ *
+ * The two guards are the ones the skill gauges already use, for the reasons
+ * recorded there. `@supports` because a browser without scroll-driven
+ * animations must get the finished state rather than a permanently hidden one —
+ * the base rules below leave everything visible, so the animation only ever
+ * takes things away and puts them back. And `prefers-reduced-motion` because
+ * the block at the top of this file forces `animation-duration` to 0.01ms on
+ * everything, which a scroll-driven animation reads as "already finished".
+ * ========================================================================== */
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+}
+
+@keyframes rule-draw {
+  from {
+    scale: 0 1;
+  }
+}
+
+@layer base {
+  /*
+   * The hairline at the top of a section, as an element rather than a border,
+   * so it can be drawn. Full width by default: if nothing below animates it,
+   * it is exactly the border it replaced.
+   */
+  .section-rule {
+    position: relative;
+  }
+
+  .section-rule::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background-color: hsl(var(--border) / 0.6);
+    transform-origin: left;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .section-rule::before {
+        animation: rule-draw linear both;
+        animation-timeline: view();
+        /* Finished well before the heading lands, so the rule reads as the
+           thing that introduces the section rather than as a late arrival. */
+        animation-range: entry 0% entry 70%;
+      }
+
+      .reveal {
+        animation: reveal-in linear both;
+        animation-timeline: view();
+        animation-range: entry 5% cover 26%;
+      }
+
+      /*
+       * The row animates its children rather than itself: a parent fading
+       * while its children fade multiplies the opacity and drags the block
+       * along with the child's translate. This also means a grid needs one
+       * class, not one per card.
+       *
+       * Members of a row share a scroll position, so they would otherwise
+       * arrive together. Nudging the range per column walks them in from the
+       * left — the same reading direction as the text above them.
+       */
+      .reveal-row > * {
+        animation: reveal-in linear both;
+        animation-timeline: view();
+        animation-range: entry 5% cover 26%;
+      }
+
+      .reveal-row > *:nth-child(2n) {
+        animation-range: entry 9% cover 30%;
+      }
+
+      .reveal-row > *:nth-child(3n) {
+        animation-range: entry 13% cover 34%;
+      }
+    }
+  }
+}
