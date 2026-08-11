@@ -1,4 +1,9 @@
-import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
+import type {
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 
 import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/cn";
@@ -78,11 +83,25 @@ type SharedProps = {
   error?: string;
 };
 
+/*
+ * Every control below pulls `className` out of the rest of its props and merges
+ * it, rather than letting the spread carry it.
+ *
+ * Spreading it is the bug it looks like it is not. `<input className={base}
+ * {...props} />` lets a caller's `className` replace the base outright — and
+ * because a spread applies whatever the key holds, passing `className={
+ * undefined}` from a conditional replaces it with nothing at all. The controls
+ * then render with no border, no background and no padding, which on a light
+ * page means an input you cannot see. That shipped through type-check and lint
+ * and was caught by opening the form.
+ */
+
 export function TextField({
   name,
   label,
   meta,
   error,
+  className,
   ...props
 }: SharedProps & Omit<InputHTMLAttributes<HTMLInputElement>, "name" | "id">) {
   return (
@@ -90,12 +109,86 @@ export function TextField({
       <input
         id={name}
         name={name}
-        className={controlClasses}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${name}-error` : undefined}
         {...props}
+        className={cn(controlClasses, className)}
       />
     </FieldShell>
+  );
+}
+
+export function SelectField({
+  name,
+  label,
+  meta,
+  error,
+  options,
+  className,
+  ...props
+}: SharedProps & { options: { value: string; label: string }[] } & Omit<
+    SelectHTMLAttributes<HTMLSelectElement>,
+    "name" | "id"
+  >) {
+  return (
+    <FieldShell htmlFor={name} label={label} meta={meta} error={error}>
+      <select
+        id={name}
+        name={name}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${name}-error` : undefined}
+        {...props}
+        className={cn(controlClasses, className)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </FieldShell>
+  );
+}
+
+/**
+ * A checkbox, which does not use FieldShell.
+ *
+ * The shell puts its label above the control, which is right for something you
+ * type into and wrong for a checkbox — a tickbox belongs beside its label, and
+ * the label has to be part of the target rather than sitting above it. So this
+ * is a `<label>` wrapping both, giving a 44px row that is entirely clickable.
+ */
+export function CheckboxField({
+  name,
+  label,
+  hint,
+  defaultChecked,
+}: {
+  name: string;
+  label: string;
+  hint?: string;
+  defaultChecked?: boolean;
+}) {
+  return (
+    <div>
+      <label
+        htmlFor={name}
+        className="inline-flex min-h-11 cursor-pointer items-center gap-3"
+      >
+        <input
+          id={name}
+          name={name}
+          type="checkbox"
+          defaultChecked={defaultChecked}
+          // h-5 w-5: the browser default is 13px, which is both hard to hit and
+          // visually lost next to 14px text. accent-primary tints the tick with
+          // the site's own colour instead of the OS blue.
+          className="h-5 w-5 shrink-0 accent-primary"
+        />
+        <span className={eyebrowClasses}>{label}</span>
+      </label>
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
   );
 }
 
@@ -104,6 +197,7 @@ export function TextAreaField({
   label,
   meta,
   error,
+  className,
   ...props
 }: SharedProps & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "name" | "id">) {
   return (
@@ -111,12 +205,12 @@ export function TextAreaField({
       <textarea
         id={name}
         name={name}
-        // Vertical resize only: a horizontally resizable textarea can be
-        // dragged out past its container and break the column.
-        className={cn(controlClasses, "resize-y")}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${name}-error` : undefined}
         {...props}
+        // Vertical resize only: a horizontally resizable textarea can be
+        // dragged out past its container and break the column.
+        className={cn(controlClasses, "resize-y", className)}
       />
     </FieldShell>
   );

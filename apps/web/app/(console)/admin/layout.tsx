@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { signOut } from "@/app/actions/auth";
+import { ConsoleNav } from "@/components/console/console-nav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Container } from "@/components/ui/container";
@@ -34,7 +35,10 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
         >
           <Link
             href="/admin"
-            className="uppercase tracking-[0.18em] text-foreground hover:text-primary"
+            // min-h-11: as bare inline text this was a 66×16 target, which is
+            // under the 44px floor every other control on the site meets. It
+            // became worth fixing once there was a nav under it to go back from.
+            className="inline-flex min-h-11 items-center uppercase tracking-[0.18em] text-foreground hover:text-primary"
           >
             Console
           </Link>
@@ -76,6 +80,13 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
           </form>
         </Container>
       </header>
+
+      {/*
+        The way between sections, under the status strip rather than beside it:
+        one row says who you are, the next says where you can go, and neither
+        has to compete with the other for width.
+      */}
+      <ConsoleNav />
 
       {children}
     </>
