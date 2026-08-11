@@ -194,3 +194,89 @@ export async function deleteContact(token: string, id: number): Promise<ApiResul
   const response = await call(path, { method: "DELETE", token });
   return toResult<unknown>(response, path);
 }
+
+/**
+ * Content CRUD, for whichever type the caller names.
+ *
+ * One set of functions rather than five, because the API is one shape for all
+ * of them — see lib/content-schema.ts, which holds the differences. `apiPath`
+ * comes from that description and never from a URL, so a request cannot be
+ * aimed somewhere else by editing the address bar.
+ *
+ * These return rows untyped. The admin screens render from the field
+ * description rather than from a TypeScript interface, and the reader that does
+ * care about shape — the public site's lib/api.ts — has its own.
+ */
+export type ContentRecord = Record<string, unknown>;
+
+/**
+ * Every row, drafts included.
+ *
+ * The token is what does that: `get_optional_admin` on the API widens the same
+ * public list route to unpublished rows when the caller is an admin — which is
+ * also why an admin list must never be cached. See the note at the top.
+ */
+export async function fetchContentList(
+  token: string,
+  apiPath: string,
+): Promise<ApiResult<ContentRecord[]>> {
+  const response = await call(apiPath, { token });
+  const result = await toResult<ContentRecord[]>(response, apiPath);
+
+  // Same reasoning as fetchContacts: an object where a list belongs throws on
+  // .map() during render, which is a 500 produced by a successful request.
+  if (result.ok && !Array.isArray(result.data)) {
+    console.error(`[console] ${apiPath} returned 200 with a non-list body`);
+    return { ok: false, reason: "error" };
+  }
+
+  return result;
+}
+
+export async function fetchContentItem(
+  token: string,
+  apiPath: string,
+  id: number,
+): Promise<ApiResult<ContentRecord>> {
+  const path = `${apiPath}${id}`;
+  const response = await call(path, { token });
+  return toResult<ContentRecord>(response, path);
+}
+
+export async function createContent(
+  token: string,
+  apiPath: string,
+  payload: ContentRecord,
+): Promise<ApiResult<ContentRecord>> {
+  const response = await call(apiPath, {
+    method: "POST",
+    token,
+    body: JSON.stringify(payload),
+  });
+  return toResult<ContentRecord>(response, apiPath);
+}
+
+export async function updateContent(
+  token: string,
+  apiPath: string,
+  id: number,
+  payload: ContentRecord,
+): Promise<ApiResult<ContentRecord>> {
+  const path = `${apiPath}${id}`;
+  const response = await call(path, {
+    method: "PUT",
+    token,
+    body: JSON.stringify(payload),
+  });
+  return toResult<ContentRecord>(response, path);
+}
+
+export async function deleteContent(
+  token: string,
+  apiPath: string,
+  id: number,
+): Promise<ApiResult<unknown>> {
+  const path = `${apiPath}${id}`;
+  const response = await call(path, { method: "DELETE", token });
+  return toResult<unknown>(response, path);
+}

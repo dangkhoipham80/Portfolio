@@ -44,12 +44,40 @@ const isList: ShapeCheck = (data) => Array.isArray(data);
 const isRecord: ShapeCheck = (data) =>
   typeof data === "object" && data !== null && !Array.isArray(data);
 
-async function getJson<T>(path: string, fallback: T, isExpectedShape: ShapeCheck): Promise<T> {
+/**
+ * Cache tags, one per content type.
+ *
+ * These are what the console's writes invalidate. Tagging rather than listing
+ * paths is not a tidiness preference — it is the only version that works. A
+ * publish toggle knows a row's id and nothing else, so it cannot name
+ * `/blog/the-slug`; and `revalidatePath("/blog/[slug]", "page")` did not clear
+ * the prerendered detail pages, which left an unpublished post still readable
+ * at its URL, body and all, while the API was correctly 404ing it. A tag
+ * invalidates every page that read the tagged response, whatever its path.
+ */
+export const CONTENT_TAGS = {
+  projects: "projects",
+  skills: "skills",
+  certificates: "certificates",
+  career: "career",
+  posts: "posts",
+} as const;
+
+export type ContentTag = (typeof CONTENT_TAGS)[keyof typeof CONTENT_TAGS];
+
+async function getJson<T>(
+  path: string,
+  fallback: T,
+  isExpectedShape: ShapeCheck,
+  tag: ContentTag,
+): Promise<T> {
   const url = `${API_URL}/api/v1${path}`;
 
   try {
     const response = await fetch(url, {
-      next: { revalidate: REVALIDATE_SECONDS },
+      // `revalidate` is still the backstop for a change made anywhere but the
+      // console — the seed script, or psql.
+      next: { revalidate: REVALIDATE_SECONDS, tags: [tag] },
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { Accept: "application/json" },
     });
@@ -77,23 +105,28 @@ async function getJson<T>(path: string, fallback: T, isExpectedShape: ShapeCheck
 }
 
 export async function getProjects(): Promise<Project[]> {
-  return getJson<Project[]>("/projects/", [], isList);
+  return getJson<Project[]>("/projects/", [], isList, CONTENT_TAGS.projects);
 }
 
 export async function getProject(slug: string): Promise<Project | null> {
-  return getJson<Project | null>(`/projects/slug/${encodeURIComponent(slug)}`, null, isRecord);
+  return getJson<Project | null>(
+    `/projects/slug/${encodeURIComponent(slug)}`,
+    null,
+    isRecord,
+    CONTENT_TAGS.projects,
+  );
 }
 
 export async function getSkills(): Promise<Skill[]> {
-  return getJson<Skill[]>("/skills/", [], isList);
+  return getJson<Skill[]>("/skills/", [], isList, CONTENT_TAGS.skills);
 }
 
 export async function getCertificates(): Promise<Certificate[]> {
-  return getJson<Certificate[]>("/certificates/", [], isList);
+  return getJson<Certificate[]>("/certificates/", [], isList, CONTENT_TAGS.certificates);
 }
 
 export async function getCareerEntries(): Promise<CareerEntry[]> {
-  return getJson<CareerEntry[]>("/career/", [], isList);
+  return getJson<CareerEntry[]>("/career/", [], isList, CONTENT_TAGS.career);
 }
 
 /**
@@ -106,9 +139,14 @@ export async function getCareerEntries(): Promise<CareerEntry[]> {
  * view costs no second round trip.
  */
 export async function getPosts(): Promise<Post[]> {
-  return getJson<Post[]>("/posts/", [], isList);
+  return getJson<Post[]>("/posts/", [], isList, CONTENT_TAGS.posts);
 }
 
 export async function getPost(slug: string): Promise<Post | null> {
-  return getJson<Post | null>(`/posts/slug/${encodeURIComponent(slug)}`, null, isRecord);
+  return getJson<Post | null>(
+    `/posts/slug/${encodeURIComponent(slug)}`,
+    null,
+    isRecord,
+    CONTENT_TAGS.posts,
+  );
 }
