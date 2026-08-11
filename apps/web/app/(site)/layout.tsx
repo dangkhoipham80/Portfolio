@@ -1,8 +1,13 @@
 import Link from "next/link";
+import { Fragment } from "react";
 
 import { SkipLink } from "@/components/skip-link";
 import { SiteNav } from "@/components/site-nav";
 import { Container } from "@/components/ui/container";
+import { eyebrowClasses } from "@/components/ui/eyebrow";
+import { ExternalLink } from "@/components/ui/external-link";
+import { CHANNELS, isMailto } from "@/lib/channels";
+import { cn } from "@/lib/cn";
 
 /**
  * Chrome for the public portfolio: nav, content, footer.
@@ -32,36 +37,70 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
       <footer className="mt-auto border-t border-border bg-card">
         <Container
           width="layout"
-          className="flex flex-col items-center gap-4 py-8 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground sm:flex-row sm:justify-between"
+          className="flex flex-col gap-8 py-10 sm:flex-row sm:items-start sm:justify-between"
         >
-          <span>© {new Date().getFullYear()} Phạm Đăng Khôi</span>
+          {/*
+            The contact channels, on every page rather than only at the bottom
+            of the home page. Someone reading /certificates or a project detail
+            had no way to make contact without navigating back to / and
+            scrolling to the end of it — which is a lot to ask of a recruiter
+            who has already decided to get in touch.
+          */}
+          {/*
+            A two-column grid rather than a fixed-width label column. `w-16`
+            fitted EMAIL and GITHUB and was 11px too narrow for LINKEDIN, which
+            ran into its own value with no gap. `auto` sizes the column to the
+            longest label, so adding a channel cannot break the alignment.
+          */}
+          <nav
+            aria-label="Elsewhere"
+            className="grid grid-cols-[auto_1fr] items-center gap-x-5"
+          >
+            {CHANNELS.map((channel) => (
+              <Fragment key={channel.label}>
+                <span className={eyebrowClasses}>{channel.label}</span>
 
-          <span className="flex items-center gap-3 sm:gap-4">
+                {isMailto(channel.href) ? (
+                  // Not an ExternalLink: a mailto does not leave for another
+                  // site, so the ↗ would be a lie and the new tab it opens
+                  // would be left behind empty.
+                  <a
+                    href={channel.href}
+                    className="inline-flex min-h-11 items-center text-sm text-muted-foreground transition-colors hover:text-primary"
+                  >
+                    {channel.value}
+                  </a>
+                ) : (
+                  <ExternalLink href={channel.href}>{channel.value}</ExternalLink>
+                )}
+              </Fragment>
+            ))}
+          </nav>
+
+          <div
+            className={cn(
+              eyebrowClasses,
+              "flex flex-col gap-1 sm:items-end sm:text-right",
+            )}
+          >
+            <span>© {new Date().getFullYear()} Phạm Đăng Khôi</span>
             <span>Ho Chi Minh City, Vietnam</span>
 
             {/*
-              Same hairline the header uses between destinations and controls.
-              Without it the two spans read as one run — "VIETNAM CONSOLE" — and
-              the link disappears into the metadata beside it.
-            */}
-            <span aria-hidden="true" className="h-3 w-px shrink-0 bg-border" />
+              The way into the console on a phone, where the header has no room
+              for the key control. Underlined rather than tinted: at this size,
+              in mono uppercase at 0.18em tracking, colour alone is not enough
+              of a signal that it is a link.
 
-            {/*
-              The second way in, for anyone who reads footers rather than
-              hunting for a key icon. Underlined rather than tinted: at this
-              size, in mono uppercase at 60% tracking, colour alone is not
-              enough of a signal that it is a link.
+              min-h-11 because as bare inline text it was a 16px tap target.
             */}
             <Link
               href="/login"
-              // min-h-11: as bare inline text this was a 16px-tall tap target,
-              // which is a miss on a phone. The row is centred, so the extra
-              // height costs nothing visually.
-              className="inline-flex min-h-11 items-center underline underline-offset-4 transition-colors hover:text-primary"
+              className="mt-1 inline-flex min-h-11 items-center underline underline-offset-4 transition-colors hover:text-primary sm:justify-end"
             >
               Console
             </Link>
-          </span>
+          </div>
         </Container>
       </footer>
     </>

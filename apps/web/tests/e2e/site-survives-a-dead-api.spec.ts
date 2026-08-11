@@ -52,7 +52,12 @@ test.describe("pages built with no API behind them", () => {
       // Without this the tests above would pass on a blank document.
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
       await expect(page.locator("h1")).toHaveCount(1);
-      await expect(page.getByRole("navigation")).toBeVisible();
+
+      // Named, because the footer's channel list is a second navigation
+      // landmark and a bare getByRole("navigation") now matches both. Naming
+      // the one meant here is what the assertion always intended anyway.
+      await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Elsewhere" })).toBeVisible();
     });
   }
 

@@ -21,6 +21,10 @@ export function ConsoleLink() {
   return (
     <Link
       href="/login"
+      // The sr-only text below names it for assistive tech; `title` is what
+      // gives a sighted visitor the same answer, since a key icon on a
+      // portfolio is not self-evident.
+      title="Console"
       // Same explicit 44x44 box as ThemeToggle — padding around a 16px icon
       // lands well under the tap target on a phone.
       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"

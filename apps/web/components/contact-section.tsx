@@ -1,9 +1,9 @@
 import { ContactForm } from "@/components/contact-form";
 import { Section } from "@/components/section";
 import { ExternalLink } from "@/components/ui/external-link";
-import { OWNER_EMAIL } from "@/lib/contact";
+import { CHANNELS, isMailto } from "@/lib/channels";
 
-/**
+/*
  * The channels are listed above the form, not tucked into an error state.
  *
  * The form depends on the API being up. These do not — a mailto works when the
@@ -11,12 +11,10 @@ import { OWNER_EMAIL } from "@/lib/contact";
  * already spent their five messages for the hour. Showing them only after a
  * failure would mean the section's fallback is invisible until the moment it is
  * needed, which is the wrong moment to introduce it.
+ *
+ * The list itself lives in lib/channels.ts, because the footer shows it too and
+ * two copies of someone's contact details drift.
  */
-const CHANNELS = [
-  { label: "Email", value: OWNER_EMAIL, href: `mailto:${OWNER_EMAIL}` },
-  { label: "GitHub", value: "dangkhoipham80", href: "https://github.com/dangkhoipham80" },
-  { label: "LinkedIn", value: "khoipham4022", href: "https://www.linkedin.com/in/khoipham4022/" },
-] as const;
 
 export function ContactSection() {
   return (
@@ -51,7 +49,7 @@ export function ContactSection() {
               {channel.label}
             </dt>
             <dd>
-              {channel.href.startsWith("mailto:") ? (
+              {isMailto(channel.href) ? (
                 // Not an ExternalLink: a mailto does not leave for another site
                 // and the ↗ affordance would be a lie about where it goes.
                 <a

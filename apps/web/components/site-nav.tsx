@@ -1,17 +1,9 @@
 import Link from "next/link";
 
 import { ConsoleLink } from "./console-link";
+import { NavLinks } from "./nav-links";
 import { ThemeToggle } from "./theme-toggle";
 import { Container } from "./ui/container";
-
-// `short` is the collapsed mobile label. Two letters, not one: "Career" and
-// "Certificates" share an initial, and a row reading P · C · C gives a sighted
-// thumb no way to tell the two apart.
-const LINKS = [
-  { href: "/#projects", label: "Projects", short: "Pr" },
-  { href: "/career-journey", label: "Career", short: "Ca" },
-  { href: "/certificates", label: "Certificates", short: "Ce" },
-];
 
 /*
  * `bg-card`, not a translucent `bg-background`.
@@ -47,26 +39,12 @@ export function SiteNav() {
           Below `sm` the labels collapse to their initials — the destinations
           stay reachable and the accessible name is unchanged, because the full
           word is still in the DOM for assistive tech.
+
+          The links themselves are a client component so they can mark the page
+          you are on; see the note in nav-links.tsx.
         */}
         <nav aria-label="Main" className="flex items-center gap-0.5 sm:gap-2">
-          {LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              // min 44×44: padding around a 12px initial only reached 28×36,
-              // which is a routine thumb-miss on a phone.
-              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[--radius-control] px-2.5 font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-primary sm:px-3"
-            >
-              {/*
-                aria-hidden on the initial: without it the accessible name is
-                computed from both spans and reads "P Projects".
-              */}
-              <span aria-hidden="true" className="sm:hidden">
-                {link.short}
-              </span>
-              <span className="sr-only sm:not-sr-only">{link.label}</span>
-            </Link>
-          ))}
+          <NavLinks />
 
           {/*
             A hairline between the places you can go and the switches that act
