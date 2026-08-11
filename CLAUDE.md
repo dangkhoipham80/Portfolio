@@ -13,9 +13,23 @@ same seriousness as the auth hardening in `apps/api`, not as a wrapper around
 1. **Use the `frontend-design` skill before designing.** Not after. It exists to
    stop the work converging on the same three AI-default looks.
 
-2. **Review with the `frontend-reviewer` subagent before opening a PR.** Give it
-   a running dev-server URL so it drives the real page. Fix everything it marks
-   Blocking. Do not open the PR on an unreviewed visual change.
+2. **Review with the `frontend-reviewer` subagent once per batch, not once per
+   change — and ask before starting it.** A pass costs roughly 100k tokens and
+   twenty minutes, which is out of proportion to a restyled footer. Propose it,
+   say what it would cover, and wait; if the answer is no, carry on and offer
+   again when there is more surface to sweep. When it does run, give it a
+   running dev-server URL so it drives the real page, and fix everything it
+   marks Blocking.
+
+   For a small change, verify it yourself instead: drive the page, screenshot
+   at 1440px and 375px in both themes, and measure tap targets and overflow in
+   the browser. That is the floor, not an excuse to skip looking.
+
+   Do not read this as permission to drop the review. The two passes that have
+   run found three Blocking issues on the console PR — one of them a real bug
+   introduced in that same PR — and, on the next one, that
+   `rounded-[--radius-x]` emits invalid CSS, which meant every corner on the
+   site had silently been square. Batch it; do not abandon it.
 
 3. **Look at what you built.** Screenshot it. A change that has only been
    type-checked has not been verified — `pnpm type-check` passing tells you
@@ -29,6 +43,15 @@ same seriousness as the auth hardening in `apps/api`, not as a wrapper around
 5. **Tokens, not literals.** Colours, radii and spacing come from
    `app/globals.css`. A raw hex or a one-off `rounded-[13px]` in a component is
    a bug — it is how a component set stops looking like one system.
+
+   Reaching for a token is not the same as getting one. Tailwind v4 emits a
+   bracket arbitrary value literally, so `rounded-[--radius-card]` compiles to
+   `border-radius:--radius-card`, which is not valid CSS — the browser drops the
+   declaration and the element renders at 0. Every corner on this site was
+   square for weeks that way, through type-check, lint, build and review. Write
+   `rounded-[var(--radius-card)]`. When a token stops applying, nothing fails
+   loudly: check the emitted stylesheet or `getComputedStyle`, not the class
+   name.
 
 6. **Primitives, not copy-paste.** If the same class string appears twice, it
    belongs in `components/ui/`. Check what is already there before writing a new
