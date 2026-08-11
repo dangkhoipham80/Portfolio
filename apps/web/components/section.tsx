@@ -75,7 +75,7 @@ export function Section({
  */
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <p className="rounded-[--radius-card] border border-dashed border-border px-4 py-10 text-center font-mono text-sm text-muted-foreground">
+    <p className="rounded-[var(--radius-card)] border border-dashed border-border px-4 py-10 text-center font-mono text-sm text-muted-foreground">
       {children}
     </p>
   );

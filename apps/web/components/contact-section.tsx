@@ -1,5 +1,6 @@
 import { ContactForm } from "@/components/contact-form";
 import { Section } from "@/components/section";
+import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { ExternalLink } from "@/components/ui/external-link";
 import { CHANNELS, isMailto } from "@/lib/channels";
 
@@ -45,7 +46,10 @@ export function ContactSection() {
       <dl className="mb-10 flex flex-wrap gap-x-10 gap-y-4">
         {CHANNELS.map((channel) => (
           <div key={channel.label}>
-            <dt className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            {/* eyebrowClasses, not a literal 11px: the footer renders these
+                same labels through it, and two sizes for one label is how a
+                scale stops being one. */}
+            <dt className={eyebrowClasses}>
               {channel.label}
             </dt>
             <dd>

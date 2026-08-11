@@ -49,7 +49,7 @@ export function NavLinks() {
             className={cn(
               // min 44×44: padding around a 12px initial only reached 28×36,
               // which is a routine thumb-miss on a phone.
-              "relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-[--radius-control] px-2.5 font-mono text-xs uppercase tracking-wider transition-colors sm:px-3",
+              "relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-control)] px-2.5 font-mono text-xs uppercase tracking-wider transition-colors sm:px-3",
               // The rule sits at the bottom of the label rather than the bottom
               // of the header, because the link is inset from both — a tab
               // indicator floating in the middle of the bar reads as an

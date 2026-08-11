@@ -24,7 +24,7 @@ export function Notice({
   return (
     <p
       className={cn(
-        "rounded-[--radius-control] border border-border bg-card px-4 py-3 text-sm text-foreground",
+        "rounded-[var(--radius-control)] border border-border bg-card px-4 py-3 text-sm text-foreground",
         className,
       )}
     >
