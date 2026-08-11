@@ -20,6 +20,18 @@ const VARIANTS = {
   primary: "bg-primary text-primary-foreground hover:opacity-90",
   /** Secondary actions that should not compete: "send another", "cancel". */
   quiet: "border border-border text-foreground hover:border-primary/40 hover:text-primary",
+  /**
+   * Destructive actions. Outlined rather than filled, and set in
+   * --destructive-text rather than --destructive.
+   *
+   * Both halves matter. A filled red button is the loudest thing on a screen,
+   * and these sit in a row of ordinary controls — the weight should come from
+   * the confirmation step, not the colour. And --destructive is tuned to be
+   * seen as a fill or a border: as *text* it measures 3.76:1 on a card in light
+   * mode and 1.88:1 in dark, which is why the palette carries a second red.
+   */
+  danger:
+    "border border-destructive/50 text-destructive-text hover:border-destructive hover:bg-destructive/10",
 } as const;
 
 export function buttonClasses(

@@ -1,13 +1,17 @@
 import type { Metadata } from "next";
 
+import { markContactAsRead, removeContact } from "@/app/actions/contacts";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmDelete } from "@/components/ui/confirm-delete";
 import { Container } from "@/components/ui/container";
 import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
 import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/cn";
 import { requireAdmin } from "@/lib/admin-guard";
 import { fetchContacts } from "@/lib/console-api";
+import { inboxProblem } from "@/lib/inbox";
 
 export const metadata: Metadata = {
   title: "Inbox",
@@ -26,8 +30,10 @@ export const metadata: Metadata = {
  * It is also the first time these submissions are readable anywhere but the
  * notification email.
  *
- * Editing — marking read, deleting, and content CRUD — is deliberately not here
- * yet.
+ * Messages can now be marked read and deleted. Both are plain form posts to
+ * Server Actions, so the inbox works with scripting off; see
+ * app/actions/contacts.ts for why the outcome comes back through the URL.
+ * Content CRUD is still to come.
  */
 
 /** "10 Aug 2026, 21:47" in the reader's locale-independent short form. */
@@ -44,12 +50,13 @@ function formatReceived(value: string): string {
   });
 }
 
-export default async function AdminInboxPage() {
+export default async function AdminInboxPage({ searchParams }: PageProps<"/admin">) {
   // Runs in the layout too. Repeated here rather than passed down because a
   // page must not depend on a parent having done the check — and it is a cache
   // hit on the same request, not a second call to the API.
   const { accessToken } = await requireAdmin("/admin");
   const result = await fetchContacts(accessToken);
+  const problem = inboxProblem((await searchParams).problem);
 
   return (
     // "wide" rather than "layout": these cards are a column of prose, and the
@@ -61,6 +68,16 @@ export default async function AdminInboxPage() {
       <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight text-foreground">
         Contact messages
       </h1>
+
+      {/*
+        A failed write, reported above the list rather than beside the message
+        it concerns. The action redirects, so by the time this renders the page
+        has been rebuilt from scratch and there is no row to attach it to — and
+        the thing the reader needs is the sentence, not its position.
+      */}
+      {problem ? (
+        <Notice className="mt-8 border-destructive/50">{problem}</Notice>
+      ) : null}
 
       {!result.ok ? (
         /*
@@ -120,6 +137,39 @@ export default async function AdminInboxPage() {
                   <p className="mt-4 max-w-prose whitespace-pre-line text-sm text-foreground">
                     {contact.message}
                   </p>
+
+                  {/*
+                    items-start, not items-center: the delete control is a
+                    <details> that grows downwards when opened, and centring
+                    would drag "Mark as read" halfway down the card with it.
+                  */}
+                  <div className="mt-5 flex flex-wrap items-start gap-2 border-t border-border/60 pt-4">
+                    {/*
+                      Only while it is unread. A button that is already done is
+                      either a no-op the reader has to test, or a lie — and the
+                      API has no route back, so it could not be a toggle.
+                    */}
+                    {!contact.read && (
+                      <form action={markContactAsRead}>
+                        <input type="hidden" name="id" value={contact.id} />
+                        <Button
+                          variant="quiet"
+                          type="submit"
+                          className="min-h-11 px-4 py-2 text-xs"
+                        >
+                          Mark as read
+                        </Button>
+                      </form>
+                    )}
+
+                    <ConfirmDelete
+                      action={removeContact}
+                      id={contact.id}
+                      // Names the sender, so the confirmation is about a
+                      // message rather than about a row number.
+                      warning={`Delete the message from ${contact.name}? This cannot be undone, and it is the only copy outside your email.`}
+                    />
+                  </div>
                 </Card>
               </li>
             ))}
