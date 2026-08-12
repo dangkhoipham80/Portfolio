@@ -14,14 +14,17 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/cn";
 
-// `short` is the collapsed mobile label. Two letters, not one: "Career" and
-// "Certificates" share an initial, and a row reading P · C · C gives a sighted
-// thumb no way to tell the two apart.
-const LINKS = [
-  { href: "/#projects", label: "Projects", short: "Pr" },
-  { href: "/blog", label: "Blog", short: "Bl" },
-  { href: "/career-journey", label: "Career", short: "Ca" },
-  { href: "/certificates", label: "Certificates", short: "Ce" },
+/*
+ * Shared with the mobile overlay menu, which renders the same destinations at
+ * a different scale — one list, two presentations, so they cannot drift.
+ *
+ * Certificates is deliberately absent: supporting evidence, not headline
+ * content for a mid-level+ candidate. The footer carries it.
+ */
+export const LINKS = [
+  { href: "/#projects", label: "Projects" },
+  { href: "/blog", label: "Blog" },
+  { href: "/career-journey", label: "Career" },
 ];
 
 /** The path part of a nav href, so `/#projects` is compared as `/`. */
@@ -40,11 +43,16 @@ function pathOf(href: string): string {
  * that highlights Projects on every page says nothing — which is what the exact
  * match was guarding against in the first place.
  */
-function isCurrent(pathname: string, href: string): boolean {
+export function isCurrent(pathname: string, href: string): boolean {
   const path = pathOf(href);
   return pathname === path || (path !== "/" && pathname.startsWith(`${path}/`));
 }
 
+/**
+ * The desktop link row. Hidden below `sm` — those widths get the overlay menu
+ * instead of the old two-letter-initials compromise, which saved the pixels
+ * but read as a rendering bug.
+ */
 export function NavLinks() {
   const pathname = usePathname();
 
@@ -62,26 +70,16 @@ export function NavLinks() {
             // of state in the header.
             aria-current={current ? "page" : undefined}
             className={cn(
-              // min 44×44: padding around a 12px initial only reached 28×36,
-              // which is a routine thumb-miss on a phone.
-              "relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-control)] px-2.5 font-mono text-xs uppercase tracking-wider transition-colors sm:px-3",
-              // The rule sits at the bottom of the label rather than the bottom
-              // of the header, because the link is inset from both — a tab
-              // indicator floating in the middle of the bar reads as an
-              // underline, which is what it is.
+              "relative inline-flex min-h-11 items-center rounded-[var(--radius-control)] px-3 font-mono text-xs uppercase tracking-wider transition-colors",
+              // The current page docks to the nav the way a section docks to
+              // the spine: a small amber node under the label, not an
+              // underline — same vocabulary as the rest of the site.
               current
-                ? "text-primary after:absolute after:inset-x-2.5 after:bottom-1.5 after:h-px after:bg-primary sm:after:inset-x-3"
+                ? "text-primary after:absolute after:bottom-1.5 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-signal"
                 : "text-muted-foreground hover:text-primary",
             )}
           >
-            {/*
-              aria-hidden on the initial: without it the accessible name is
-              computed from both spans and reads "P Projects".
-            */}
-            <span aria-hidden="true" className="sm:hidden">
-              {link.short}
-            </span>
-            <span className="sr-only sm:not-sr-only">{link.label}</span>
+            {link.label}
           </Link>
         );
       })}

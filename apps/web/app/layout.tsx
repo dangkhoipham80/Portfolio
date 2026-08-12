@@ -1,27 +1,20 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
+import { Be_Vietnam_Pro, IBM_Plex_Mono } from "next/font/google";
 
 import "./globals.css";
 
-// Display. Mechanical terminals, reads as engineered rather than editorial —
-// and deliberately not the Geist the Next.js starter ships with.
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-// Body. Drawn for technical documentation, and its Vietnamese diacritics are
-// properly designed rather than synthesised — the name in the header depends on
-// that.
-const plexSans = IBM_Plex_Sans({
-  variable: "--font-plex-sans",
+// One family, two voices: 800 tight-tracked for display, 400/500 for body.
+// Chosen over a display/body pair because the site's identity is the owner's
+// name — Be Vietnam Pro is drawn for Vietnamese first, so "Phạm Đăng Khôi"
+// gets designed diacritics at every weight, including the hero's 800.
+const beVietnam = Be_Vietnam_Pro({
+  variable: "--font-be-vietnam",
   subsets: ["latin", "vietnamese"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 
-// Eyebrows, meta rows and the topology labels.
+// Eyebrows, spine labels, meta rows and the topology labels.
 const plexMono = IBM_Plex_Mono({
   variable: "--font-plex-mono",
   subsets: ["latin"],
@@ -69,7 +62,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${spaceGrotesk.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
+      className={`${beVietnam.variable} ${plexMono.variable} h-full antialiased`}
       // The script below adds `dark` before React hydrates, so the class on the
       // client never matches what the server rendered. That is the intent.
       suppressHydrationWarning

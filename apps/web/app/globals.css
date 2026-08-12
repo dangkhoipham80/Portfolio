@@ -1,14 +1,10 @@
 @import "tailwindcss";
 
 /*
- * Palette carried over from portfolio/frontend/src/index.css so the Next.js app
- * and the Vite app it replaces look like the same site while both are live:
- * green primary in light mode, purple in dark. Values are bare HSL channels so
- * the `hsl(var(--x))` indirection below still works.
- *
- * The legacy stylesheet's decorative layer — meteors, drifting stars, the
- * fifteen keyframe animations — is deliberately not ported. It is a large chunk
- * of unrelated CSS and belongs in its own change.
+ * "The System, Seen" — dark-first instrument palette. One warm signal-amber
+ * accent in both modes (the old scheme was green in light, purple in dark —
+ * two identities). Values are bare HSL channels so the `hsl(var(--x))`
+ * indirection below still works. See docs/redesign.md for the full plan.
  */
 
 @theme {
@@ -18,6 +14,7 @@
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
   --color-card: hsl(var(--card));
+  --color-raised: hsl(var(--raised));
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
   --color-accent: hsl(var(--accent));
@@ -25,6 +22,13 @@
   --color-destructive: hsl(var(--destructive));
   --color-destructive-text: hsl(var(--destructive-text));
   --color-ring: hsl(var(--ring));
+  /*
+   * The vivid amber, constant across modes, for non-text marks only: spine
+   * nodes, packets, the hero diacritics. --primary is the *text-safe* accent
+   * and darkens in light mode; --signal never does, because a 3px dot has no
+   * contrast requirement and dimming it kills the identity.
+   */
+  --color-signal: hsl(var(--signal));
 
   /*
    * One radius scale, derived from a single value. Cards, badges and buttons
@@ -32,22 +36,22 @@
    * that makes a set of components look like it came from three different
    * sites.
    */
-  --radius-card: 0.875rem;
-  --radius-control: 0.5rem;
+  --radius-card: 1rem;
+  --radius-control: 0.625rem;
   --radius-pill: 9999px;
 
   /*
-   * Three type roles, each doing one job.
+   * Two faces, three roles.
    *
-   * Display (Space Grotesk) has odd, slightly mechanical terminals — it reads
-   * as engineered rather than editorial, and it is not the Geist/Inter default
-   * every Next.js starter ships with. Body is IBM Plex Sans, drawn for
-   * technical documentation. Mono is used for eyebrows and meta rows, where it
-   * is doing real work: those lines are field names and timestamps, and setting
-   * them in mono says so.
+   * Display and body are the same family at different weights: Be Vietnam Pro,
+   * drawn for Vietnamese first, so the owner's name carries designed diacritics
+   * at the hero's 800 as well as the body's 400. One family with radical weight
+   * contrast is what makes a site read as a product rather than a document.
+   * Mono is used for eyebrows and meta rows, where it is doing real work: those
+   * lines are field names and timestamps, and setting them in mono says so.
    */
-  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-be-vietnam), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-be-vietnam), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 
   /*
@@ -68,80 +72,72 @@
 
 @layer base {
   /*
-   * Light mode deviates from the Vite app's values in two places, both because
-   * the originals fail WCAG AA against this background.
-   *
-   * The background is a tinted green (120 60% 95%), not white, and that tint
-   * eats the contrast margin of any grey sitting on it. The legacy
-   * --muted-foreground measured 4.40:1 on it — under the 4.5:1 needed for body
-   * text — which covered the nav links, every eyebrow, and the hero paragraph.
-   * The legacy --primary measured 3.86:1 as text on the same background, and
-   * 3.99:1 for white-on-primary in the 404 button.
-   *
-   * Dark mode measured 7.4-7.8:1 and 5.2:1 and is left exactly as it was.
+   * Light mode: warm paper, not white — the amber accent needs a warm neutral
+   * to sit on, and a pure white page next to an amber mark reads clinical.
+   * --primary darkens to 30% lightness here because vivid amber as *text* on
+   * paper measures ~2.4:1; the vivid mark colour lives in --signal instead.
    */
   :root {
-    --background: 120 60% 95%;
-    --foreground: 222 47% 11%;
+    --background: 40 20% 96%;
+    --foreground: 222 20% 11%;
     --card: 0 0% 100%;
-    --primary: 120 60% 28%; /* was 35% — 3.86:1 as text on the page background */
-    --primary-foreground: 210 40% 98%;
-    --border: 120 20% 80%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 20% 43%; /* was 16.3% 46.9% — 4.40:1 */
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222 47% 11%;
+    --raised: 40 20% 99%;
+    --primary: 33 85% 30%; /* AA as text on the paper background (~5:1) */
+    --primary-foreground: 40 20% 98%;
+    --border: 40 12% 86%;
+    --muted: 40 15% 92%;
+    --muted-foreground: 222 10% 40%;
+    --accent: 40 15% 91%;
+    --accent-foreground: 222 20% 11%;
     --destructive: 0 84.2% 60.2%;
     /*
-     * A second red, for error *text*.
-     *
-     * --destructive is tuned to be seen as a fill or a border, and at 60%
-     * lightness it measures 3.76:1 as text on a card — under the 4.5:1 body
-     * text needs. Its dark counterpart is worse: 1.88:1, effectively invisible.
-     * Field validation messages are the first real text this palette has had to
-     * set in red, which is why nothing caught it before. 7.46:1 here.
+     * A second red, for error *text*. --destructive is tuned to be seen as a
+     * fill or a border; as text it fails AA in both modes, which is why the
+     * palette carries two reds.
      */
     --destructive-text: 0 72% 38%;
-    --ring: 120 60% 28%;
+    --ring: 33 85% 30%;
+    /* The constant identity amber — marks only, never text. */
+    --signal: 38 90% 55%;
     /*
      * The page grid's line colour, per mode rather than derived from
-     * --border with one shared alpha: the light border sits on a 95%
-     * background and the dark one on 4%, so a single opacity reads loud in
+     * --border with one shared alpha: the light border sits on a 96%
+     * background and the dark one on 6%, so a single opacity reads loud in
      * one mode and invisible in the other.
      */
-    --grid-line: hsl(120 20% 80% / 0.45);
-    /*
-     * Hero glow, per mode. Light mode cannot reuse --primary: the same green
-     * over the green-tinted page blends to a ~7% darkening nobody perceives.
-     * Nudged toward cyan and up in alpha it reads as a cool light source;
-     * dark mode's purple over near-black needs far less to do the same.
-     */
-    --hero-glow: hsl(150 60% 28% / 0.14);
+    --grid-line: hsl(40 12% 86% / 0.5);
+    --hero-glow: hsl(38 90% 55% / 0.12);
   }
 
+  /*
+   * Dark mode is the primary mode: blue-black ink, never pure black, so the
+   * amber has something warm-against-cool to glow on. Surfaces step
+   * background → card → raised instead of leaning on borders.
+   */
   .dark {
-    --background: 222 47% 4%;
-    --foreground: 213 31% 91%;
-    --card: 222 47% 8%;
-    --primary: 250 65% 65%;
+    --background: 222 24% 6%;
+    --foreground: 222 18% 92%;
+    --card: 222 20% 9%;
+    --raised: 222 18% 13%;
+    --primary: 38 90% 60%;
     /*
-     * Dark, not light. The dark primary is a mid-lightness purple, so the
-     * legacy near-white foreground on top of it measured 3.29:1 — light on
-     * light. Only the filled buttons (404, error boundary) use this pairing,
-     * which is why it survived unnoticed: nothing else puts the two together.
+     * Dark, not light: the amber is mid-lightness, so near-white on it would
+     * be light-on-light. Ink text on an amber fill reads like a hazard label —
+     * which is the correct register for the one loud control on a screen.
      */
-    --primary-foreground: 222 47% 8%;
-    --border: 217 33% 20%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    /* Light rather than dark, for the same reason the light mode's is dark. 7.93:1. */
+    --primary-foreground: 222 24% 8%;
+    --border: 222 14% 18%;
+    --muted: 222 18% 12%;
+    --muted-foreground: 222 10% 68%;
+    --accent: 222 18% 14%;
+    --accent-foreground: 222 18% 92%;
+    --destructive: 0 62.8% 45%;
+    /* Light rather than dark, for the same reason the light mode's is dark. */
     --destructive-text: 0 85% 75%;
-    --ring: 250 65% 65%;
-    --grid-line: hsl(217 33% 20% / 0.55);
-    --hero-glow: hsl(250 65% 65% / 0.08);
+    --ring: 38 90% 60%;
+    --signal: 38 90% 60%;
+    --grid-line: hsl(222 14% 18% / 0.5);
+    --hero-glow: hsl(38 90% 60% / 0.07);
   }
 
   html {
@@ -165,7 +161,7 @@
       linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
     background-size: 40px 40px;
     color: hsl(var(--foreground));
-    line-height: 1.6;
+    line-height: 1.7;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -460,6 +456,23 @@
   }
 
   /*
+   * Shiki emits both themes as custom properties on every token
+   * (`defaultColor: false` in lib/markdown.ts); these two rules are the switch
+   * that picks a side. The block's background stays the site's own surface —
+   * the pre rule above — so code sits on the same token as every other panel
+   * instead of importing a ninth grey from the theme.
+   */
+  .article-prose .shiki,
+  .article-prose .shiki span {
+    color: var(--shiki-light);
+  }
+
+  .dark .article-prose .shiki,
+  .dark .article-prose .shiki span {
+    color: var(--shiki-dark);
+  }
+
+  /*
    * The fence's language, in the same mono-uppercase treatment as every other
    * field name on the site. `data-lang` is written by lib/markdown.ts from a
    * className the sanitiser has already vetted.
@@ -533,10 +546,34 @@
     scale: 0 1;
   }
 
+  /*
+   * The vertical variant: a post's progress as a spine segment drawing down
+   * the left edge of the viewport — the same line the home page's sections
+   * dock onto, doing the same job the horizontal bar did.
+   */
+  @keyframes reading-progress-y {
+    from {
+      scale: 1 0;
+    }
+    to {
+      scale: 1 1;
+    }
+  }
+
+  .reading-progress-y {
+    transform-origin: top;
+    scale: 1 0;
+  }
+
   @supports (animation-timeline: scroll()) {
     @media (prefers-reduced-motion: no-preference) {
       .reading-progress {
         animation: reading-progress linear both;
+        animation-timeline: scroll(root block);
+      }
+
+      .reading-progress-y {
+        animation: reading-progress-y linear both;
         animation-timeline: scroll(root block);
       }
     }
@@ -603,7 +640,8 @@
   --console-panel: 225 15% 10%;
   --console-raised: 225 14% 14%;
   --console-line: 225 12% 19%;
-  --console-accent: 255 88% 72%;
+  /* Signal amber, matching the public site — one brand, two surfaces. */
+  --console-accent: 38 90% 62%;
   --console-text: 225 22% 96%;
   --console-muted: 225 12% 68%;
 
@@ -648,12 +686,6 @@
   --color-ring: hsl(var(--console-accent));
   --color-destructive: hsl(0 72% 58%);
   --color-destructive-text: hsl(0 90% 78%);
-
-  /* Rounder than the site. The larger radius is most of what separates a 2026
-     app surface from a 2016 one, and these are read at the point of use, so
-     overriding them here does work. */
-  --radius-card: 0.875rem;
-  --radius-control: 0.625rem;
 
   color-scheme: dark;
   background-color: hsl(var(--console-bg));
@@ -730,9 +762,11 @@
     box-shadow: 0 0 0 3px hsl(152 65% 55% / 0.16);
   }
 
+  /* Dim, not amber: amber is the accent now, and a draft is a thing that is
+     off, not a thing that is highlighted. */
   .console-theme .c-dot-draft {
-    background-color: hsl(38 95% 62%);
-    box-shadow: 0 0 0 3px hsl(38 95% 62% / 0.16);
+    background-color: hsl(225 12% 55%);
+    box-shadow: 0 0 0 3px hsl(225 12% 55% / 0.16);
   }
 
   /*
@@ -875,5 +909,117 @@
         animation-range: entry 13% cover 34%;
       }
     }
+  }
+}
+
+/* ==========================================================================
+ * The spine.
+ *
+ * The site's signature: one vertical data path that the page's sections dock
+ * onto, each at an amber node. Structurally it is one rail per section — the
+ * rail spans the section's full height including its vertical padding, so
+ * stacked sections read as a single continuous line. The amber overlay draws
+ * downward as the section scrolls in, on the same view() timeline system the
+ * reveals use, with the same two guards and the same fail-closed base state:
+ * without scroll-driven animation support the rail is simply a drawn line.
+ *
+ * Desktop only (`lg`, applied at the call site): at phone widths the gutter
+ * the rail needs does not exist, and a line squeezed against the viewport
+ * edge reads as a rendering artifact rather than a spine.
+ * ========================================================================== */
+
+@keyframes spine-draw {
+  from {
+    scale: 1 0;
+  }
+}
+
+@layer base {
+  .spine-rail {
+    position: relative;
+    width: 2px;
+    height: 100%;
+  }
+
+  /* The idle track: always present, so the path never disappears. */
+  .spine-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: hsl(var(--border) / 0.9);
+  }
+
+  /* The lit path, drawn top-down as the section arrives. */
+  .spine-rail::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      hsl(var(--signal) / 0.9),
+      hsl(var(--signal) / 0.25)
+    );
+    transform-origin: top;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .spine-rail::after {
+        animation: spine-draw linear both;
+        animation-timeline: view();
+        animation-range: entry 0% cover 55%;
+      }
+    }
+  }
+
+  /*
+   * A junction on the spine: the dot a section docks at. The halo is what
+   * stops a 10px dot reading as dust; the outer glow is the one place the
+   * site is allowed to bloom.
+   */
+  .spine-node {
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 9999px;
+    background: hsl(var(--signal));
+    box-shadow:
+      0 0 0 4px hsl(var(--signal) / 0.15),
+      0 0 14px hsl(var(--signal) / 0.5);
+  }
+
+  /*
+   * A loading placeholder: the muted surface with a slow sheen passing over
+   * it. Under reduced motion the global cap freezes the animation and the
+   * block rests as a plain muted panel, which is the correct fallback.
+   */
+  .skeleton {
+    border-radius: var(--radius-control);
+    background: linear-gradient(
+      100deg,
+      hsl(var(--muted)) 40%,
+      hsl(var(--accent)) 50%,
+      hsl(var(--muted)) 60%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-sheen 1.8s linear infinite;
+  }
+
+  @keyframes skeleton-sheen {
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  /*
+   * The accented glyphs of the owner's name, lit in signal amber — the name
+   * is the logo. A soft glow in dark mode only; on paper the ink does not
+   * bloom.
+   */
+  .hero-name-accent {
+    color: hsl(var(--signal));
+  }
+
+  .dark .hero-name-accent {
+    text-shadow: 0 0 28px hsl(var(--signal) / 0.45);
   }
 }

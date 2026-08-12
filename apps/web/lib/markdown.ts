@@ -1,5 +1,6 @@
 import "server-only";
 
+import rehypeShiki from "@shikijs/rehype";
 import type { Element, Root } from "hast";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
@@ -54,15 +55,28 @@ function labelCodeBlocks() {
       );
       if (!code) return;
 
-      const classes = code.properties?.className;
-      if (!Array.isArray(classes)) return;
+      // Shiki writes the class under the raw `class` key as a single string;
+      // remark-rehype writes `className` as an array. Accept all of it —
+      // this runs after either producer.
+      const raw = code.properties?.className ?? code.properties?.["class"];
+      const classes = Array.isArray(raw)
+        ? raw
+        : typeof raw === "string"
+          ? raw.split(" ")
+          : [];
 
       for (const entry of classes) {
         const match = LANGUAGE_CLASS.exec(String(entry));
-        if (match) {
-          node.properties = { ...node.properties, "data-lang": match[1].toLowerCase() };
-          return;
+        if (!match) continue;
+
+        const language = match[1].toLowerCase();
+        // "text" is the highlighter's filler for a bare fence (defaultLanguage
+        // above), not something the author wrote. A TEXT corner label is a
+        // guess, and the design leaves unlabelled fences unlabelled.
+        if (language !== "text" && language !== "plaintext" && language !== "txt") {
+          node.properties = { ...node.properties, "data-lang": language };
         }
+        return;
       }
     });
   };
@@ -83,6 +97,22 @@ const processor = unified()
       // Every link out of a post body is untrusted by definition.
       a: [...(defaultSchema.attributes?.a ?? []), "target", "rel"],
     },
+  })
+  /*
+   * Highlighting runs *after* the sanitiser: everything Shiki emits — the
+   * spans, the inline colour variables — is generated from code text the
+   * sanitiser has already vetted, so none of it can smuggle markup in. Both
+   * themes are emitted as CSS variables (`defaultColor: false`) and
+   * globals.css picks a side per mode; on the server only, like the rest of
+   * this module, so the browser ships zero highlighter code.
+   */
+  .use(rehypeShiki, {
+    themes: { light: "vitesse-light", dark: "vitesse-dark" },
+    defaultColor: false,
+    defaultLanguage: "text",
+    fallbackLanguage: "text",
+    // Keeps `language-x` on the <code>, which labelCodeBlocks reads next.
+    addLanguageClass: true,
   })
   .use(labelCodeBlocks)
   .use(rehypeStringify);

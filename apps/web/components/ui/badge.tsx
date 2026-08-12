@@ -10,6 +10,14 @@ const VARIANTS = {
   outline: "border border-border text-muted-foreground",
 } as const;
 
+/*
+ * Tech tags and skills are identifiers — package names, service names — so
+ * they are set the way the site sets every other identifier: mono, small,
+ * tracked. A rounded sans pill says "topic"; this says "dependency".
+ */
+export const chipClasses =
+  "inline-flex items-center rounded-[var(--radius-control)] bg-muted px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground";
+
 export function Badge({
   variant = "neutral",
   className,

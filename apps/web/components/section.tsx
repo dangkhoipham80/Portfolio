@@ -50,19 +50,41 @@ export function Section({
         // section-rule replaces the top border with a line that can be drawn
         // as the section arrives; see globals.css. Without scroll-driven
         // animation support it renders as exactly the border it replaced.
-        "section-rule py-16 sm:py-20 lg:py-24",
+        "section-rule relative py-24 sm:py-32 lg:py-40",
         tinted && "bg-muted",
       )}
     >
+      {/*
+        The spine: a rail spanning the section's full height, including its
+        vertical padding, so stacked sections read as one continuous line.
+        Positioned by a mirror of the content Container so it sits exactly on
+        the content box's left edge at every viewport. Decorative — the
+        structure it draws is already in the headings — so hidden from
+        assistive tech, and absent below lg where its gutter does not exist.
+      */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden lg:block">
+        <Container width={width} className="h-full">
+          <div className="spine-rail" />
+        </Container>
+      </div>
+
       <Container width={width}>
-        {eyebrow ? <Eyebrow className="reveal mb-3">{eyebrow}</Eyebrow> : null}
-        <Heading className="reveal font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          {title}
-        </Heading>
-        {description ? (
-          <p className="reveal mt-3 max-w-2xl text-muted-foreground">{description}</p>
-        ) : null}
-        <div className="mt-10">{children}</div>
+        <div className="relative lg:pl-16">
+          {/* The junction: this section, docked to the path. */}
+          <span
+            aria-hidden="true"
+            className="spine-node absolute left-0 top-1 ml-px hidden -translate-x-1/2 lg:block"
+          />
+
+          {eyebrow ? <Eyebrow className="reveal mb-3">{eyebrow}</Eyebrow> : null}
+          <Heading className="reveal font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+            {title}
+          </Heading>
+          {description ? (
+            <p className="reveal mt-4 max-w-2xl text-lg text-muted-foreground">{description}</p>
+          ) : null}
+          <div className="mt-12">{children}</div>
+        </div>
       </Container>
     </section>
   );

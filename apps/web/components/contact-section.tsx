@@ -21,14 +21,18 @@ export function ContactSection() {
   return (
     <Section
       id="contact"
-      width="reading"
+      // "layout", not "reading": the home page's spine sits on the layout
+      // container's left edge, and this is the one section that broke the
+      // line by centring a narrower container. The reading measure survives
+      // as the max-width on the content below.
+      width="layout"
       // This read "Contact · POST /contacts" — the route the form submits to,
       // which is true and is the one thing that distinguishes this form from
       // the EmailJS one it replaces. It does not survive the eyebrow's
       // `uppercase`: "POST /CONTACTS" reads as shouting, not as a path. The
       // systems-voice detail moved to the status line above the submit button,
       // where the text is under this component's control.
-      eyebrow="Contact"
+      eyebrow="/contact"
       title="Send me a message"
       description="Open to mid-level roles and above in backend, data and AI engineering. Anything that lands here reaches my inbox."
     >
@@ -43,7 +47,7 @@ export function ContactSection() {
         someone. Letting each channel take its natural width fixes it and wraps
         gracefully at 375px.
       */}
-      <dl className="mb-10 flex flex-wrap gap-x-10 gap-y-4">
+      <dl className="mb-10 flex max-w-2xl flex-wrap gap-x-10 gap-y-4">
         {CHANNELS.map((channel) => (
           <div key={channel.label}>
             {/* eyebrowClasses, not a literal 11px: the footer renders these
@@ -73,7 +77,9 @@ export function ContactSection() {
         ))}
       </dl>
 
-      <ContactForm />
+      <div className="max-w-2xl">
+        <ContactForm />
+      </div>
     </Section>
   );
 }
