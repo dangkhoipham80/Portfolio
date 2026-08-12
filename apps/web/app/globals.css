@@ -988,29 +988,6 @@
   }
 
   /*
-   * A loading placeholder: the muted surface with a slow sheen passing over
-   * it. Under reduced motion the global cap freezes the animation and the
-   * block rests as a plain muted panel, which is the correct fallback.
-   */
-  .skeleton {
-    border-radius: var(--radius-control);
-    background: linear-gradient(
-      100deg,
-      hsl(var(--muted)) 40%,
-      hsl(var(--accent)) 50%,
-      hsl(var(--muted)) 60%
-    );
-    background-size: 200% 100%;
-    animation: skeleton-sheen 1.8s linear infinite;
-  }
-
-  @keyframes skeleton-sheen {
-    to {
-      background-position: -200% 0;
-    }
-  }
-
-  /*
    * The accented glyphs of the owner's name, lit in signal amber — the name
    * is the logo. A soft glow in dark mode only; on paper the ink does not
    * bloom.

@@ -113,6 +113,18 @@ const processor = unified()
     fallbackLanguage: "text",
     // Keeps `language-x` on the <code>, which labelCodeBlocks reads next.
     addLanguageClass: true,
+    /*
+     * Spelled out because the default is every grammar Shiki ships — which
+     * makes the first render pay seconds of initialisation, in production
+     * cold starts and in the test suite alike. This is the vocabulary of the
+     * posts this blog actually writes; a fence in anything else degrades to
+     * unhighlighted text via fallbackLanguage rather than failing.
+     */
+    langs: [
+      "python", "javascript", "typescript", "tsx", "jsx", "json", "yaml",
+      "toml", "bash", "shell", "sql", "css", "html", "dockerfile", "java",
+      "markdown", "diff",
+    ],
   })
   .use(labelCodeBlocks)
   .use(rehypeStringify);
