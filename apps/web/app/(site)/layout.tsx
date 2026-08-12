@@ -34,10 +34,22 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
         `mt-auto` matters on short pages — the 404 and an empty section would
         otherwise leave the footer floating mid-screen with paper below it.
       */}
-      <footer className="mt-auto border-t border-border bg-card">
+      <footer className="mt-auto border-t border-border/60 bg-card">
+        <Container width="layout" className="pt-10">
+          {/*
+            The end of the line. Every page's spine has to terminate somewhere,
+            and a file that ends cleanly ends at EOF — the one quiet joke the
+            site allows itself, in the same node-plus-mono-label vocabulary as
+            every junction above it.
+          */}
+          <p aria-hidden="true" className="flex items-center gap-3 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            <span className="spine-node shrink-0" />
+            /eof
+          </p>
+        </Container>
         <Container
           width="layout"
-          className="flex flex-col gap-8 py-10 sm:flex-row sm:items-start sm:justify-between"
+          className="flex flex-col gap-8 py-8 sm:flex-row sm:items-start sm:justify-between"
         >
           {/*
             The contact channels, on every page rather than only at the bottom
@@ -94,9 +106,17 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
 
               min-h-11 because as bare inline text it was a 16px tap target.
             */}
+            {/* Demoted from the primary nav: supporting evidence lives at the
+                end of the page, still one click from anywhere. */}
+            <Link
+              href="/certificates"
+              className="mt-1 inline-flex min-h-11 items-center underline underline-offset-4 transition-colors hover:text-primary sm:justify-end"
+            >
+              Certificates
+            </Link>
             <Link
               href="/login"
-              className="mt-1 inline-flex min-h-11 items-center underline underline-offset-4 transition-colors hover:text-primary sm:justify-end"
+              className="inline-flex min-h-11 items-center underline underline-offset-4 transition-colors hover:text-primary sm:justify-end"
             >
               Console
             </Link>

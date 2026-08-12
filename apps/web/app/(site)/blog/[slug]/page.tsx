@@ -72,17 +72,17 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
   return (
     <>
       {/*
-        How far through the post you are. Fixed to the top of the viewport
-        rather than pinned under the header, so it does not depend on the
-        header's height; z-50 puts it over the nav's own z-40.
+        How far through the post you are, as a spine segment drawing down the
+        left edge — the same amber line the home page's sections dock onto.
+        z-50 puts it over the nav's own z-40.
 
         The fill is scroll-driven CSS — no client component, no scroll
-        listener. See `.reading-progress` in globals.css for why it is behind
-        a `@supports` and a reduced-motion guard, and what it does without
-        them: nothing, which is the correct amount for a decoration.
+        listener. See `.reading-progress-y` in globals.css for why it is
+        behind a `@supports` and a reduced-motion guard, and what it does
+        without them: nothing, which is the correct amount for a decoration.
       */}
-      <div aria-hidden="true" className="fixed inset-x-0 top-0 z-50 h-0.5">
-        <div className="reading-progress h-full w-full bg-primary" />
+      <div aria-hidden="true" className="fixed inset-y-0 left-0 z-50 w-0.5">
+        <div className="reading-progress-y h-full w-full bg-signal" />
       </div>
 
       <article className="py-14 sm:py-20">

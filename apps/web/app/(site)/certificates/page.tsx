@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 
 import { EmptyState, Section } from "@/components/section";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
 import { ExternalLink } from "@/components/ui/external-link";
+import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { getCertificates } from "@/lib/api";
 import { formatMonthYear } from "@/lib/format";
 
@@ -13,6 +11,11 @@ export const metadata: Metadata = {
   description: "Courses and certifications completed.",
 };
 
+/**
+ * A ledger, not a card grid. Certificates are supporting evidence for a
+ * mid-level+ candidate — issuer, date, link — and a grid of cards gave them
+ * the same visual weight as the projects. Rows read as the record they are.
+ */
 export default async function CertificatesPage() {
   const certificates = await getCertificates();
 
@@ -20,61 +23,45 @@ export default async function CertificatesPage() {
     <Section
       level="h1"
       width="layout"
-      eyebrow={`Certificates · ${certificates.length}`}
+      eyebrow={`/credentials · ${certificates.length}`}
       title="Courses and certifications"
     >
       {certificates.length === 0 ? (
         <EmptyState>No certificates published yet.</EmptyState>
       ) : (
-        // A dangling odd card spans the row — a half-filled last row reads as
-        // missing data. Three columns at lg, same as the project grid.
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 sm:max-lg:[&>*:nth-child(odd):last-child]:col-span-2">
+        <div className="max-w-4xl border-t border-border/60">
           {certificates.map((certificate) => (
-            <Card key={certificate.id} className="gap-3">
-              <div className="flex items-start justify-between gap-3">
+            <article
+              key={certificate.id}
+              className="grid gap-2 border-b border-border/60 py-6 sm:grid-cols-[8.5rem_1fr_auto] sm:items-baseline sm:gap-6"
+            >
+              {/* issue_date is a datetime; only the date part is meaningful. */}
+              <p className={eyebrowClasses}>
+                {formatMonthYear(certificate.issue_date.slice(0, 10))}
+              </p>
+
+              <div>
                 {/* h2: the page heading is h1, so h3 here would skip a level. */}
-                <h2 className="font-display font-semibold text-foreground">
+                <h2 className="font-display text-lg font-semibold text-foreground">
                   {certificate.title}
                 </h2>
-                {certificate.category ? (
-                  <Badge variant="outline" className="shrink-0">
-                    {certificate.category}
-                  </Badge>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {certificate.issuer}
+                  {certificate.category ? ` · ${certificate.category}` : null}
+                </p>
+                {certificate.skills.length > 0 ? (
+                  <p className={`${eyebrowClasses} mt-2 normal-case tracking-normal`}>
+                    {certificate.skills.join(" · ")}
+                  </p>
                 ) : null}
               </div>
 
-              <div>
-                <p className="text-sm text-primary">{certificate.issuer}</p>
-                {/* issue_date is a datetime; only the date part is meaningful. */}
-                <Eyebrow className="mt-1">
-                  {formatMonthYear(certificate.issue_date.slice(0, 10))}
-                </Eyebrow>
-              </div>
-
-              {certificate.description ? (
-                <p className="flex-1 text-sm text-muted-foreground">
-                  {certificate.description}
-                </p>
-              ) : null}
-
-              {certificate.skills.length > 0 ? (
-                <ul className="flex flex-wrap gap-1.5">
-                  {certificate.skills.map((skill) => (
-                    <li key={skill}>
-                      <Badge>{skill}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-
               {certificate.credential_url ? (
-                <div className="border-t border-border/60 pt-3">
-                  <ExternalLink href={certificate.credential_url}>
-                    View credential
-                  </ExternalLink>
-                </div>
+                <ExternalLink href={certificate.credential_url}>
+                  View credential
+                </ExternalLink>
               ) : null}
-            </Card>
+            </article>
           ))}
         </div>
       )}

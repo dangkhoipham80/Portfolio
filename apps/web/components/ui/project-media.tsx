@@ -31,20 +31,56 @@ export function ProjectMedia({
   slug,
   title,
   imageUrl,
+  cover = false,
   className,
 }: {
   slug: string;
   title: string;
   imageUrl: string | null;
+  /**
+   * Render a designed generative cover when the record has no image. Off by
+   * default: in a dense grid an identical box per card reads as a grid of
+   * failed downloads. A case row is different — the layout promises a spread,
+   * so the panel must exist, and the cover below is composed (ghost initial,
+   * slug, slug-derived gradient) rather than an empty swatch.
+   */
+  cover?: boolean;
   className?: string;
 }) {
-  // No image on the record means draw nothing. The gradient exists to cover an
-  // image that fails to *load*, not to fill space where the data says there is
-  // no image — every card carrying an identical empty pastel box looked like a
-  // grid of failed downloads, which is worse than a card with no media at all.
-  if (!imageUrl) return null;
+  // No image on the record means draw nothing — unless a cover was asked for.
+  if (!imageUrl && !cover) return null;
 
   const angle = angleFromSlug(slug);
+
+  if (!imageUrl) {
+    return (
+      <div
+        className={cn(
+          "relative flex aspect-video items-end overflow-hidden rounded-[var(--radius-card)] border border-border/60",
+          className,
+        )}
+        style={{
+          backgroundImage: `linear-gradient(${angle}deg, hsl(var(--primary) / 0.16), hsl(var(--primary) / 0.03) 60%)`,
+        }}
+        role="presentation"
+      >
+        {/* The project's initial as a ghosted plate mark — cover art the data
+            cannot fail to provide. */}
+        <span
+          aria-hidden="true"
+          className="absolute -right-5 top-1/2 -translate-y-1/2 select-none font-display text-[9rem] font-extrabold leading-none text-foreground/[0.06] sm:text-[12rem]"
+        >
+          {title.slice(0, 1)}
+        </span>
+        <span
+          aria-hidden="true"
+          className="p-4 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground"
+        >
+          /{slug}
+        </span>
+      </div>
+    );
+  }
 
   // Later layers paint on top. The image sits above the gradient, so it wins
   // when it loads and is invisible when it does not.

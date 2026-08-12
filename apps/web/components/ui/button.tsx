@@ -16,10 +16,15 @@ import { cn } from "@/lib/cn";
  */
 
 const VARIANTS = {
-  /** The one action a screen is asking for. */
-  primary: "bg-primary text-primary-foreground hover:opacity-90",
+  /**
+   * The one action a screen is asking for. The hover glow is the amber
+   * "signal" identity doing its job on the single loudest control — nothing
+   * else on a screen is allowed to bloom like this.
+   */
+  primary:
+    "bg-primary text-primary-foreground font-semibold hover:shadow-[0_0_28px_hsl(var(--signal)/0.35)] hover:brightness-105",
   /** Secondary actions that should not compete: "send another", "cancel". */
-  quiet: "border border-border text-foreground hover:border-primary/40 hover:text-primary",
+  quiet: "bg-muted text-foreground hover:bg-accent hover:text-primary",
   /**
    * Destructive actions. Outlined rather than filled, and set in
    * --destructive-text rather than --destructive.
@@ -43,7 +48,9 @@ export function buttonClasses(
     // each call site re-inventing the alignment.
     // py-3 rather than the py-2.5 the inlined versions used: that came to 40px,
     // just under a comfortable touch target.
-    "inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] px-5 py-3 text-sm font-medium transition-opacity",
+    // `active:scale-[0.98]` is the press: controls compress under the pointer
+    // the way a physical switch does, 100ms so it never feels laggy.
+    "inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] px-5 py-3 text-sm font-medium transition-[opacity,box-shadow,transform,background-color,color,filter] duration-200 active:scale-[0.98]",
     // A disabled submit still has to read as the same control, just inert —
     // and it must not keep the pointer affordance of something clickable.
     "disabled:cursor-not-allowed disabled:opacity-70",

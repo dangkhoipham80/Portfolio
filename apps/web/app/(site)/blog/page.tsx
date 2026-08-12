@@ -42,7 +42,7 @@ export default async function BlogPage({ searchParams }: PageProps<"/blog">) {
     <Section
       level="h1"
       width="wide"
-      eyebrow={`Writing · ${posts.length}`}
+      eyebrow={`/writing · ${posts.length}`}
       title="Notes from building this"
       description="What I built, what broke, and what the fix turned out to be. Mostly backend, occasionally CSS."
     >

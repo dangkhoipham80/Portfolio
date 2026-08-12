@@ -1,13 +1,15 @@
-import type { CSSProperties } from "react";
+import Link from "next/link";
 
+import { CaseRow, ProjectIndexRow } from "@/components/case-row";
 import { ContactSection } from "@/components/contact-section";
 import { HeroTopology } from "@/components/hero-topology";
-import { ProjectCard } from "@/components/project-card";
 import { EmptyState, Section } from "@/components/section";
+import { StackDiagram } from "@/components/stack-diagram";
+import { buttonClasses } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
-import { getProjects, getSkills } from "@/lib/api";
-import { LEVEL_WIDTH, levelLabel } from "@/lib/format";
+import { getPosts, getProjects, getSkills } from "@/lib/api";
+import { isoDay } from "@/lib/format";
 import type { Skill } from "@/lib/types";
 
 /** Preserve the order the API sends; it is the owner's chosen ordering. */
@@ -26,64 +28,101 @@ function groupByCategory(skills: Skill[]): [string, Skill[]][] {
   return [...groups.entries()];
 }
 
+/** How many recent posts the home page previews before pointing at /blog. */
+const WRITING_PREVIEW_COUNT = 3;
+
 export default async function HomePage() {
-  // Both reads are independent, so let them overlap rather than waterfall.
-  const [projects, skills] = await Promise.all([getProjects(), getSkills()]);
+  // All three reads are independent, so let them overlap rather than waterfall.
+  const [projects, skills, posts] = await Promise.all([
+    getProjects(),
+    getSkills(),
+    getPosts(),
+  ]);
+
+  // The owner curates `featured` in the console; featured work gets the
+  // case-row treatment, the rest a compact index. If nothing is flagged the
+  // whole list is the index — a site with no opinion beats an empty spread.
+  const featured = projects.filter((p) => p.featured);
+  const rest = projects.filter((p) => !p.featured);
+  const recentPosts = posts.slice(0, WRITING_PREVIEW_COUNT);
 
   return (
     <>
-      <section className="hero-atmosphere py-20 sm:py-28 lg:py-36">
-        {/*
-          Two columns at lg, not md: at exactly 768px the h1 wraps against a
-          half-width diagram and both look cramped. Stacked-until-1024 gives
-          each its full measure instead.
-        */}
-        <Container width="layout" className="grid items-start gap-12 lg:grid-cols-[1.1fr_1fr]">
-          <div>
-            <Eyebrow className="hero-item">Backend · Data · AI</Eyebrow>
-            <h1 className="hero-item mt-4 font-display text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl [animation-delay:80ms]">
-              Phạm Đăng Khôi
-            </h1>
-            <p className="hero-item mt-5 max-w-xl text-lg text-muted-foreground [animation-delay:180ms]">
-              I build the parts you do not see: APIs, schemas, queues and the
-              services between them. Software engineering student at FPT
-              University, working in Python and Java, moving toward data and AI
-              engineering.
-            </p>
-            {/*
-              A status line, in the same dot-plus-mono shape the career timeline
-              uses: the one fact a recruiter scans for, styled as a health check
-              rather than a banner.
-            */}
-            <p className="hero-item mt-8 flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-primary [animation-delay:280ms]">
-              <span aria-hidden="true" className="status-dot h-1.5 w-1.5 rounded-full bg-primary" />
-              Open to mid-level+ roles
-            </p>
-          </div>
+      {/*
+        The hero owns the first viewport. The name is the logo, set at display
+        scale with its Vietnamese glyphs lit in signal amber — the identity in
+        one line — and the topology sits beside the thesis as supporting
+        evidence rather than competing with the name for the top row.
+      */}
+      <section className="hero-atmosphere relative flex min-h-[calc(100svh-4.25rem)] items-center py-20 sm:py-24">
+        <Container width="layout">
+          <Eyebrow className="hero-item">Backend · Data · AI</Eyebrow>
+          <h1 className="hero-item mt-5 font-display text-[clamp(3.25rem,9vw,7.5rem)] font-extrabold leading-[1.04] tracking-[-0.03em] text-foreground [animation-delay:80ms]">
+            Ph<span className="hero-name-accent">ạ</span>m{" "}
+            <span className="hero-name-accent">Đă</span>ng Kh
+            <span className="hero-name-accent">ô</span>i
+          </h1>
 
-          <HeroTopology className="justify-self-center lg:justify-self-stretch" />
+          <div className="mt-10 grid items-center gap-12 lg:mt-14 lg:grid-cols-2">
+            <div>
+              <p className="hero-item max-w-xl text-lg text-muted-foreground sm:text-xl [animation-delay:180ms]">
+                I build the parts you do not see: APIs, schemas, queues and the
+                services between them. Software engineering student at FPT
+                University, working in Python and Java, moving toward data and
+                AI engineering.
+              </p>
+              {/*
+                A status line, in the same dot-plus-mono shape the career
+                timeline uses: the one fact a recruiter scans for, styled as a
+                health check rather than a banner.
+              */}
+              <p className="hero-item mt-8 flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-primary [animation-delay:280ms]">
+                <span aria-hidden="true" className="status-dot h-1.5 w-1.5 rounded-full bg-signal" />
+                Open to mid-level+ roles
+              </p>
+
+              <div className="hero-item mt-10 flex flex-wrap gap-3 [animation-delay:360ms]">
+                <Link href="/#projects" className={buttonClasses("primary")}>
+                  View work
+                </Link>
+                <Link href="/blog" className={buttonClasses("quiet")}>
+                  Read writing
+                </Link>
+              </div>
+            </div>
+
+            <HeroTopology className="w-full max-w-xl justify-self-center lg:justify-self-end" />
+          </div>
         </Container>
       </section>
 
       <Section
         id="projects"
         width="layout"
-        eyebrow={`Projects · ${projects.length}`}
-        title="Things I have built"
+        eyebrow={`/selected-work · ${projects.length}`}
+        title="Selected work"
       >
         {projects.length === 0 ? (
-          <EmptyState>No projects published yet.</EmptyState>
+          <EmptyState>No entries returned — the write-up queue is still draining.</EmptyState>
         ) : (
-          /*
-            Three columns at lg keeps text-only cards at a readable width in the
-            layout container. In the two-column range a dangling odd card spans
-            the row — half-filled last rows read as missing data, not layout.
-          */
-          <div className="reveal-row grid gap-6 sm:grid-cols-2 lg:grid-cols-3 sm:max-lg:[&>*:nth-child(odd):last-child]:col-span-2">
-            {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
-          </div>
+          <>
+            <div className="flex flex-col gap-20 lg:gap-28">
+              {(featured.length > 0 ? featured : projects).map((project, i) => (
+                <CaseRow key={project.id} project={project} flip={i % 2 === 1} />
+              ))}
+            </div>
+
+            {featured.length > 0 && rest.length > 0 ? (
+              <div className="mt-20 lg:mt-24">
+                <Eyebrow as="h3">/more-builds · {rest.length}</Eyebrow>
+                <div className="mt-4 divide-y divide-border/60 border-t border-border/60">
+                  {rest.map((project) => (
+                    <ProjectIndexRow key={project.id} project={project} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
         )}
       </Section>
 
@@ -91,53 +130,63 @@ export default async function HomePage() {
         id="skills"
         tinted
         width="layout"
-        eyebrow={`Skills · ${skills.length}`}
-        title="What I work with"
+        eyebrow={`/capabilities · ${skills.length}`}
+        title="Where in the stack I work"
       >
         {skills.length === 0 ? (
-          <EmptyState>No skills published yet.</EmptyState>
+          <EmptyState>No capabilities published yet.</EmptyState>
         ) : (
-          <div className="reveal-row grid gap-x-12 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-            {groupByCategory(skills).map(([category, entries]) => (
-              <div key={category}>
-                <Eyebrow>{category}</Eyebrow>
-                <ul className="mt-4 space-y-3.5">
-                  {entries.map((skill) => (
-                    <li key={skill.id}>
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-sm text-foreground">{skill.name}</span>
-                        <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-                          {levelLabel(skill.level)}
-                        </span>
-                      </div>
-                      {/*
-                        overflow-clip, not overflow-hidden: `hidden` makes the
-                        track a scroll container, and the fill's view() timeline
-                        then measures entry into this 4px track instead of the
-                        viewport — the scroll fill silently never runs.
-                      */}
-                      <div
-                        className="mt-1.5 h-1 overflow-clip rounded-full bg-accent"
-                        role="presentation"
-                      >
-                        {/*
-                          Level via custom property, not a width style: the
-                          skill-fill keyframe scales the bar up to var(--bar-w)
-                          as it scrolls into view, and the base rule rests at
-                          the same value where scroll-driven animation is
-                          unsupported or motion is reduced.
-                        */}
-                        <div
-                          className="skill-bar-fill h-full rounded-full bg-primary"
-                          style={{ "--bar-w": LEVEL_WIDTH[skill.level] } as CSSProperties}
-                        />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <StackDiagram groups={groupByCategory(skills)} />
+        )}
+      </Section>
+
+      <Section
+        id="writing"
+        width="layout"
+        eyebrow={`/writing · ${posts.length}`}
+        title="Notes from the build"
+      >
+        {recentPosts.length === 0 ? (
+          <EmptyState>Nothing published yet — drafts are still in review.</EmptyState>
+        ) : (
+          <>
+            <ul className="reveal-row divide-y divide-border/60 border-t border-border/60">
+              {recentPosts.map((post) => (
+                <li key={post.id}>
+                  <article className="group relative grid gap-1 py-6 sm:grid-cols-[8.5rem_1fr] sm:gap-6">
+                    <time
+                      dateTime={isoDay(post.published_at) ?? undefined}
+                      className="pt-1 font-mono text-xs uppercase tracking-wider text-muted-foreground"
+                    >
+                      {isoDay(post.published_at)}
+                    </time>
+                    <div>
+                      <h3 className="font-display text-xl font-semibold tracking-tight text-foreground">
+                        <Link
+                          href={`/blog/${post.slug}`}
+                          className="after:absolute after:inset-0 group-hover:text-primary"
+                        >
+                          {post.title}
+                        </Link>
+                      </h3>
+                      {post.excerpt ? (
+                        <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
+                          {post.excerpt}
+                        </p>
+                      ) : null}
+                    </div>
+                  </article>
+                </li>
+              ))}
+            </ul>
+
+            <Link
+              href="/blog"
+              className="mt-8 inline-flex min-h-11 items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-primary transition-colors hover:text-foreground"
+            >
+              All posts <span aria-hidden="true">→</span>
+            </Link>
+          </>
         )}
       </Section>
 
