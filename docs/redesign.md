@@ -114,7 +114,9 @@ only voice.
 
 - [x] Career timeline docked on the spine (nodes = roles)
 - [x] Certificates as a compact ledger; demoted from primary nav to footer
-- [x] `loading.tsx` skeletons for streamed routes
+- [x] ~~`loading.tsx` skeletons for streamed routes~~ **Reverted** — see
+      decisions log: a loading boundary broke 404 status codes and no-JS
+      rendering, and the e2e suite caught both
 - [x] Empty/error/404 voice pass (`404 — route not found`, dashed spine)
 - [x] Login page aligned to the new system
 
@@ -159,3 +161,9 @@ after Phase 5.
   template; the stack diagram says "systems engineer".
 - **`ProjectCard` removed.** The home grid it served no longer exists; case
   rows and index rows replaced it.
+- **Route-level `loading.tsx` reverted.** A loading boundary makes Next stream
+  the shell: the 200 status is committed before `notFound()` runs (so every
+  404 became a 200), and swapping the Suspense fallback for content needs
+  inline scripts, so a no-JS visitor kept the skeleton forever. The e2e suite
+  caught both — the site is largely prerendered anyway, so skeletons bought
+  almost nothing.

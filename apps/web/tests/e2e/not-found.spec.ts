@@ -27,7 +27,9 @@ for (const path of PATHS) {
     const response = await page.goto(path);
 
     expect(response?.status()).toBe(404);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("This page does not exist");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "Nothing is listening on this path",
+    );
     await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Elsewhere" })).toBeVisible();
 

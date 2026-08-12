@@ -19,7 +19,11 @@ const PAGES = [
   {
     path: "/",
     heading: "Phạm Đăng Khôi",
-    empty: ["No projects published yet.", "No skills published yet."],
+    empty: [
+      "No entries returned — the write-up queue is still draining.",
+      "No capabilities published yet.",
+      "Nothing published yet — drafts are still in review.",
+    ],
   },
   {
     path: "/career-journey",
@@ -72,9 +76,10 @@ test.describe("pages built with no API behind them", () => {
     await page.goto("/");
 
     // The eyebrows interpolate `projects.length`. A fallback that was not an
-    // array would render "Projects · undefined" here, if it rendered at all.
-    await expect(page.getByText("Projects · 0")).toBeVisible();
-    await expect(page.getByText("Skills · 0")).toBeVisible();
+    // array would render "/selected-work · undefined" here, if it rendered at
+    // all.
+    await expect(page.getByText("/selected-work · 0")).toBeVisible();
+    await expect(page.getByText("/capabilities · 0")).toBeVisible();
   });
 
   test("the contact form is still usable when the content API is gone", async ({ page }) => {
