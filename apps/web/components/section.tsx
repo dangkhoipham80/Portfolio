@@ -50,7 +50,12 @@ export function Section({
         // section-rule replaces the top border with a line that can be drawn
         // as the section arrives; see globals.css. Without scroll-driven
         // animation support it renders as exactly the border it replaced.
-        "section-rule relative py-24 sm:py-32 lg:py-40",
+        //
+        // py-40 at `lg` put 160px of nothing above and below every section —
+        // 320px per boundary, which on its own was roughly a screen and a half
+        // of the home page. The rule and the tint already mark where a section
+        // starts; the padding does not have to do it a third time.
+        "section-rule relative py-20 sm:py-24 lg:py-28",
         tinted && "bg-muted",
       )}
     >
@@ -83,7 +88,7 @@ export function Section({
           {description ? (
             <p className="reveal mt-4 max-w-2xl text-lg text-muted-foreground">{description}</p>
           ) : null}
-          <div className="mt-12">{children}</div>
+          <div className="mt-10">{children}</div>
         </div>
       </Container>
     </section>

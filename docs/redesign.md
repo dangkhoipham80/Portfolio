@@ -140,6 +140,75 @@ after Phase 5.
 
 ## Decisions log
 
+- **2026-08-20 — the hero stopped illustrating and started reporting.** The
+  topology drew FastAPI fanning out to Postgres, Redis and Kafka. Those are real
+  technologies from the projects below, but none of Redis or Kafka is in *this*
+  system — so a portfolio arguing for honest systems engineering opened with a
+  diagram of something that was not running.
+
+  It is now the four services that actually serve the response — Browser →
+  Next.js on Vercel → FastAPI on `fly.io/iad` → Postgres on `neon/us-east-2`,
+  checked against `fly.toml` rather than memory — with a readout line under it
+  reporting the call the page really made: `GET /projects/ · 200 · 5 records`.
+
+  The API node is lit **only if that read was answered**. `lib/api.ts` returns a
+  fallback on failure so the site stays up, which makes an empty list ambiguous
+  between "nothing published" and "nothing reachable"; `readJson` now keeps the
+  outcome and `readProjects()` hands it to the page. When the backend is asleep
+  the node goes dim and the readout says `no answer · serving fallback`. A status
+  light that is always on is not a status light.
+
+  Two shape decisions fell out of building it. The chain is folded into a
+  serpentine because four nodes in a row leaves ~30px gaps, and a packet
+  travelling behind them was hidden for 92% of its journey — it read as a
+  flicker. Folded, the open runs dominate and the packet is visible about three
+  quarters of the time. And the packet is drawn *before* the nodes so their
+  opaque fills occlude it: it visibly enters a service and comes out the far
+  side, which is the one thing a static architecture diagram cannot say.
+
+- **2026-08-20 — the case row's layout follows the data.** Every project has
+  `image_url: null`, and the row reserved half the page for a generated gradient
+  regardless. Four of those stacked put roughly 40% of the page's area into empty
+  grey panels, which do not read as "a cover is coming" but as broken images.
+
+  A project without a cover now gets a record layout — mono fields beside prose,
+  full width, about a third of the height — and a rule per row, so a run of them
+  reads as a ledger of work. Uploading a cover switches that row back to the
+  spread with no other change. The owner is uploading real screenshots in prod;
+  the page is built for them without pretending they have arrived. Generated
+  per-project artwork was considered and rejected: the fix for "no real images"
+  is real images, not better fakes.
+
+- **2026-08-20 — motion below the fold, in one vocabulary.** All the previous
+  motion was in the hero. The rule for what was added: lit things travel along
+  paths, and every one of them is driven by the reader rather than a timer.
+
+  The spine's lit path was running bright-to-dim *downward*, so its strongest
+  point sat at the top of a section already passed. Inverted, the head is at the
+  scroll position and the trail behind it is ink. The green is held to the last
+  12% of the gradient — at a 60% stop it covered ~500px of a tall section's rail
+  and put a long saturated line down the page, which is colour describing where
+  the reader has been rather than where something is happening.
+
+  The capabilities table, the most static block on the page, gained a scan: each
+  layer's left tick lights as that layer crosses the middle of the viewport, in
+  stack order. Both sit behind the same `@supports` + `prefers-reduced-motion`
+  guards as everything else, with ink resting states.
+
+  Verified rather than assumed: `document.getAnimations()` shows 41 running;
+  cancelling all of them leaves nothing content-bearing invisible, and under
+  emulated `prefers-reduced-motion: reduce` nothing runs and nothing hides. The
+  two hero packets are deliberately `opacity: 0` when motion is off — a packet
+  is pure motion, and parked on a wire it would claim something is in flight.
+
+- **2026-08-20 — density: 6.6 screens → 4.67.** Section padding was `py-40` at
+  `lg`, 320px of nothing per boundary; it is `py-28` now, since the rule and the
+  tint already mark where a section starts. The contact block was 1065px for one
+  form and three links — channels moved beside the form and it is 861px. The
+  `/writing` section is **absent** when there are no posts rather than rendering
+  "Nothing published yet" into 545px of blank page; an e2e test pins that, and
+  `/blog` still explains itself for anyone who goes looking.
+
 - **2026-08-20 — the amber is gone, and so is the grid.** Reviewed on the
   deployed site, the verdict was that the yellow *text* and the graph-paper
   background were ugly. Both were removed and the palette is now monochrome:

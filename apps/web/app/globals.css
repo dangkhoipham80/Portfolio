@@ -284,6 +284,93 @@
   }
 
   /*
+   * One request, running the path.
+   *
+   * The hero used to put a dashed `wire-flow` on every edge at once, which
+   * reads as "there is traffic" — ambient, and true of any system. A single
+   * dot that leaves the browser, disappears behind each service and comes back
+   * with an answer reads as *this* request, which is the hero's actual claim.
+   *
+   * `offset-path` does the moving, so the position is one declaration rather
+   * than hand-keyframed x/y per segment, and the dots are drawn before the
+   * node rectangles in the markup so opaque node fills occlude them — the
+   * packet visibly enters a service and comes out the other side.
+   *
+   * Both dots share one straight path across the row; the opacity keys are
+   * what separate them in time, so the response only starts once the request
+   * has arrived. Baking the pause into the keyframes rather than using
+   * `animation-delay` keeps the two loops locked together forever instead of
+   * drifting apart.
+   */
+  .packet-path .packet {
+    /*
+     * The whole chain as one path: right along the top, down the fold, left
+     * along the bottom. The two corners both fall *inside* a node box, so they
+     * are never seen — which is why they can be square.
+     */
+    offset-path: path("M110,45 L302,45 L302,165 L110,165");
+    /* A circle has no heading to align, and leaving this at `auto` makes the
+       element rotate about a point it does not care about. */
+    offset-rotate: 0deg;
+    /*
+     * Off by default, and only turned on inside the no-preference block below.
+     * A packet is pure motion — with the animation stopped there is no
+     * "resting state" it should hold, just a green dot parked on a wire
+     * claiming something is in flight when nothing is.
+     */
+    opacity: 0;
+  }
+
+  @keyframes packet-out {
+    0% {
+      offset-distance: 0%;
+      opacity: 0;
+    }
+    6%,
+    38% {
+      opacity: 1;
+    }
+    44%,
+    100% {
+      offset-distance: 100%;
+      opacity: 0;
+    }
+  }
+
+  @keyframes packet-back {
+    0%,
+    50% {
+      offset-distance: 100%;
+      opacity: 0;
+    }
+    56%,
+    88% {
+      opacity: 1;
+    }
+    94%,
+    100% {
+      offset-distance: 0%;
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .packet-path .packet-out {
+      animation: packet-out 3.6s linear infinite;
+      /* Held until the last node's entrance has landed — a packet arriving at
+         a database that has not booted yet breaks the boot narrative. */
+      animation-delay: 900ms;
+      filter: drop-shadow(0 0 4px hsl(var(--live) / 0.8));
+    }
+
+    .packet-path .packet-back {
+      animation: packet-back 3.6s linear infinite;
+      animation-delay: 900ms;
+      filter: drop-shadow(0 0 4px hsl(var(--live) / 0.6));
+    }
+  }
+
+  /*
    * The rails draw themselves, left to right, in the order a request would
    * travel them.
    *
@@ -1025,6 +1112,63 @@
 }
 
 /* ==========================================================================
+ * The stack, scanned.
+ *
+ * The capabilities table was the most static block on the page: a card of
+ * chips that did nothing from the moment it rendered. It is also the one
+ * section whose content genuinely is a stack, ordered top to bottom the way a
+ * request descends through one — so the motion it gets is a scan running down
+ * that order, one layer lighting as it reaches the middle of the viewport.
+ *
+ * The reader drives it. Each layer is on its own `view()` timeline, so the
+ * light is a function of where that row is on screen rather than of a timer:
+ * scrolling back up runs the scan back up, and landing halfway down the page
+ * from a link starts it in the right place. There is no orchestration code,
+ * no observer and no library — one keyframe and a range.
+ *
+ * Same two guards as everything else here. `@supports` because a browser
+ * without scroll-driven animation must get the resting state, and the resting
+ * state is a plain ink tick at the left of each layer — which is a reasonable
+ * thing for a layer to have, not a broken version of something. And
+ * `prefers-reduced-motion` because the global block forces
+ * `animation-duration` to 0.01ms, which a scroll-driven animation reads as
+ * "already finished" and would pin every layer lit at once.
+ * ========================================================================== */
+
+@keyframes layer-scan {
+  0%,
+  100% {
+    background-color: hsl(var(--border));
+  }
+  50% {
+    background-color: hsl(var(--live));
+  }
+}
+
+@layer base {
+  .stack-layer::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 2px;
+    background-color: hsl(var(--border));
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .stack-layer::before {
+        animation: layer-scan linear both;
+        animation-timeline: view();
+        /* Peaks as the layer crosses the middle of the viewport, so the lit
+           row is always the one the reader is actually looking at. */
+        animation-range: cover 30% cover 70%;
+      }
+    }
+  }
+}
+
+/* ==========================================================================
  * The spine.
  *
  * The site's signature: one vertical data path that the page's sections dock
@@ -1061,15 +1205,37 @@
     background: hsl(var(--border) / 0.9);
   }
 
-  /* The lit path, drawn top-down as the section arrives. */
+  /*
+   * The lit path, drawn top-down as the section arrives — with the bright end
+   * at the *bottom*, which is where the reader is.
+   *
+   * This gradient used to run bright-to-dim downward, so the strongest point
+   * sat at the top of a section the reader had already passed and the leading
+   * edge faded out into nothing. Inverting it puts a lit head exactly at the
+   * scroll position and leaves an ink trail behind it: the same "static is
+   * ink, live is lit" rule the hero's packet follows, with the reader's own
+   * scrolling as the thing that is happening.
+   *
+   * The element is scaled rather than repositioned, so the gradient compresses
+   * with it and the head stays at the leading edge at every scroll position —
+   * no second element and no JavaScript to keep in sync.
+   */
   .spine-rail::after {
     content: "";
     position: absolute;
     inset: 0;
+    /*
+     * The green is held back to the last tenth on purpose. At a 60% stop the
+     * hue covered roughly 500px of a tall section's rail, which in dark mode
+     * put a long saturated line down the left edge of the page — colour
+     * describing everything the reader had already passed rather than the one
+     * place something is happening. Ink to 88%, then the head.
+     */
     background: linear-gradient(
       to bottom,
-      hsl(var(--signal) / 0.9),
-      hsl(var(--signal) / 0.25)
+      hsl(var(--signal) / 0.12),
+      hsl(var(--signal) / 0.45) 88%,
+      hsl(var(--live) / 0.85)
     );
     transform-origin: top;
   }

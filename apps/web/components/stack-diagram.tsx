@@ -31,7 +31,10 @@ export function StackDiagram({ groups }: { groups: [string, Skill[]][] }) {
           <section
             key={category}
             className={cn(
-              "grid gap-3 p-5 sm:grid-cols-[9rem_1fr] sm:gap-6 sm:p-6",
+              // stack-layer is the scan: an ink tick at the left of every
+              // layer that lights as that layer crosses the viewport. See
+              // globals.css — it needs `relative` for the tick to anchor to.
+              "stack-layer relative grid gap-3 p-5 pl-6 sm:grid-cols-[9rem_1fr] sm:gap-6 sm:p-6 sm:pl-7",
               i > 0 && "border-t border-border/60",
             )}
           >
