@@ -66,6 +66,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       // The script below adds `dark` before React hydrates, so the class on the
       // client never matches what the server rendered. That is the intent.
       suppressHydrationWarning
+      /*
+       * `scroll-behavior: smooth` in globals.css is there for in-page anchors:
+       * /#projects from the nav, and the skip link. Without this attribute Next
+       * applies it to *route* transitions too, so following a project link from
+       * the bottom of the home page scrolls the new page up from wherever the
+       * old one was standing instead of starting at the top. Declaring it marks
+       * the smoothness as deliberate, and is what the dev-server warning asks
+       * for.
+       */
+      data-scroll-behavior="smooth"
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
