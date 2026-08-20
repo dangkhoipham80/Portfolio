@@ -102,15 +102,53 @@ export function ProjectMedia({
   const tile =
     "relative flex items-end overflow-hidden rounded-[var(--radius-control)] border border-border";
 
-  // The caption both branches share: the title, restated over the panel. It is
-  // aria-hidden because the card's own heading is directly below.
+  /*
+   * The caption both branches share: the title, restated over the panel. It is
+   * aria-hidden because the card's own heading is directly below.
+   *
+   * ## The scrim is not decoration
+   *
+   * This used to be `text-muted-foreground` sitting directly on the image. That
+   * is fine on the dark photo you happen to test with and fails on everything
+   * else: measured on a white cover it came out at 2.33:1, against the 4.5:1
+   * this size of text needs. The covers being uploaded are screenshots of web
+   * apps, which are mostly light — so the failing case is the normal one, and
+   * it was invisible while every record had `image_url: null`.
+   *
+   * Over an image the caption stops following the theme, because the photo is
+   * its background rather than the page: light text on a dark scrim in both
+   * modes. `black`/`white` rather than tokens is deliberate and is not the
+   * literal-instead-of-token bug — there is no "darken an arbitrary
+   * photograph" surface in the palette, and a scrim that flipped with the
+   * theme would be unreadable in one of them.
+   */
   const caption = (
-    <span
-      aria-hidden="true"
-      className="relative z-10 p-3 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground"
-    >
-      {title}
-    </span>
+    <>
+      <span
+        aria-hidden="true"
+        /*
+         * `bg-linear-to-t`, not `bg-gradient-to-t`. Tailwind v4 renamed the
+         * gradient utilities, and the v3 name emits no `background-image` at
+         * all — the element was there, styled, and completely invisible, which
+         * is the same silent failure as `rounded-[--radius-card]`. Verified by
+         * reading `backgroundImage` off getComputedStyle, not by reading the
+         * class name.
+         *
+         * `inset-0` rather than `bottom-0 h-1/2`: a percentage height inside an
+         * aspect-ratio box resolved to zero, so the span measured 0x0. The
+         * gradient is transparent across the top half anyway, so covering the
+         * whole tile paints the same thing without depending on how the
+         * parent's height was arrived at.
+         */
+        className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/85 via-black/35 via-18% to-transparent to-36%"
+      />
+      <span
+        aria-hidden="true"
+        className="relative z-10 p-3 font-mono text-xs uppercase tracking-[0.18em] text-white/90 [text-shadow:0_1px_2px_rgb(0_0_0/0.5)]"
+      >
+        {title}
+      </span>
+    </>
   );
 
   if (isOptimisableImage(imageUrl)) {
