@@ -50,6 +50,14 @@ const EDGES = [
 const NODE_BOOT_DELAY_MS = [450, 525, 600, 675, 750];
 
 /*
+ * Each rail is drawn just before the node it arrives at pops in, so the
+ * sequence reads as one motion — the wire reaches the service, then the
+ * service appears — rather than as two separate animations that happen to
+ * overlap.
+ */
+const EDGE_DRAW_DELAY_MS = [240, 380, 470, 560];
+
+/*
  * When the wires start flowing. Kafka's entrance technically runs until
  * 1.15s, but the deceleration easing has it visually settled well before
  * that — 0.8s starts the first flow the moment the graph reads as complete,
@@ -67,26 +75,34 @@ export function HeroTopology({ className }: { className?: string }) {
       // as the architecture it depicts, not as an icon beside the text.
       className={cn("h-auto w-full max-w-lg lg:max-w-none", className)}
     >
-      {/* Static rails, so the graph still reads as connected when motion is off. */}
-      <g className="hero-item [animation-delay:350ms]">
-        {EDGES.map((edge) => (
+      {/*
+        The rails draw themselves in request order. `pathLength="1"` normalises
+        every curve so one dasharray works for all of them — see `.edge-draw`.
+        The base state is a fully drawn line, so with motion off (or without
+        animation support) this is exactly the static graph it replaced.
+      */}
+      <g>
+        {EDGES.map((edge, i) => (
           <path
             key={`rail-${edge.d}`}
             d={edge.d}
+            pathLength="1"
             fill="none"
             stroke="hsl(var(--border))"
             strokeWidth="1.5"
+            className="edge-draw"
+            style={{ animationDelay: `${EDGE_DRAW_DELAY_MS[i]}ms` }}
           />
         ))}
       </g>
 
-      <g className="hero-item [animation-delay:350ms]">
+      {/* The packets. `.wire-flow` supplies the lit stroke and its glow. */}
+      <g>
         {EDGES.map((edge) => (
           <path
             key={`flow-${edge.d}`}
             d={edge.d}
             fill="none"
-            stroke="hsl(var(--primary))"
             strokeWidth="2"
             strokeLinecap="round"
             className="wire-flow"
@@ -100,9 +116,29 @@ export function HeroTopology({ className }: { className?: string }) {
       {NODES.map((node, i) => (
         <g
           key={node.id}
-          className="topology-node hero-item"
+          className="topology-node node-pop"
           style={{ animationDelay: `${NODE_BOOT_DELAY_MS[i]}ms` }}
         >
+          {/*
+            A halo under the API node only. It is the one service on this
+            diagram that is *this* site's API, and giving exactly one node a
+            slow breath is what stops the graph reading as a still life. One
+            infinite animation, on a decorative mark, nowhere near text.
+          */}
+          {node.id === "api" ? (
+            <rect
+              x={node.x - 5}
+              y={node.y - 5}
+              width={NODE_WIDTH + 10}
+              height={NODE_HEIGHT + 10}
+              rx="13"
+              fill="none"
+              stroke="hsl(var(--live))"
+              strokeWidth="1"
+              className="node-live"
+            />
+          ) : null}
+
           <rect
             x={node.x}
             y={node.y}

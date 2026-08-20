@@ -88,7 +88,12 @@ export default async function HomePage() {
                 health check rather than a banner.
               */}
               <p className="hero-item mt-8 flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-primary [animation-delay:280ms]">
-                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-signal" />
+                {/* Lit, with a halo: this is a live status, which is exactly
+                    what the hue is reserved for. */}
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 rounded-full bg-live shadow-[0_0_0_3px_hsl(var(--live)/0.18)]"
+                />
                 Open to mid-level+ roles
               </p>
 

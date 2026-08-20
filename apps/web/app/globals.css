@@ -49,6 +49,21 @@
   --color-signal: hsl(var(--signal));
 
   /*
+   * The one hue on the site, and it is not decoration — it marks what is
+   * *live*. Packets moving along a wire, a node that is up, the availability
+   * status. Static furniture stays ink; if a thing is lit, it is because
+   * something is happening there.
+   *
+   * Green rather than a brand colour picked from nowhere: this page's subject
+   * is services talking to each other, and green-is-healthy is the existing
+   * vocabulary of every dashboard that does that. The console already uses
+   * this exact hue for `c-dot-live`, so the two surfaces agree.
+   *
+   * It never sets a text colour. That rule has not moved.
+   */
+  --color-live: hsl(var(--live));
+
+  /*
    * One radius scale, derived from a single value. Cards, badges and buttons
    * previously each picked their own `rounded-*`, which is the kind of drift
    * that makes a set of components look like it came from three different
@@ -128,11 +143,14 @@
     --destructive-text: 0 72% 38%;
     --ring: 222 20% 30%;
     /*
-     * Marks — spine nodes, the status dot, the packets on the wire. Ink
-     * rather than a signal colour now: see the palette note at the top of
-     * this file for why the amber left.
+     * Marks that are *not* live — spine nodes, section junctions. Ink, so the
+     * lit ones below stand out by being the only thing with a hue.
      */
     --signal: 222 20% 22%;
+    /* Darker on paper than on ink: mid-green on white measures badly. */
+    --live: 158 72% 32%;
+    /* The soft light behind the hero, so the page is not a flat sheet. */
+    --depth: 158 40% 55%;
   }
 
   /*
@@ -158,6 +176,8 @@
     --destructive-text: 0 85% 75%;
     --ring: 222 12% 72%;
     --signal: 222 12% 90%;
+    --live: 152 68% 55%;
+    --depth: 152 60% 50%;
   }
 
   html {
@@ -182,6 +202,37 @@
     line-height: 1.7;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+  }
+
+  /*
+   * One light source, behind the hero.
+   *
+   * Not the graph paper coming back: that was a repeating pattern across the
+   * whole page, competing with the content. This is a single soft radial that
+   * decays within the first viewport, and its only job is to stop the top of
+   * the page reading as a flat sheet of one colour. A dark interface with no
+   * light in it looks unfinished no matter how good the type is, and that is
+   * most of what "pure black" was complaining about.
+   *
+   * Fixed, not scrolled, so it behaves like a light in the room rather than a
+   * shape on the page — it never becomes an object you scroll past.
+   */
+  .page-light {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(
+        60rem 40rem at 72% -5%,
+        hsl(var(--depth) / 0.1),
+        transparent 65%
+      ),
+      radial-gradient(
+        40rem 30rem at 8% 8%,
+        hsl(var(--depth) / 0.05),
+        transparent 60%
+      );
   }
 
   /*
@@ -227,6 +278,71 @@
   .wire-flow {
     stroke-dasharray: 3 9;
     animation: wire-flow 1.6s linear infinite;
+    /* Lit, because this is the thing on the diagram that is actually moving. */
+    stroke: hsl(var(--live));
+    filter: drop-shadow(0 0 3px hsl(var(--live) / 0.7));
+  }
+
+  /*
+   * The rails draw themselves, left to right, in the order a request would
+   * travel them.
+   *
+   * The graph used to fade in whole, which said "here is a picture of a
+   * system". Drawing it says "here is a system coming up", which is the
+   * hero's actual claim and costs one keyframe. `pathLength="1"` is set on
+   * the paths so the dash maths is 0-to-1 regardless of each curve's real
+   * length — otherwise every edge needs its own hand-measured dasharray.
+   */
+  @keyframes edge-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .edge-draw {
+    stroke-dasharray: 1;
+    animation: edge-draw 620ms var(--ease-enter) both;
+  }
+
+  /*
+   * A node arrives by scaling up from slightly small, from its own centre.
+   * `transform-box: fill-box` is the part that is easy to miss: without it an
+   * SVG child scales about the *viewport* origin and flies in from the corner.
+   */
+  @keyframes node-pop {
+    from {
+      opacity: 0;
+      scale: 0.86;
+    }
+  }
+
+  .node-pop {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: node-pop 420ms var(--ease-enter) both;
+  }
+
+  /*
+   * The API node keeps a slow breath after it lands — one element on the
+   * diagram that never settles, so the graph reads as running rather than
+   * paused. Deliberately the only infinite animation on the page, and it is
+   * on a decorative, aria-hidden mark rather than beside text.
+   */
+  @keyframes node-live {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 0.16;
+    }
+  }
+
+  .node-live {
+    animation: node-live 3.2s ease-in-out infinite;
   }
 
   /*
