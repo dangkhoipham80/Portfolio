@@ -19,6 +19,12 @@ import { cn } from "@/lib/cn";
 export default function SiteLayout({ children }: LayoutProps<"/">) {
   return (
     <>
+      {/*
+        The page's light source. Here rather than in the root layout because
+        the console deliberately does not share the site's surface, and a
+        fixed decorative layer in the root would bleed into it.
+      */}
+      <div aria-hidden="true" className="page-light" />
       <SkipLink />
       <SiteNav />
       <main id="main" className="flex-1">

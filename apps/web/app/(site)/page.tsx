@@ -8,7 +8,7 @@ import { StackDiagram } from "@/components/stack-diagram";
 import { buttonClasses } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
-import { getPosts, getProjects, getSkills } from "@/lib/api";
+import { getPosts, getSkills, readProjects } from "@/lib/api";
 import { isoDay } from "@/lib/format";
 import type { Skill } from "@/lib/types";
 
@@ -33,11 +33,16 @@ const WRITING_PREVIEW_COUNT = 3;
 
 export default async function HomePage() {
   // All three reads are independent, so let them overlap rather than waterfall.
-  const [projects, skills, posts] = await Promise.all([
-    getProjects(),
+  // The projects read keeps its outcome as well as its data: the hero's
+  // topology lights the API node from it, so an empty list caused by an outage
+  // and one caused by an empty database do not look the same.
+  const [projectsRead, skills, posts] = await Promise.all([
+    readProjects(),
     getSkills(),
     getPosts(),
   ]);
+
+  const projects = projectsRead.data;
 
   // The owner curates `featured` in the console; featured work gets the
   // case-row treatment, the rest a compact index. If nothing is flagged the
@@ -50,20 +55,31 @@ export default async function HomePage() {
     <>
       {/*
         The hero owns the first viewport. The name is the logo, set at display
-        scale with its Vietnamese glyphs lit in signal amber — the identity in
-        one line — and the topology sits beside the thesis as supporting
+        scale in one ink, and the topology sits beside the thesis as supporting
         evidence rather than competing with the name for the top row.
+
+        The `hero-name-accent` spans below currently render no differently from
+        the rest of the name — see the note on that class in globals.css. They
+        are left in place because the diacritics are still the right thing to
+        single out; what they need is a treatment that is not colour.
       */}
-      <section className="hero-atmosphere relative flex min-h-[calc(100svh-4.25rem)] items-center py-20 sm:py-24">
+      <section className="relative flex min-h-[calc(100svh-4.25rem)] items-center py-20 sm:py-24">
         <Container width="layout">
           <Eyebrow className="hero-item">Backend · Data · AI</Eyebrow>
-          <h1 className="hero-item mt-5 font-display text-[clamp(3.25rem,9vw,7.5rem)] font-extrabold leading-[1.04] tracking-[-0.03em] text-foreground [animation-delay:80ms]">
+          {/*
+            Leading opens up until the name fits on one line. Vietnamese
+            stacks diacritics both ways — the nặng dot under "ạ" and the
+            breve over "ă" — so at 1.04 a wrapped name has the dot of one
+            line landing in the breve of the next. It only shows below `lg`,
+            where the name wraps, which is exactly where it must not.
+          */}
+          <h1 className="hero-item mt-5 font-display text-[clamp(3.25rem,9vw,7.5rem)] font-extrabold leading-[1.16] tracking-[-0.03em] text-foreground lg:leading-[1.04] [animation-delay:80ms]">
             Ph<span className="hero-name-accent">ạ</span>m{" "}
             <span className="hero-name-accent">Đă</span>ng Kh
             <span className="hero-name-accent">ô</span>i
           </h1>
 
-          <div className="mt-10 grid items-center gap-12 lg:mt-14 lg:grid-cols-2">
+          <div className="mt-8 grid items-center gap-10 lg:mt-10 lg:grid-cols-2 lg:gap-14">
             <div>
               <p className="hero-item max-w-xl text-lg text-muted-foreground sm:text-xl [animation-delay:180ms]">
                 I build the parts you do not see: APIs, schemas, queues and the
@@ -77,7 +93,12 @@ export default async function HomePage() {
                 health check rather than a banner.
               */}
               <p className="hero-item mt-8 flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-primary [animation-delay:280ms]">
-                <span aria-hidden="true" className="status-dot h-1.5 w-1.5 rounded-full bg-signal" />
+                {/* Lit, with a halo: this is a live status, which is exactly
+                    what the hue is reserved for. */}
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 rounded-full bg-live shadow-[0_0_0_3px_hsl(var(--live)/0.18)]"
+                />
                 Open to mid-level+ roles
               </p>
 
@@ -91,7 +112,11 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <HeroTopology className="w-full max-w-xl justify-self-center lg:justify-self-end" />
+            <HeroTopology
+              projectCount={projects.length}
+              apiOk={projectsRead.ok}
+              className="hero-item w-full max-w-xl justify-self-center [animation-delay:440ms] lg:justify-self-end"
+            />
           </div>
         </Container>
       </section>
@@ -106,9 +131,17 @@ export default async function HomePage() {
           <EmptyState>No entries returned — the write-up queue is still draining.</EmptyState>
         ) : (
           <>
-            <div className="flex flex-col gap-20 lg:gap-28">
+            {/* No gap: each row carries its own top spacing, because a record
+                row separates itself with a rule and a spread needs more air
+                than a rule. */}
+            <div className="flex flex-col">
               {(featured.length > 0 ? featured : projects).map((project, i) => (
-                <CaseRow key={project.id} project={project} flip={i % 2 === 1} />
+                <CaseRow
+                  key={project.id}
+                  project={project}
+                  flip={i % 2 === 1}
+                  priority={i === 0}
+                />
               ))}
             </div>
 
@@ -140,55 +173,62 @@ export default async function HomePage() {
         )}
       </Section>
 
-      <Section
-        id="writing"
-        width="layout"
-        eyebrow={`/writing · ${posts.length}`}
-        title="Notes from the build"
-      >
-        {recentPosts.length === 0 ? (
-          <EmptyState>Nothing published yet — drafts are still in review.</EmptyState>
-        ) : (
-          <>
-            <ul className="reveal-row divide-y divide-border/60 border-t border-border/60">
-              {recentPosts.map((post) => (
-                <li key={post.id}>
-                  <article className="group relative grid gap-1 py-6 sm:grid-cols-[8.5rem_1fr] sm:gap-6">
-                    <time
-                      dateTime={isoDay(post.published_at) ?? undefined}
-                      className="pt-1 font-mono text-xs uppercase tracking-wider text-muted-foreground"
-                    >
-                      {isoDay(post.published_at)}
-                    </time>
-                    <div>
-                      <h3 className="font-display text-xl font-semibold tracking-tight text-foreground">
-                        <Link
-                          href={`/blog/${post.slug}`}
-                          className="after:absolute after:inset-0 group-hover:text-primary"
-                        >
-                          {post.title}
-                        </Link>
-                      </h3>
-                      {post.excerpt ? (
-                        <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
-                          {post.excerpt}
-                        </p>
-                      ) : null}
-                    </div>
-                  </article>
-                </li>
-              ))}
-            </ul>
+      {/*
+        Absent, not empty.
 
-            <Link
-              href="/blog"
-              className="mt-8 inline-flex min-h-11 items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-primary transition-colors hover:text-foreground"
-            >
-              All posts <span aria-hidden="true">→</span>
-            </Link>
-          </>
-        )}
-      </Section>
+        This section used to render "Nothing published yet — drafts are still in
+        review." into 545px of otherwise blank page. An empty state earns its
+        space when the reader can act on it or when the emptiness is itself
+        information; here it is neither — it is a section announcing that it has
+        nothing to say, on the one page whose job is to be convincing in five
+        seconds. /blog is still in the nav and still has its own empty state for
+        anyone who goes looking.
+      */}
+      {recentPosts.length > 0 ? (
+        <Section
+          id="writing"
+          width="layout"
+          eyebrow={`/writing · ${posts.length}`}
+          title="Notes from the build"
+        >
+          <ul className="reveal-row divide-y divide-border/60 border-t border-border/60">
+            {recentPosts.map((post) => (
+              <li key={post.id}>
+                <article className="group relative grid gap-1 py-6 sm:grid-cols-[8.5rem_1fr] sm:gap-6">
+                  <time
+                    dateTime={isoDay(post.published_at) ?? undefined}
+                    className="pt-1 font-mono text-xs uppercase tracking-wider text-muted-foreground"
+                  >
+                    {isoDay(post.published_at)}
+                  </time>
+                  <div>
+                    <h3 className="font-display text-xl font-semibold tracking-tight text-foreground">
+                      <Link
+                        href={`/blog/${post.slug}`}
+                        className="after:absolute after:inset-0 group-hover:text-primary"
+                      >
+                        {post.title}
+                      </Link>
+                    </h3>
+                    {post.excerpt ? (
+                      <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
+                        {post.excerpt}
+                      </p>
+                    ) : null}
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ul>
+
+          <Link
+            href="/blog"
+            className="mt-8 inline-flex min-h-11 items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-primary transition-colors hover:text-foreground"
+          >
+            All posts <span aria-hidden="true">→</span>
+          </Link>
+        </Section>
+      ) : null}
 
       <ContactSection />
     </>

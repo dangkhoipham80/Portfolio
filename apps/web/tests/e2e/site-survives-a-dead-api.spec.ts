@@ -19,10 +19,12 @@ const PAGES = [
   {
     path: "/",
     heading: "Phạm Đăng Khôi",
+    // The writing section is deliberately absent rather than empty here — see
+    // the test below. Projects and capabilities still explain themselves, so
+    // the page continues to say that it is empty on purpose rather than broken.
     empty: [
       "No entries returned — the write-up queue is still draining.",
       "No capabilities published yet.",
-      "Nothing published yet — drafts are still in review.",
     ],
   },
   {
@@ -80,6 +82,24 @@ test.describe("pages built with no API behind them", () => {
     // all.
     await expect(page.getByText("/selected-work · 0")).toBeVisible();
     await expect(page.getByText("/capabilities · 0")).toBeVisible();
+  });
+
+  test("the home page drops the writing section rather than advertising an empty one", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    // With no posts this section used to render "Nothing published yet" into
+    // 545px of blank page — a section whose only content was the admission
+    // that it had none, on the page that has five seconds to be convincing.
+    // Absent is the intended state, so it is asserted rather than left to
+    // whichever way the markup happens to fall.
+    await expect(page.locator("#writing")).toHaveCount(0);
+    await expect(page.getByText("Nothing published yet")).toHaveCount(0);
+
+    // But not hidden: /blog is still reachable and still explains itself, so
+    // dropping the preview loses nobody the content.
+    await expect(page.getByRole("link", { name: "Blog" })).toBeVisible();
   });
 
   test("the contact form is still usable when the content API is gone", async ({ page }) => {

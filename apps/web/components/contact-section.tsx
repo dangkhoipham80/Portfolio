@@ -47,38 +47,62 @@ export function ContactSection() {
         someone. Letting each channel take its natural width fixes it and wraps
         gracefully at 375px.
       */}
-      <dl className="mb-10 flex max-w-2xl flex-wrap gap-x-10 gap-y-4">
-        {CHANNELS.map((channel) => (
-          <div key={channel.label}>
-            {/* eyebrowClasses, not a literal 11px: the footer renders these
-                same labels through it, and two sizes for one label is how a
-                scale stops being one. */}
-            <dt className={eyebrowClasses}>
-              {channel.label}
-            </dt>
-            <dd>
-              {isMailto(channel.href) ? (
-                // Not an ExternalLink: a mailto does not leave for another site
-                // and the ↗ affordance would be a lie about where it goes.
-                <a
-                  href={channel.href}
-                  // py-3 to match ExternalLink's tap target; these sit in the
-                  // same row and one being shorter than its neighbours is both
-                  // a miss on touch and visibly uneven.
-                  className="inline-flex py-3 text-sm text-muted-foreground transition-colors hover:text-primary"
-                >
-                  {channel.value}
-                </a>
-              ) : (
-                <ExternalLink href={channel.href}>{channel.value}</ExternalLink>
-              )}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      {/*
+        Channels beside the form rather than stacked above it.
 
-      <div className="max-w-2xl">
-        <ContactForm />
+        Stacked, this section was 1065px tall — a screen and a bit for one form
+        and three links, most of it the gap between the two. Side by side the
+        form keeps its reading measure, the channels stop being a full-width
+        band of mostly air, and the whole block fits in a viewport. Below `lg`
+        it stacks again, which is the order it should be read in anyway: here
+        is how to reach me, here is the form.
+      */}
+      <div className="grid gap-10 lg:grid-cols-[1fr_20rem] lg:gap-16">
+        <div className="max-w-2xl lg:order-1">
+          <ContactForm />
+        </div>
+
+        {/*
+          A description list, because that is what this is: a stable key and its
+          value. The same mono-key / value shape the meta rows elsewhere use.
+        */}
+        <dl className="lg:order-2">
+          {CHANNELS.map((channel) => (
+            <div key={channel.label} className="border-t border-border/60 py-3 first:border-t-0 first:pt-0 lg:first:border-t lg:first:pt-3">
+              {/* eyebrowClasses, not a literal 11px: the footer renders these
+                  same labels through it, and two sizes for one label is how a
+                  scale stops being one. */}
+              <dt className={eyebrowClasses}>
+                {channel.label}
+              </dt>
+              <dd>
+                {isMailto(channel.href) ? (
+                  // Not an ExternalLink: a mailto does not leave for another
+                  // site and the ↗ affordance would be a lie about where it
+                  // goes.
+                  <a
+                    href={channel.href}
+                    // min-h-11 states the 44px tap target rather than arriving
+                    // at it by adding padding to a line-height — which is how
+                    // this silently became 36px when the row gained padding of
+                    // its own. ExternalLink beside it is already 44.
+                    //
+                    // No break-all, on purpose: in an earlier equal-column grid
+                    // the address was 6px wider than its cell and broke to
+                    // "dangkhoipham80@gmail.co" / "m", and an address split
+                    // across two lines is not one you can read back to someone.
+                    // The 20rem column is sized to hold it whole.
+                    className="inline-flex min-h-11 items-center text-sm text-muted-foreground transition-colors hover:text-primary"
+                  >
+                    {channel.value}
+                  </a>
+                ) : (
+                  <ExternalLink href={channel.href}>{channel.value}</ExternalLink>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </Section>
   );

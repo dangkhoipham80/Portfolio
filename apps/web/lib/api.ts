@@ -65,12 +65,24 @@ export const CONTENT_TAGS = {
 
 export type ContentTag = (typeof CONTENT_TAGS)[keyof typeof CONTENT_TAGS];
 
-async function getJson<T>(
+/**
+ * A read, plus whether the API actually answered it.
+ *
+ * Every reader below returns a fallback on failure, which is what keeps the
+ * site up when the backend is asleep — and which also makes an empty list
+ * ambiguous: it means "nothing published" and "nothing reachable" equally. The
+ * home page's topology claims one of its nodes is *live*, and a claim like that
+ * has to be answerable. `ok` is that answer, and it is the only thing that
+ * separates the two cases.
+ */
+export type Read<T> = { data: T; ok: boolean };
+
+async function readJson<T>(
   path: string,
   fallback: T,
   isExpectedShape: ShapeCheck,
   tag: ContentTag,
-): Promise<T> {
+): Promise<Read<T>> {
   const url = `${API_URL}/api/v1${path}`;
 
   try {
@@ -86,26 +98,49 @@ async function getJson<T>(
       // A 404 on a detail route is the caller's business, not an outage; it is
       // reported the same way here and distinguished by the caller's fallback.
       console.error(`[api] ${response.status} ${response.statusText} for ${url}`);
-      return fallback;
+      return { data: fallback, ok: false };
     }
 
     const data = await response.json();
 
     if (!isExpectedShape(data)) {
       console.error(`[api] unexpected shape from ${url}:`, data);
-      return fallback;
+      return { data: fallback, ok: false };
     }
 
-    return data as T;
+    return { data: data as T, ok: true };
   } catch (error) {
     // Covers DNS failure, connection refused, and the timeout above.
     console.error(`[api] request to ${url} failed:`, error);
-    return fallback;
+    return { data: fallback, ok: false };
   }
+}
+
+/** The shape almost every caller wants: the data, and no opinion about why. */
+async function getJson<T>(
+  path: string,
+  fallback: T,
+  isExpectedShape: ShapeCheck,
+  tag: ContentTag,
+): Promise<T> {
+  const { data } = await readJson(path, fallback, isExpectedShape, tag);
+  return data;
 }
 
 export async function getProjects(): Promise<Project[]> {
   return getJson<Project[]>("/projects/", [], isList, CONTENT_TAGS.projects);
+}
+
+/**
+ * The projects read, with the outcome kept.
+ *
+ * Only the home page needs this: it draws the request path that served the
+ * page, and the API node on that drawing is lit or dim depending on whether
+ * this very read succeeded. Everywhere else wants `getProjects` — a sitemap has
+ * nothing to say about reachability.
+ */
+export async function readProjects(): Promise<Read<Project[]>> {
+  return readJson<Project[]>("/projects/", [], isList, CONTENT_TAGS.projects);
 }
 
 export async function getProject(slug: string): Promise<Project | null> {

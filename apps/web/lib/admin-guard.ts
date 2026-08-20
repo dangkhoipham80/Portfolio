@@ -35,6 +35,37 @@ import {
 export type AdminSession = { user: CurrentUser; accessToken: string };
 
 /**
+ * Resolve the caller's admin session, or null. Never redirects.
+ *
+ * ## Why this exists separately from requireAdmin
+ *
+ * `requireAdmin` answers with a *redirect*, which is right for a page — a
+ * signed-out visitor should meet the sign-in screen. It is wrong for anything
+ * a `fetch` calls. A route handler that redirects hands the caller a 307 to
+ * `/login` and, since `fetch` follows redirects by default, the JSON parse
+ * downstream fails on a page of HTML. The upload route needs a plain 401, so
+ * it needs a check that returns rather than throws a redirect.
+ *
+ * Unlike `requireAdmin` this does not attempt token renewal. Renewal is a
+ * redirect through /auth/refresh — the one thing a route handler cannot do —
+ * so an expired session is simply "no session" here, and the client re-auths
+ * by navigating.
+ */
+export async function getAdminSession(): Promise<AdminSession | null> {
+  const jar = await cookies();
+  const accessToken = jar.get(ACCESS_COOKIE)?.value;
+  if (!accessToken) return null;
+
+  const result = await fetchCurrentUser(accessToken);
+  if (!result.ok) return null;
+
+  // Signed in is not the same as allowed.
+  if (!result.data.roles.includes("admin")) return null;
+
+  return { user: result.data, accessToken };
+}
+
+/**
  * Whether the caller already holds a usable admin session.
  *
  * Used by the sign-in screen to send someone straight to /admin rather than
@@ -43,13 +74,7 @@ export type AdminSession = { user: CurrentUser; accessToken: string };
  * bounce between /login and /admin.
  */
 export async function hasLiveSession(): Promise<boolean> {
-  const jar = await cookies();
-  const accessToken = jar.get(ACCESS_COOKIE)?.value;
-  if (!accessToken) return false;
-
-  const result = await fetchCurrentUser(accessToken);
-
-  return result.ok && result.data.roles.includes("admin");
+  return (await getAdminSession()) !== null;
 }
 
 /**
