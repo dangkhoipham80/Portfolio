@@ -30,7 +30,16 @@ const CASE_ROW_CHIPS = 5;
  * than a grid of tiles. The grid treats every project as the same size;
  * featured work is not the same size, and this is the layout saying so.
  */
-export function CaseRow({ project, flip }: { project: Project; flip?: boolean }) {
+export function CaseRow({
+  project,
+  flip,
+  priority,
+}: {
+  project: Project;
+  flip?: boolean;
+  /** True for the first row only — see ProjectMedia's `priority`. */
+  priority?: boolean;
+}) {
   const period = formatPeriod(project.started_on, project.ended_on);
 
   return (
@@ -46,6 +55,7 @@ export function CaseRow({ project, flip }: { project: Project; flip?: boolean })
           title={project.title}
           imageUrl={project.image_url}
           cover
+          priority={priority}
           className={cn(
             "aspect-video w-full transition-transform duration-500 group-hover:scale-[1.01]",
             flip && "lg:order-2",

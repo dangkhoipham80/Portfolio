@@ -119,7 +119,12 @@ export default async function HomePage() {
           <>
             <div className="flex flex-col gap-20 lg:gap-28">
               {(featured.length > 0 ? featured : projects).map((project, i) => (
-                <CaseRow key={project.id} project={project} flip={i % 2 === 1} />
+                <CaseRow
+                  key={project.id}
+                  project={project}
+                  flip={i % 2 === 1}
+                  priority={i === 0}
+                />
               ))}
             </div>
 

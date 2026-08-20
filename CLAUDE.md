@@ -20,7 +20,39 @@ same seriousness as the auth hardening in `apps/api`, not as a wrapper around
    answer. Reading the skill is not the same as escaping the thing it warns
    about; check the finished screen against the list, not just the plan.
 
-2. **Review with the `frontend-reviewer` subagent once per batch, not once per
+2. **Run the Impeccable detector before every commit, and again before opening
+   a PR.** Not once per batch — every time. It is deterministic, runs no model,
+   and costs seconds:
+
+   ```
+   npx impeccable detect --json apps/web/app apps/web/components
+   ```
+
+   `[]` is clean. Treat anything else the way you treat a failing test — fix
+   it, or write down why it is wrong; do not commit past it.
+
+   This tier exists because the expensive tiers kept missing cheap things.
+   `rounded-[--radius-x]` emitted invalid CSS and survived type-check, lint,
+   build *and* a human review for weeks.
+
+   Its published rule list is worth reading on its own. Three entries on it —
+   "AI beige" palettes, pulsing-dot indicators, and status-chip soup — each
+   described something this site was doing and had argued for in a comment.
+   Those were matched by hand against the list, not caught by a run; they were
+   already fixed by the time the detector was first pointed at this repo.
+
+   **A silent pass is not a pass.** In text mode this tool prints nothing at
+   all when it is clean, which is indistinguishable from not having run. Use
+   `--json` — clean is `[]` — and if a run ever reports nothing on a change you
+   expected it to have an opinion about, prove the tool is alive before
+   believing it: point it at a file with a deliberate `bg-clip-text` gradient
+   and check that it complains.
+
+   Do not treat a clean run as permission to skip looking at the page. It
+   checks for known tells; it has no opinion about whether the design is any
+   good.
+
+3. **Review with the `frontend-reviewer` subagent once per batch, not once per
    change — and ask before starting it.** A pass costs roughly 100k tokens and
    twenty minutes, which is out of proportion to a restyled footer. Propose it,
    say what it would cover, and wait; if the answer is no, carry on and offer
@@ -38,7 +70,7 @@ same seriousness as the auth hardening in `apps/api`, not as a wrapper around
    `rounded-[--radius-x]` emits invalid CSS, which meant every corner on the
    site had silently been square. Batch it; do not abandon it.
 
-3. **Look at what you built.** Screenshot it. A change that has only been
+4. **Look at what you built.** Screenshot it. A change that has only been
    type-checked has not been verified — `pnpm type-check` passing tells you
    nothing about whether the page is usable.
 
@@ -51,22 +83,21 @@ same seriousness as the auth hardening in `apps/api`, not as a wrapper around
    ```
 
    And check tokens with `getComputedStyle`, never by reading the class name —
-   see rule 5.
+   see rule 6.
 
-   The three checks belong to three different layers, and none replaces
-   another: `frontend-design` picks the *direction* before any code exists,
-   this rule catches what a screen actually looks like, and `frontend-reviewer`
-   (rule 2) sweeps a whole batch. A deterministic detector such as
-   `npx impeccable detect` fits between the last two — it is the layer that
-   would have caught `rounded-[--radius-x]` in CI for no tokens at all, which
-   type-check, lint, build and a human review all missed for weeks.
+   Rules 1 to 4 are four different layers and none replaces another:
+   `frontend-design` (1) picks the *direction* before any code exists, the
+   detector (2) catches known tells on every commit, `frontend-reviewer` (3)
+   sweeps a whole batch, and this rule is the one that asks whether the screen
+   is actually any good — which is the only question none of the others can
+   answer.
 
-4. **Server components by default.** `"use client"` needs a reason that is
+5. **Server components by default.** `"use client"` needs a reason that is
    stated in a comment: an event handler, browser API, or hook that genuinely
    cannot run on the server. Reaching for it to call `useState` for something
    CSS can do is the most common mistake here.
 
-5. **Tokens, not literals.** Colours, radii and spacing come from
+6. **Tokens, not literals.** Colours, radii and spacing come from
    `app/globals.css`. A raw hex or a one-off `rounded-[13px]` in a component is
    a bug — it is how a component set stops looking like one system.
 
@@ -79,16 +110,16 @@ same seriousness as the auth hardening in `apps/api`, not as a wrapper around
    loudly: check the emitted stylesheet or `getComputedStyle`, not the class
    name.
 
-6. **Primitives, not copy-paste.** If the same class string appears twice, it
+7. **Primitives, not copy-paste.** If the same class string appears twice, it
    belongs in `components/ui/`. Check what is already there before writing a new
    one.
 
-7. **The quality floor is not optional and is not announced.** Responsive to
+8. **The quality floor is not optional and is not announced.** Responsive to
    375px, visible keyboard focus, `prefers-reduced-motion` respected, real
    `<button>`/`<a>` for interactive things, one `<h1>` per page. These are not
    features to mention in a PR; they are the cost of entry.
 
-8. **The API can be down.** Every read in `lib/api.ts` returns a fallback, and
+9. **The API can be down.** Every read in `lib/api.ts` returns a fallback, and
    pages render an empty state rather than a 500. Keep it that way — this
    replaced a static site that could not break.
 
