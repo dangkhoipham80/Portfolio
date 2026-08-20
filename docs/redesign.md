@@ -166,6 +166,25 @@ after Phase 5.
   opaque fills occlude it: it visibly enters a service and comes out the far
   side, which is the one thing a static architecture diagram cannot say.
 
+- **2026-08-20 — text over imagery stops following the theme.** Found by
+  temporarily injecting covers locally to exercise the spread layout, which had
+  never rendered on this site. The caption sat straight on the image in
+  `text-muted-foreground` — 2.33:1 on a white cover, against the 4.5:1 it needs,
+  and the covers being uploaded are screenshots of web apps, so the failing case
+  is the normal one. Over an image the caption is now light text on a dark scrim
+  in **both** modes, because its background is the photograph rather than the
+  page. `black`/`white` rather than tokens is deliberate: there is no "darken an
+  arbitrary photograph" surface in the palette, and a scrim that flipped with the
+  theme would be unreadable in one of them.
+
+  Two silent failures in the scrim itself are worth remembering. `bg-gradient-to-t`
+  emits **no** `background-image` under Tailwind v4, which renamed the utilities
+  to `bg-linear-*` — present, positioned, invisible, exactly like
+  `rounded-[--radius-card]`. And `bottom-0 h-1/2` measured 0×0, because a
+  percentage height inside an aspect-ratio box resolves to zero. Both were caught
+  by reading `getComputedStyle`, neither by reading the class name. That is now
+  three separate instances of the same lesson in this file.
+
 - **2026-08-20 — the case row's layout follows the data.** Every project has
   `image_url: null`, and the row reserved half the page for a generated gradient
   regardless. Four of those stacked put roughly 40% of the page's area into empty
