@@ -140,8 +140,35 @@ after Phase 5.
 
 ## Decisions log
 
-- **Amber replaces both green and purple.** One accent across modes; the old
-  scheme had no single identity.
+- **2026-08-20 — the amber is gone, and so is the grid.** Reviewed on the
+  deployed site, the verdict was that the yellow *text* and the graph-paper
+  background were ugly. Both were removed and the palette is now monochrome:
+  no accent hue at all, hierarchy from type and surface steps, and the only
+  colour on a page is whatever is inside a project screenshot.
+
+  The standing rule is now **colour never touches text**. `--primary` and
+  `--signal` survive as token names because every component reads them, but
+  they resolve to ink and near-white.
+
+  Three things fell out of that decision rather than being asked for:
+
+  - The **status badges** were four Tailwind hues (green/blue/yellow/red) and
+    became the loudest thing on the page once the amber stopped drowning them.
+    They now carry state in the *dot* — filled, ringed, hollow, dim — which
+    also survives greyscale and red/green colour blindness, which the old
+    version did not.
+  - **Light mode was a warm cream**, justified as somewhere for the amber to
+    sit. With no amber it was just beige — and "AI beige" is a named
+    AI-interface tell. The neutrals are cool now, sharing the ink's hue.
+  - The **availability dot pulsed forever**, defended above as "calm
+    telemetry". Nothing about it was telemetry; it was an infinite loop in the
+    first viewport saying something static. It is a plain dot.
+
+  Also capped case-row technology chips at five plus a count. Eleven identical
+  chips read as one grey texture, not as eleven facts.
+
+- ~~**Amber replaces both green and purple.**~~ Superseded by the entry above.
+  One accent across modes; the old scheme had no single identity.
 - **No WebGL/three.js.** Depth from surface steps, glow, and pointer tilt;
   LCP and taste both prefer it.
 - **No scroll-hijacking (Lenis etc.).** Native scroll + CSS scroll-driven

@@ -49,7 +49,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
     // The console group no longer supplies a <main>; each screen places its
     // own, so the skip link lands on content rather than on chrome.
-    <main id="main" className="hero-atmosphere flex flex-1 items-center py-16 sm:py-24">
+    <main id="main" className="flex flex-1 items-center py-16 sm:py-24">
       <Container width="layout">
         {/*
           Left-aligned on the same rail the hero uses, and capped at a readable

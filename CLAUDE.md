@@ -13,6 +13,13 @@ same seriousness as the auth hardening in `apps/api`, not as a wrapper around
 1. **Use the `frontend-design` skill before designing.** Not after. It exists to
    stop the work converging on the same three AI-default looks.
 
+   It is worth knowing that this site walked straight into one of them anyway.
+   The amber redesign was "near-black ground plus one bright accent" — that
+   skill's own AI-default #2 — and the light mode was a warm cream, its #1. Both
+   were argued for at length in `globals.css` and both were still the default
+   answer. Reading the skill is not the same as escaping the thing it warns
+   about; check the finished screen against the list, not just the plan.
+
 2. **Review with the `frontend-reviewer` subagent once per batch, not once per
    change — and ask before starting it.** A pass costs roughly 100k tokens and
    twenty minutes, which is out of proportion to a restyled footer. Propose it,
@@ -34,6 +41,25 @@ same seriousness as the auth hardening in `apps/api`, not as a wrapper around
 3. **Look at what you built.** Screenshot it. A change that has only been
    type-checked has not been verified — `pnpm type-check` passing tells you
    nothing about whether the page is usable.
+
+   There is no local API on the default port (8000 is taken on this machine).
+   The quickest way to see real content rather than empty states is to point
+   the dev server at the deployed API, which is public and read-only:
+
+   ```
+   API_URL=https://khoi-portfolio-api.fly.dev pnpm exec next dev --port 3100
+   ```
+
+   And check tokens with `getComputedStyle`, never by reading the class name —
+   see rule 5.
+
+   The three checks belong to three different layers, and none replaces
+   another: `frontend-design` picks the *direction* before any code exists,
+   this rule catches what a screen actually looks like, and `frontend-reviewer`
+   (rule 2) sweeps a whole batch. A deterministic detector such as
+   `npx impeccable detect` fits between the last two — it is the layer that
+   would have caught `rounded-[--radius-x]` in CI for no tokens at all, which
+   type-check, lint, build and a human review all missed for weeks.
 
 4. **Server components by default.** `"use client"` needs a reason that is
    stated in a comment: an event handler, browser API, or hook that genuinely

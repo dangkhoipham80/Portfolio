@@ -10,6 +10,21 @@ import type { Project } from "@/lib/types";
 import { ViewTransition } from "@/lib/view-transition";
 
 /**
+ * How many technology chips a case row shows before it stops counting.
+ *
+ * This row used to render every one, which meant eleven identical chips under
+ * EduPath and Food Forum and nine under Cenematic. Past about five they stop
+ * being read: they are all the same size, weight and colour, so the eye takes
+ * them as one grey texture and the two that actually matter are buried in it.
+ * A wall of chips also reads as a generated interface rather than an edited
+ * one — someone chose to list eleven things, or nobody chose anything.
+ *
+ * The remainder is shown as a count rather than dropped silently, and the
+ * detail page still lists the full stack, so nothing becomes unreachable.
+ */
+const CASE_ROW_CHIPS = 5;
+
+/**
  * A featured project as a full-width case row: media beside the argument for
  * it, alternating sides so the section reads as a sequence of spreads rather
  * than a grid of tiles. The grid treats every project as the same size;
@@ -62,12 +77,17 @@ export function CaseRow({ project, flip }: { project: Project; flip?: boolean })
         <p className="mt-4 max-w-xl text-muted-foreground">{project.description}</p>
 
         {project.technologies.length > 0 ? (
-          <ul className="mt-5 flex flex-wrap gap-1.5">
-            {project.technologies.map((tech) => (
+          <ul className="mt-5 flex flex-wrap items-center gap-1.5">
+            {project.technologies.slice(0, CASE_ROW_CHIPS).map((tech) => (
               <li key={tech} className={chipClasses}>
                 {tech}
               </li>
             ))}
+            {project.technologies.length > CASE_ROW_CHIPS ? (
+              <li className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                +{project.technologies.length - CASE_ROW_CHIPS}
+              </li>
+            ) : null}
           </ul>
         ) : null}
 

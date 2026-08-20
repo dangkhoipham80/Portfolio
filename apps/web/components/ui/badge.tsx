@@ -41,17 +41,27 @@ export function Badge({
 }
 
 /*
- * Status colours are spelled out per status rather than interpolated.
- * Tailwind scans source text for complete class names, so a template like
- * `bg-${colour}-500/15` produces no CSS at all — the class exists in the DOM
- * and does nothing.
+ * Status, without hue.
+ *
+ * These were four Tailwind palettes — green, blue, yellow, red — and they
+ * survived the amber only because the amber was louder. With the page
+ * monochrome they became the single most colourful thing on it, answering to
+ * no token in globals.css, and the `on_hold` yellow was literally the colour
+ * the redesign set out to remove.
+ *
+ * State is carried by the dot instead: filled, ringed, hollow, dim. That is a
+ * real encoding rather than decoration — the fill reads as "how far along",
+ * and it degrades honestly in greyscale and for anyone who cannot separate
+ * red from green, which the old version did not.
+ *
+ * The label is never colour-only, so the dot is redundant reinforcement
+ * rather than the sole carrier of meaning.
  */
-const STATUS_STYLES: Record<ProjectStatus, string> = {
-  // green-700 on the composited 15% green measured 4.33:1 in light mode.
-  completed: "bg-green-500/15 text-green-800 dark:text-green-300",
-  in_progress: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
-  on_hold: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300",
-  dropped: "bg-red-500/15 text-red-700 dark:text-red-300",
+const STATUS_DOTS: Record<ProjectStatus, string> = {
+  completed: "bg-foreground",
+  in_progress: "bg-foreground/40 ring-1 ring-foreground/70",
+  on_hold: "border border-muted-foreground/70",
+  dropped: "bg-muted-foreground/40",
 };
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -63,7 +73,14 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 
 export function StatusBadge({ status }: { status: ProjectStatus }) {
   return (
-    <Badge className={cn("shrink-0", STATUS_STYLES[status])}>
+    <Badge
+      variant="outline"
+      className="shrink-0 gap-1.5 font-mono text-[11px] uppercase tracking-wider"
+    >
+      <span
+        aria-hidden="true"
+        className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOTS[status])}
+      />
       {STATUS_LABELS[status] ?? status}
     </Badge>
   );

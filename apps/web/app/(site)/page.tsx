@@ -50,14 +50,25 @@ export default async function HomePage() {
     <>
       {/*
         The hero owns the first viewport. The name is the logo, set at display
-        scale with its Vietnamese glyphs lit in signal amber — the identity in
-        one line — and the topology sits beside the thesis as supporting
+        scale in one ink, and the topology sits beside the thesis as supporting
         evidence rather than competing with the name for the top row.
+
+        The `hero-name-accent` spans below currently render no differently from
+        the rest of the name — see the note on that class in globals.css. They
+        are left in place because the diacritics are still the right thing to
+        single out; what they need is a treatment that is not colour.
       */}
-      <section className="hero-atmosphere relative flex min-h-[calc(100svh-4.25rem)] items-center py-20 sm:py-24">
+      <section className="relative flex min-h-[calc(100svh-4.25rem)] items-center py-20 sm:py-24">
         <Container width="layout">
           <Eyebrow className="hero-item">Backend · Data · AI</Eyebrow>
-          <h1 className="hero-item mt-5 font-display text-[clamp(3.25rem,9vw,7.5rem)] font-extrabold leading-[1.04] tracking-[-0.03em] text-foreground [animation-delay:80ms]">
+          {/*
+            Leading opens up until the name fits on one line. Vietnamese
+            stacks diacritics both ways — the nặng dot under "ạ" and the
+            breve over "ă" — so at 1.04 a wrapped name has the dot of one
+            line landing in the breve of the next. It only shows below `lg`,
+            where the name wraps, which is exactly where it must not.
+          */}
+          <h1 className="hero-item mt-5 font-display text-[clamp(3.25rem,9vw,7.5rem)] font-extrabold leading-[1.16] tracking-[-0.03em] text-foreground lg:leading-[1.04] [animation-delay:80ms]">
             Ph<span className="hero-name-accent">ạ</span>m{" "}
             <span className="hero-name-accent">Đă</span>ng Kh
             <span className="hero-name-accent">ô</span>i
@@ -77,7 +88,7 @@ export default async function HomePage() {
                 health check rather than a banner.
               */}
               <p className="hero-item mt-8 flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-primary [animation-delay:280ms]">
-                <span aria-hidden="true" className="status-dot h-1.5 w-1.5 rounded-full bg-signal" />
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-signal" />
                 Open to mid-level+ roles
               </p>
 
