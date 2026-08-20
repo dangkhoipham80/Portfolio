@@ -34,6 +34,12 @@ export type FieldKind =
   /** Markdown, edited as plain text. Rendered server-side; see lib/markdown.ts. */
   | "markdown"
   | "url"
+  /**
+   * An image URL, with a file picker that uploads to Blob and fills it in.
+   * Still a URL underneath — the text input is the field, so the form keeps
+   * working with scripting off. See components/console/image-field.tsx.
+   */
+  | "image"
   /** An API `date` column: sent as `YYYY-MM-DD`. */
   | "date"
   /** An API `datetime` column, but only the day is meaningful. See toPayload. */
@@ -144,7 +150,13 @@ export const ENTITIES: EntitySpec[] = [
         hint: "The body of the detail page.",
       },
       SLUG,
-      { name: "image_url", label: "Image URL", kind: "url", maxLength: 500 },
+      {
+        name: "image_url",
+        label: "Cover image",
+        kind: "image",
+        maxLength: 500,
+        hint: "The panel beside this project on the home page, and its detail header.",
+      },
       { name: "github_url", label: "Source URL", kind: "url", maxLength: 500 },
       { name: "live_url", label: "Live URL", kind: "url", maxLength: 500 },
       { name: "technologies", label: "Technologies", kind: "list" },
@@ -196,7 +208,7 @@ export const ENTITIES: EntitySpec[] = [
       },
       SLUG,
       { name: "tags", label: "Tags", kind: "list" },
-      { name: "cover_image", label: "Cover image URL", kind: "url", maxLength: 500 },
+      { name: "cover_image", label: "Cover image", kind: "image", maxLength: 500 },
       PUBLISHED,
       {
         name: "published_at",
@@ -225,7 +237,7 @@ export const ENTITIES: EntitySpec[] = [
       { name: "skills", label: "Skills", kind: "list" },
       { name: "credential_id", label: "Credential ID", kind: "text", maxLength: 100 },
       { name: "credential_url", label: "Credential URL", kind: "url", maxLength: 500 },
-      { name: "image_url", label: "Image URL", kind: "url", maxLength: 500 },
+      { name: "image_url", label: "Image", kind: "image", maxLength: 500 },
       PUBLISHED,
     ],
   },

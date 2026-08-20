@@ -19,6 +19,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
+import { ImageField } from "@/components/console/image-field";
 import { Button } from "@/components/ui/button";
 import { CheckboxField, SelectField, TextAreaField, TextField } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
@@ -149,6 +150,18 @@ function Control({
           error={error}
           rows={field.rows ?? 4}
           defaultValue={value}
+        />
+      );
+
+    case "image":
+      return (
+        <ImageField
+          name={field.name}
+          label={field.label}
+          hint={field.hint}
+          error={error}
+          defaultValue={value}
+          maxLength={field.maxLength}
         />
       );
 

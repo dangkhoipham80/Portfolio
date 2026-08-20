@@ -55,3 +55,4 @@ blob-report/
 .env
 .env.*
 !.env.example
+.env*
