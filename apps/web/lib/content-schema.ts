@@ -62,12 +62,37 @@ export type FieldSpec = {
   hint?: string;
   rows?: number;
   /**
+   * Sits two-to-a-row above `sm`. Opt-in rather than derived from `kind`: a
+   * date is always short but a title is always full, and both are one-line
+   * inputs, so there is no rule to infer this from. Anything unmarked is full
+   * width.
+   */
+  span?: "half";
+  /**
    * Settable on create and fixed afterwards — which is the API's rule, not a
    * choice made here: the `*Update` schemas have no `slug`, because
    * regenerating one on a title edit silently breaks every link already
    * published to it.
    */
   createOnly?: boolean;
+};
+
+/**
+ * A band of the form.
+ *
+ * The grouping is not arbitrary chunking to break up a long column: each band
+ * is a place on the public site. "Identity" is the card, "Detail page" is the
+ * body, "Visibility" is whether any of it is reachable. The field hints were
+ * already saying this one at a time ("The card blurb on the home page"); the
+ * bands promote it from an aside repeated per field to the shape of the screen,
+ * so the question "where does this show up?" is answered once per group instead
+ * of fifteen times per form.
+ */
+export type FieldGroup = {
+  label: string;
+  /** One line on what this band controls, and where it appears. */
+  hint?: string;
+  fields: FieldSpec[];
 };
 
 export type EntitySpec = {
@@ -83,6 +108,16 @@ export type EntitySpec = {
   subtitleField?: string;
   /** Whether rows have a `published` flag, and so a publish toggle. */
   publishable: boolean;
+  groups: FieldGroup[];
+  /**
+   * Every field of every group, flattened — what validation and serialisation
+   * walk, since neither cares where a field sits on screen.
+   *
+   * Derived, never written by hand. Groups are the source of truth precisely so
+   * that a field cannot exist without being placed: a hand-maintained flat list
+   * beside a hand-maintained grouping is two lists that drift, and the failure
+   * is a field that validates but never renders.
+   */
   fields: FieldSpec[];
   /**
    * The cache tag every public read of this type carries, so a write can
@@ -122,7 +157,7 @@ const PROJECT_STATUS: FieldSpec = {
   ],
 };
 
-export const ENTITIES: EntitySpec[] = [
+const ENTITY_DEFINITIONS: Omit<EntitySpec, "fields">[] = [
   {
     key: "projects",
     cacheTag: "projects",
@@ -132,51 +167,82 @@ export const ENTITIES: EntitySpec[] = [
     titleField: "title",
     subtitleField: "description",
     publishable: true,
-    fields: [
-      { name: "title", label: "Title", kind: "text", required: true, maxLength: 255 },
+    groups: [
       {
-        name: "description",
-        label: "Description",
-        kind: "textarea",
-        required: true,
-        rows: 3,
-        hint: "The card blurb on the home page.",
+        label: "Identity",
+        hint: "The card for this project on the home page.",
+        fields: [
+          { name: "title", label: "Title", kind: "text", required: true, maxLength: 255 },
+          {
+            name: "description",
+            label: "Description",
+            kind: "textarea",
+            required: true,
+            rows: 3,
+            hint: "The card blurb on the home page.",
+          },
+          SLUG,
+          {
+            name: "image_url",
+            label: "Cover image",
+            kind: "image",
+            maxLength: 500,
+            hint: "The panel beside this project on the home page, and its detail header.",
+          },
+        ],
       },
       {
-        name: "long_description",
-        label: "Long description",
-        kind: "textarea",
-        rows: 6,
-        hint: "The body of the detail page.",
+        label: "Detail page",
+        hint: "Everything below the header on the project's own page.",
+        fields: [
+          {
+            name: "long_description",
+            label: "Long description",
+            kind: "textarea",
+            rows: 8,
+            hint: "The body of the detail page.",
+          },
+          { name: "technologies", label: "Technologies", kind: "list" },
+          { name: "features", label: "Features", kind: "list" },
+          { name: "challenges", label: "Challenges", kind: "list" },
+        ],
       },
-      SLUG,
       {
-        name: "image_url",
-        label: "Cover image",
-        kind: "image",
-        maxLength: 500,
-        hint: "The panel beside this project on the home page, and its detail header.",
+        label: "Links",
+        hint: "Rendered as buttons on the detail page. Both optional.",
+        fields: [
+          { name: "github_url", label: "Source URL", kind: "url", maxLength: 500 },
+          { name: "live_url", label: "Live URL", kind: "url", maxLength: 500 },
+        ],
       },
-      { name: "github_url", label: "Source URL", kind: "url", maxLength: 500 },
-      { name: "live_url", label: "Live URL", kind: "url", maxLength: 500 },
-      { name: "technologies", label: "Technologies", kind: "list" },
-      { name: "features", label: "Features", kind: "list" },
-      { name: "challenges", label: "Challenges", kind: "list" },
-      { name: "started_on", label: "Started on", kind: "date" },
       {
-        name: "ended_on",
-        label: "Ended on",
-        kind: "date",
-        hint: "Leave empty while the work is still running.",
+        label: "Timeline",
+        fields: [
+          { name: "started_on", label: "Started on", kind: "date", span: "half" },
+          {
+            name: "ended_on",
+            label: "Ended on",
+            kind: "date",
+            span: "half",
+            hint: "Leave empty while the work is still running.",
+          },
+          { ...PROJECT_STATUS, span: "half" },
+        ],
       },
-      PROJECT_STATUS,
-      { name: "featured", label: "Featured", kind: "boolean" },
-      PUBLISHED,
       {
-        name: "order",
-        label: "Order",
-        kind: "number",
-        hint: "Lowest first, within the published set.",
+        label: "Visibility",
+        hint: "Who can see this, and where it sits among the rest.",
+        fields: [
+          PUBLISHED,
+          { name: "featured", label: "Featured", kind: "boolean" },
+          {
+            name: "order",
+            label: "Order",
+            kind: "number",
+            span: "half",
+            hint: "Lowest first, within the published set.",
+          },
+        ],
       },
     ],
   },
@@ -189,32 +255,49 @@ export const ENTITIES: EntitySpec[] = [
     titleField: "title",
     subtitleField: "excerpt",
     publishable: true,
-    fields: [
-      { name: "title", label: "Title", kind: "text", required: true, maxLength: 255 },
+    groups: [
       {
-        name: "excerpt",
-        label: "Excerpt",
-        kind: "textarea",
-        rows: 3,
-        hint: "The blurb on the index and the meta description. Left empty, the opening of the body is used.",
+        label: "Identity",
+        hint: "How the post appears on the index and in search results.",
+        fields: [
+          { name: "title", label: "Title", kind: "text", required: true, maxLength: 255 },
+          {
+            name: "excerpt",
+            label: "Excerpt",
+            kind: "textarea",
+            rows: 3,
+            hint: "The blurb on the index and the meta description. Left empty, the opening of the body is used.",
+          },
+          SLUG,
+          { name: "cover_image", label: "Cover image", kind: "image", maxLength: 500 },
+          { name: "tags", label: "Tags", kind: "list" },
+        ],
       },
       {
-        name: "body",
         label: "Body",
-        kind: "markdown",
-        required: true,
-        rows: 20,
-        hint: "Markdown. Rendered and sanitised on the server; raw HTML is dropped.",
+        fields: [
+          {
+            name: "body",
+            label: "Body",
+            kind: "markdown",
+            required: true,
+            rows: 20,
+            hint: "Markdown. Rendered and sanitised on the server; raw HTML is dropped.",
+          },
+        ],
       },
-      SLUG,
-      { name: "tags", label: "Tags", kind: "list" },
-      { name: "cover_image", label: "Cover image", kind: "image", maxLength: 500 },
-      PUBLISHED,
       {
-        name: "published_at",
-        label: "Published on",
-        kind: "datetime",
-        hint: "Left empty, it is stamped the first time the post is published. Set it to backdate.",
+        label: "Visibility",
+        fields: [
+          PUBLISHED,
+          {
+            name: "published_at",
+            label: "Published on",
+            kind: "datetime",
+            span: "half",
+            hint: "Left empty, it is stamped the first time the post is published. Set it to backdate.",
+          },
+        ],
       },
     ],
   },
@@ -227,18 +310,46 @@ export const ENTITIES: EntitySpec[] = [
     titleField: "title",
     subtitleField: "issuer",
     publishable: true,
-    fields: [
-      { name: "title", label: "Title", kind: "text", required: true, maxLength: 255 },
-      { name: "issuer", label: "Issuer", kind: "text", required: true, maxLength: 255 },
-      { name: "issue_date", label: "Issued on", kind: "datetime", required: true },
-      SLUG,
-      { name: "category", label: "Category", kind: "text", maxLength: 50 },
-      { name: "description", label: "Description", kind: "textarea", rows: 3 },
-      { name: "skills", label: "Skills", kind: "list" },
-      { name: "credential_id", label: "Credential ID", kind: "text", maxLength: 100 },
-      { name: "credential_url", label: "Credential URL", kind: "url", maxLength: 500 },
-      { name: "image_url", label: "Image", kind: "image", maxLength: 500 },
-      PUBLISHED,
+    groups: [
+      {
+        label: "Identity",
+        fields: [
+          { name: "title", label: "Title", kind: "text", required: true, maxLength: 255 },
+          { name: "issuer", label: "Issuer", kind: "text", required: true, maxLength: 255 },
+          SLUG,
+          { name: "category", label: "Category", kind: "text", maxLength: 50, span: "half" },
+        ],
+      },
+      {
+        label: "Credential",
+        hint: "What proves it. The URL becomes the card's link.",
+        fields: [
+          {
+            name: "issue_date",
+            label: "Issued on",
+            kind: "datetime",
+            required: true,
+            span: "half",
+          },
+          {
+            name: "credential_id",
+            label: "Credential ID",
+            kind: "text",
+            maxLength: 100,
+            span: "half",
+          },
+          { name: "credential_url", label: "Credential URL", kind: "url", maxLength: 500 },
+        ],
+      },
+      {
+        label: "Presentation",
+        fields: [
+          { name: "description", label: "Description", kind: "textarea", rows: 3 },
+          { name: "skills", label: "Skills", kind: "list" },
+          { name: "image_url", label: "Image", kind: "image", maxLength: 500 },
+        ],
+      },
+      { label: "Visibility", fields: [PUBLISHED] },
     ],
   },
   {
@@ -250,20 +361,41 @@ export const ENTITIES: EntitySpec[] = [
     titleField: "title",
     subtitleField: "company",
     publishable: true,
-    fields: [
-      { name: "title", label: "Role", kind: "text", required: true, maxLength: 255 },
-      { name: "company", label: "Company", kind: "text", required: true, maxLength: 255 },
-      { name: "location", label: "Location", kind: "text", maxLength: 255 },
-      { name: "started_on", label: "Started on", kind: "date", required: true },
+    groups: [
       {
-        name: "ended_on",
-        label: "Ended on",
-        kind: "date",
-        hint: "Leave empty for a role you are still in; the site renders that as Present.",
+        label: "Role",
+        fields: [
+          { name: "title", label: "Role", kind: "text", required: true, maxLength: 255 },
+          { name: "company", label: "Company", kind: "text", required: true, maxLength: 255 },
+          { name: "location", label: "Location", kind: "text", maxLength: 255, span: "half" },
+          SLUG,
+        ],
       },
-      SLUG,
-      { name: "highlights", label: "Highlights", kind: "list" },
-      PUBLISHED,
+      {
+        label: "Dates",
+        fields: [
+          {
+            name: "started_on",
+            label: "Started on",
+            kind: "date",
+            required: true,
+            span: "half",
+          },
+          {
+            name: "ended_on",
+            label: "Ended on",
+            kind: "date",
+            span: "half",
+            hint: "Leave empty for a role you are still in; the site renders that as Present.",
+          },
+        ],
+      },
+      {
+        label: "Detail",
+        hint: "The bullets under this role on the career timeline.",
+        fields: [{ name: "highlights", label: "Highlights", kind: "list" }],
+      },
+      { label: "Visibility", fields: [PUBLISHED] },
     ],
   },
   {
@@ -277,33 +409,49 @@ export const ENTITIES: EntitySpec[] = [
     // The only content type with no `published` column: skills are a flat list
     // on the home page and have never had a draft state.
     publishable: false,
-    fields: [
-      { name: "name", label: "Name", kind: "text", required: true, maxLength: 100 },
+    groups: [
       {
-        name: "category",
-        label: "Category",
-        kind: "text",
-        required: true,
-        maxLength: 50,
-        hint: "Groups the bars on the home page: Frontend, Backend, Database, Cloud, DevOps, Tools.",
-      },
-      {
-        name: "level",
-        label: "Level",
-        kind: "select",
-        required: true,
-        options: [
-          { value: "beginner", label: "Beginner" },
-          { value: "intermediate", label: "Intermediate" },
-          { value: "advanced", label: "Advanced" },
-          { value: "expert", label: "Expert" },
+        label: "Skill",
+        fields: [
+          { name: "name", label: "Name", kind: "text", required: true, maxLength: 100 },
+          {
+            name: "category",
+            label: "Category",
+            kind: "text",
+            required: true,
+            maxLength: 50,
+            hint: "Groups the bars on the home page: Frontend, Backend, Database, Cloud, DevOps, Tools.",
+          },
+          {
+            name: "level",
+            label: "Level",
+            kind: "select",
+            required: true,
+            span: "half",
+            options: [
+              { value: "beginner", label: "Beginner" },
+              { value: "intermediate", label: "Intermediate" },
+              { value: "advanced", label: "Advanced" },
+              { value: "expert", label: "Expert" },
+            ],
+          },
         ],
       },
-      { name: "icon", label: "Icon", kind: "text", maxLength: 100 },
-      { name: "order", label: "Order", kind: "number" },
+      {
+        label: "Placement",
+        fields: [
+          { name: "icon", label: "Icon", kind: "text", maxLength: 100, span: "half" },
+          { name: "order", label: "Order", kind: "number", span: "half" },
+        ],
+      },
     ],
   },
 ];
+
+export const ENTITIES: EntitySpec[] = ENTITY_DEFINITIONS.map((definition) => ({
+  ...definition,
+  fields: definition.groups.flatMap((group) => group.fields),
+}));
 
 export function entityFor(key: string | undefined): EntitySpec | undefined {
   return ENTITIES.find((entity) => entity.key === key);
@@ -312,6 +460,21 @@ export function entityFor(key: string | undefined): EntitySpec | undefined {
 /** Fields the form shows: everything, minus the create-only ones when editing. */
 export function fieldsFor(spec: EntitySpec, mode: "create" | "edit"): FieldSpec[] {
   return mode === "create" ? spec.fields : spec.fields.filter((field) => !field.createOnly);
+}
+
+/**
+ * The same filter as `fieldsFor`, but keeping the bands — and dropping any band
+ * left empty by it, so an edit form never renders a heading with nothing under
+ * it. That is not hypothetical: a group holding only `slug` would be exactly
+ * that on every edit screen.
+ */
+export function groupsFor(spec: EntitySpec, mode: "create" | "edit"): FieldGroup[] {
+  return spec.groups
+    .map((group) => ({
+      ...group,
+      fields: mode === "create" ? group.fields : group.fields.filter((f) => !f.createOnly),
+    }))
+    .filter((group) => group.fields.length > 0);
 }
 
 export type Values = Record<string, string>;

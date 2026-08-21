@@ -21,15 +21,17 @@ import { useActionState } from "react";
 
 import { ImageField } from "@/components/console/image-field";
 import { Button } from "@/components/ui/button";
+import { Eyebrow } from "@/components/ui/eyebrow";
 import { CheckboxField, SelectField, TextAreaField, TextField } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
+import { cn } from "@/lib/cn";
 import {
   INITIAL_CONTENT_STATE,
   type ContentState,
   type EntitySpec,
   type FieldSpec,
   type Values,
-  fieldsFor,
+  groupsFor,
 } from "@/lib/content-schema";
 
 export function EntityForm({
@@ -38,6 +40,7 @@ export function EntityForm({
   initial,
   action,
   cancelHref,
+  slug,
 }: {
   spec: EntitySpec;
   mode: "create" | "edit";
@@ -45,6 +48,8 @@ export function EntityForm({
   initial: Values;
   action: (previous: ContentState, formData: FormData) => Promise<ContentState>;
   cancelHref: string;
+  /** The saved slug, for the action bar. Absent while creating — there is none yet. */
+  slug?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL_CONTENT_STATE);
 
@@ -52,7 +57,20 @@ export function EntityForm({
   const errors = state.status === "invalid" ? state.errors : {};
 
   return (
-    <form action={formAction} className="mt-8">
+    // max-w so a text input does not stretch to a 1200px line on a big screen.
+    // 3xl rather than the 2xl this was: the fields are two-to-a-row above `sm`
+    // now, and at 672px a pair of halves is too narrow for a date plus its
+    // label.
+    <form
+      action={formAction}
+      // Required fields carry the attribute, so assistive technology announces
+      // them — but this form renders its own per-field errors from `validate`,
+      // and the browser's bubble says "Please fill out this field" in the
+      // browser's voice, over the wrong element, in a style nothing else here
+      // uses. Same arrangement, and the same reasoning, as the contact form.
+      noValidate
+      className="mt-8 max-w-3xl"
+    >
       {state.status === "unavailable" && (
         <Notice className="mb-6 border-destructive/50">
           Nothing was saved — the API did not answer. Your changes are still in
@@ -73,29 +91,122 @@ export function EntityForm({
         </Notice>
       )}
 
-      {/* max-w so a text input does not stretch to a 1200px line on a big screen. */}
-      <div className="flex max-w-2xl flex-col gap-6">
-        {fieldsFor(spec, mode).map((field) => (
-          <Control
-            key={field.name}
-            field={field}
-            value={values[field.name] ?? ""}
-            error={errors[field.name]}
-          />
+      <div className="flex flex-col gap-10">
+        {groupsFor(spec, mode).map((group) => (
+          <section key={group.label}>
+            <div className="border-b border-border pb-3">
+              <Eyebrow as="h2">{group.label}</Eyebrow>
+              {group.hint ? (
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  {group.hint}
+                </p>
+              ) : null}
+            </div>
+
+            {/*
+              Two columns above `sm`, and a field opts into a half by declaring
+              it. Everything else spans both — which is why the default here is
+              `sm:col-span-2` and `span: "half"` is what removes it.
+            */}
+            <div className="mt-5 grid grid-cols-1 gap-x-5 gap-y-6 sm:grid-cols-2">
+              {group.fields.map((field) => (
+                <div
+                  key={field.name}
+                  className={cn("min-w-0", field.span !== "half" && "sm:col-span-2")}
+                >
+                  <Control
+                    field={field}
+                    value={values[field.name] ?? ""}
+                    error={errors[field.name]}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
 
-      <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-border pt-6">
-        <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : mode === "create" ? `Create ${spec.singular}` : "Save changes"}
-        </Button>
+      {/*
+        The action bar, and the one place this screen spends any boldness.
 
-        {/* A link, not a button: cancelling is going somewhere, not submitting. */}
-        <Link href={cancelHref} className="min-h-11 px-2 py-3 text-sm text-muted-foreground hover:text-primary">
-          Cancel
-        </Link>
+        It follows you: `sticky bottom-4` means Save is one click away from
+        anywhere in a form that runs well past a screen, instead of at the end
+        of a scroll. And it carries the row's state on the left, so the thing
+        you most often came here to change is also the thing you can always see.
+      */}
+      <div className="c-actionbar sticky bottom-4 z-10 mt-10 flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3">
+        <StatusLine spec={spec} mode={mode} slug={slug} />
+
+        <div className="ms-auto flex items-center gap-1">
+          {/* A link, not a button: cancelling is going somewhere, not submitting. */}
+          <Link
+            href={cancelHref}
+            className="inline-flex min-h-11 items-center px-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Cancel
+          </Link>
+
+          <Button type="submit" disabled={pending}>
+            {pending ? "Saving…" : mode === "create" ? `Create ${spec.singular}` : "Save changes"}
+          </Button>
+        </div>
       </div>
     </form>
+  );
+}
+
+/**
+ * What this row currently is, in the action bar.
+ *
+ * The live/draft half is driven by CSS, not React state. The published
+ * checkbox is a real checkbox inside this form, so `form:has(#published:checked)`
+ * in globals.css already knows the answer — mirroring it into `useState` would
+ * add a hook, a handler and a second source of truth for something the DOM is
+ * tracking anyway. Same reasoning as the theme toggle.
+ *
+ * Only rendered with a `published` field to read: on skills, which have no
+ * draft state, `:has(#published:checked)` can never match and every skill would
+ * claim to be a draft.
+ */
+function StatusLine({
+  spec,
+  mode,
+  slug,
+}: {
+  spec: EntitySpec;
+  mode: "create" | "edit";
+  slug?: string;
+}) {
+  if (mode === "create") {
+    return (
+      <p className="font-mono text-xs text-muted-foreground">
+        Not created yet
+      </p>
+    );
+  }
+
+  // Skills are both unpublishable and slugless, so there is nothing true to
+  // say about one — and an empty <p> holding the bar open is not nothing, it is
+  // markup that exists to describe a row and describes none.
+  if (!spec.publishable && !slug) return null;
+
+  return (
+    <p className="flex min-w-0 items-center gap-2 font-mono text-xs text-muted-foreground">
+      {spec.publishable ? (
+        <>
+          <span className="c-when-published inline-flex items-center gap-2">
+            <span className="c-dot c-dot-live" />
+            Live
+          </span>
+          <span className="c-when-draft inline-flex items-center gap-2">
+            <span className="c-dot c-dot-draft" />
+            Draft
+          </span>
+        </>
+      ) : null}
+
+      {slug ? <span className="truncate">/{slug}</span> : null}
+    </p>
   );
 }
 
@@ -108,11 +219,11 @@ function Control({
   value: string;
   error?: string;
 }) {
-  const hint = field.hint ? (
-    <span className="text-xs font-normal normal-case tracking-normal text-muted-foreground">
-      {field.hint}
-    </span>
-  ) : undefined;
+  // Every control gets these three the same way, which is the point of pulling
+  // them out: `hint` used to be handed to `meta` here and to `hint` in one
+  // other branch, so the same sentence rendered in two different places
+  // depending on the field's kind.
+  const shared = { name: field.name, label: field.label, hint: field.hint, error };
 
   switch (field.kind) {
     case "boolean":
@@ -128,10 +239,8 @@ function Control({
     case "select":
       return (
         <SelectField
-          name={field.name}
-          label={field.label}
-          meta={hint}
-          error={error}
+          {...shared}
+          required={field.required}
           options={field.options ?? []}
           defaultValue={value}
         />
@@ -140,14 +249,11 @@ function Control({
     case "list":
       return (
         <TextAreaField
-          name={field.name}
-          label={field.label}
-          meta={
-            <span className="text-xs font-normal normal-case tracking-normal text-muted-foreground">
-              One per line
-            </span>
-          }
-          error={error}
+          {...shared}
+          required={field.required}
+          // The one honest use of `meta`: a short right-aligned constraint on
+          // the label row, which is what that slot was built for.
+          meta={<span className="font-mono text-xs text-muted-foreground">One per line</span>}
           rows={field.rows ?? 4}
           defaultValue={value}
         />
@@ -156,10 +262,7 @@ function Control({
     case "image":
       return (
         <ImageField
-          name={field.name}
-          label={field.label}
-          hint={field.hint}
-          error={error}
+          {...shared}
           defaultValue={value}
           maxLength={field.maxLength}
         />
@@ -169,26 +272,25 @@ function Control({
     case "markdown":
       return (
         <TextAreaField
-          name={field.name}
-          label={field.label}
-          meta={hint}
-          error={error}
+          {...shared}
+          required={field.required}
           rows={field.rows ?? 4}
           defaultValue={value}
           // Markdown is written in the same face it is read in; the body of a
           // post is largely code fences and indentation, and a proportional
-          // font makes both unreadable while editing.
-          className={field.kind === "markdown" ? "font-mono text-[0.8125rem]" : undefined}
+          // font makes both unreadable while editing. It also starts far
+          // taller: a post body opening at four rows is a slot, not a page.
+          className={
+            field.kind === "markdown" ? "min-h-96 font-mono text-[0.8125rem]" : undefined
+          }
         />
       );
 
     default:
       return (
         <TextField
-          name={field.name}
-          label={field.label}
-          meta={hint}
-          error={error}
+          {...shared}
+          required={field.required}
           defaultValue={value}
           type={inputType(field.kind)}
           maxLength={field.maxLength}

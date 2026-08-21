@@ -63,6 +63,11 @@ export default async function EditEntityPage({ params }: PageProps<"/admin/[enti
               Shown, not editable. The API's update schemas carry no `slug`
               on purpose: regenerating one on a title edit silently breaks
               every link already published to it.
+
+              The slug also rides along to the action bar, which repeats it
+              beside the live/draft state. That is not a duplicate for its own
+              sake: this line scrolls away, and the bar is what stays on screen
+              saying which row is about to be written.
             */
             <p className={cn(eyebrowClasses, "mt-3 normal-case tracking-normal")}>
               /{result.data.slug} · fixed at creation
@@ -75,6 +80,7 @@ export default async function EditEntityPage({ params }: PageProps<"/admin/[enti
             initial={toValues(spec, result.data)}
             action={saveContent.bind(null, spec.key, numericId)}
             cancelHref={`/admin/${spec.key}`}
+            slug={typeof result.data.slug === "string" ? result.data.slug : undefined}
           />
         </>
       )}

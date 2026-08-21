@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { signOut } from "@/app/actions/auth";
 import { ConsoleNav } from "@/components/console/console-nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/lib/admin-guard";
 import { accessTokenExpiry } from "@/lib/session";
@@ -35,7 +36,15 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
         of the page — a drawer would need a client component and a state hook
         for six links that fit on one scrollable line.
       */}
-      <aside className="c-sidebar shrink-0 border-b border-border bg-card lg:sticky lg:top-0 lg:h-dvh lg:w-60 lg:border-b-0 lg:border-r">
+      {/*
+        No wash behind the column any more. It was a radial of the old amber
+        accent, and with the console monochrome it had nothing left to be a
+        wash *of* — on paper it would have been a grey smear. The column
+        separates from the page on surface alone: `bg-card` is pure white
+        against a tinted ground in light, and a step lighter than the ground in
+        dark.
+      */}
+      <aside className="shrink-0 border-b border-border bg-card lg:sticky lg:top-0 lg:h-dvh lg:w-60 lg:border-b-0 lg:border-r">
         <div className="flex h-full flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-0 lg:px-3 lg:py-5">
           <Link
             href="/admin"
@@ -81,19 +90,29 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
           </div>
 
           {/*
-            A real form posting a Server Action, so signing out works without
-            JavaScript and is a POST rather than a link — a GET that destroys a
-            session gets fired by every prefetcher that meets it.
+            The toggle lives here, and its being here is what allows the console
+            to have a light mode at all — see the console section of
+            globals.css. A preference has to be changeable from the surface it
+            applies to.
           */}
-          <form action={signOut} className="order-2 ms-auto lg:order-5 lg:ms-0 lg:mt-3 lg:w-full">
-            <Button
-              variant="quiet"
-              type="submit"
-              className="min-h-11 w-full px-4 py-2 text-xs"
-            >
-              Sign out
-            </Button>
-          </form>
+          <div className="order-2 ms-auto flex items-center gap-2 lg:order-5 lg:ms-0 lg:mt-3 lg:w-full">
+            <ThemeToggle />
+
+            {/*
+              A real form posting a Server Action, so signing out works without
+              JavaScript and is a POST rather than a link — a GET that destroys
+              a session gets fired by every prefetcher that meets it.
+            */}
+            <form action={signOut} className="lg:flex-1">
+              <Button
+                variant="quiet"
+                type="submit"
+                className="min-h-11 w-full px-4 py-2 text-xs"
+              >
+                Sign out
+              </Button>
+            </form>
+          </div>
         </div>
       </aside>
 
