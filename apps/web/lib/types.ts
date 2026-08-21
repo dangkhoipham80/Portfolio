@@ -13,6 +13,28 @@ export type ProjectStatus = "completed" | "in_progress" | "on_hold" | "dropped";
 
 export type SkillLevel = "beginner" | "intermediate" | "advanced" | "expert";
 
+/**
+ * A gallery entry, as the API returns it.
+ *
+ * The project row stores a bare URL; `alt` and the dimensions are resolved from
+ * the media library on the way out, so a description lives in one place rather
+ * than being copied into every project that uses the image. All three are null
+ * for a URL the library has never seen — pasted by hand, or uploaded before the
+ * library existed.
+ */
+export interface GalleryImage {
+  url: string;
+  alt: string | null;
+  width: number | null;
+  height: number | null;
+}
+
+/** A labelled link beyond source and live: a demo video, a case study. */
+export interface ProjectLink {
+  label: string;
+  url: string;
+}
+
 export interface Project {
   id: number;
   slug: string;
@@ -27,6 +49,9 @@ export interface Project {
   technologies: string[];
   features: string[];
   challenges: string[];
+  /** Demo screenshots beyond the cover, in display order. */
+  gallery: GalleryImage[];
+  links: ProjectLink[];
   /** ISO date, or null. A null `ended_on` means the work is ongoing. */
   started_on: string | null;
   ended_on: string | null;

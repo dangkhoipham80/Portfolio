@@ -46,6 +46,20 @@ class Project(BaseModel):
     technologies = Column(JSON)  # list[str]
     features = Column(JSON)      # list[str]
     challenges = Column(JSON)    # list[str]
+    # Demo screenshots beyond the cover, in display order.
+    #
+    # Plain URLs, not {url, caption} objects. Alt text lives on the MediaAsset
+    # row for that URL and is inherited by every use, which is the whole reason
+    # that table exists; a caption stored per use here would be a second place
+    # to describe the same picture and would start disagreeing immediately.
+    gallery = Column(JSON)  # list[str]
+    # Anything beyond source and live: a demo video, a case study, a Figma file.
+    #
+    # `github_url` and `live_url` stay as their own columns rather than folding
+    # in here. They are not just two more links — the detail page gives them
+    # fixed positions and labels, every existing row has them populated, and
+    # collapsing them would mean a data migration to buy nothing.
+    links = Column(JSON)  # list[{"label": str, "url": str}]
     started_on = Column(Date)
     ended_on = Column(Date)      # Null while the work is still running.
     status = Column(Enum(ProjectStatus), nullable=False, default=ProjectStatus.COMPLETED)

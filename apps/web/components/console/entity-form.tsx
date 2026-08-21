@@ -19,7 +19,9 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
+import { GalleryField } from "@/components/console/gallery-field";
 import { ImageField } from "@/components/console/image-field";
+import { LinksField } from "@/components/console/links-field";
 import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { CheckboxField, SelectField, TextAreaField, TextField } from "@/components/ui/field";
@@ -267,6 +269,12 @@ function Control({
           maxLength={field.maxLength}
         />
       );
+
+    case "gallery":
+      return <GalleryField {...shared} defaultValue={value} />;
+
+    case "links":
+      return <LinksField {...shared} value={value} />;
 
     case "textarea":
     case "markdown":

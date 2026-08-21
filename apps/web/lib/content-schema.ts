@@ -48,7 +48,22 @@ export type FieldKind =
   | "boolean"
   | "select"
   /** A JSON list of strings, edited one per line. */
-  | "list";
+  | "list"
+  /**
+   * An ordered list of image URLs, edited as a row of thumbnails with an
+   * upload button and a picker onto the media library.
+   *
+   * Stored and posted as one URL per line, exactly like `list` — the control is
+   * richer but the wire format is not, which is what keeps it working with
+   * scripting off. See components/console/gallery-field.tsx.
+   */
+  | "gallery"
+  /**
+   * A list of `{label, url}` pairs. Posted as two parallel repeated fields and
+   * zipped back together by `readForm`, so it needs no JSON in a hidden input
+   * and no client component to submit.
+   */
+  | "links";
 
 export type FieldSpec = {
   name: string;
@@ -208,11 +223,29 @@ const ENTITY_DEFINITIONS: Omit<EntitySpec, "fields">[] = [
         ],
       },
       {
+        label: "Gallery",
+        hint: "Screenshots below the write-up on the detail page, in this order. The cover above is separate.",
+        fields: [
+          {
+            name: "gallery",
+            label: "Images",
+            kind: "gallery",
+            hint: "Descriptions come from the media library, so each image is described once however many projects use it.",
+          },
+        ],
+      },
+      {
         label: "Links",
-        hint: "Rendered as buttons on the detail page. Both optional.",
+        hint: "Rendered as buttons on the detail page. All optional.",
         fields: [
           { name: "github_url", label: "Source URL", kind: "url", maxLength: 500 },
           { name: "live_url", label: "Live URL", kind: "url", maxLength: 500 },
+          {
+            name: "links",
+            label: "Other links",
+            kind: "links",
+            hint: "A demo video, a case study, a design file — anything that is not the source or the live site.",
+          },
         ],
       },
       {
@@ -497,11 +530,58 @@ export function readForm(spec: EntitySpec, formData: FormData, mode: "create" | 
       values[field.name] = formData.get(field.name) === "on" ? "true" : "";
       continue;
     }
+
+    if (field.kind === "links") {
+      values[field.name] = readLinks(formData, field.name);
+      continue;
+    }
+
     const raw = formData.get(field.name);
     values[field.name] = typeof raw === "string" ? raw : "";
   }
 
   return values;
+}
+
+/**
+ * Zip two parallel repeated fields back into one editable string.
+ *
+ * The links editor posts `<name>_label` and `<name>_url` once per row, in
+ * document order, which is how a repeating group survives having no JavaScript:
+ * plain inputs, no hidden JSON, no client component needed to submit. `getAll`
+ * preserves that order, so index *i* of one list belongs with index *i* of the
+ * other.
+ *
+ * The intermediate form is `Label\tURL` per line, one line per row, because
+ * everything between `readForm` and `toPayload` is `Record<string, string>` —
+ * that is what lets a rejected form re-render with exactly what was typed. Tab
+ * is the separator because a label may contain anything a person types except
+ * one, the field being a single-line input.
+ *
+ * Rows with neither half filled are dropped here: the editor always renders
+ * spare blank rows, and they must not become empty links.
+ */
+function readLinks(formData: FormData, name: string): string {
+  const labels = formData.getAll(`${name}_label`);
+  const urls = formData.getAll(`${name}_url`);
+  const rows: string[] = [];
+
+  for (let i = 0; i < Math.max(labels.length, urls.length); i += 1) {
+    const label = String(labels[i] ?? "").trim();
+    const url = String(urls[i] ?? "").trim();
+    if (!label && !url) continue;
+    rows.push(`${label}\t${url}`);
+  }
+
+  return rows.join("\n");
+}
+
+/** The rows of a links field, as the editor and the payload both need them. */
+export function parseLinks(value: string): { label: string; url: string }[] {
+  return toList(value).map((line) => {
+    const [label = "", url = ""] = line.split("\t");
+    return { label: label.trim(), url: url.trim() };
+  });
 }
 
 /** Turn an API record into the strings the form edits. */
@@ -517,6 +597,28 @@ export function toValues(spec: EntitySpec, record: Record<string, unknown>): Val
       values[field.name] = raw ? "true" : "";
     } else if (field.kind === "list") {
       values[field.name] = Array.isArray(raw) ? raw.join("\n") : "";
+    } else if (field.kind === "gallery") {
+      // The API returns objects carrying resolved alt text; the form edits the
+      // URLs, which is all the column stores. Dropping the rest here is not a
+      // loss — a description is edited in the media library, and round-tripping
+      // it through this form would be the second place it lived.
+      values[field.name] = Array.isArray(raw)
+        ? raw
+            .map((item) =>
+              typeof item === "string" ? item : String((item as { url?: unknown })?.url ?? ""),
+            )
+            .filter(Boolean)
+            .join("\n")
+        : "";
+    } else if (field.kind === "links") {
+      values[field.name] = Array.isArray(raw)
+        ? raw
+            .map((item) => {
+              const link = item as { label?: unknown; url?: unknown };
+              return `${String(link?.label ?? "")}\t${String(link?.url ?? "")}`;
+            })
+            .join("\n")
+        : "";
     } else if (field.kind === "datetime") {
       // Sliced, not parsed: `new Date()` on an instant would shift the day for
       // anyone west of UTC, the same trap lib/format.ts documents.
@@ -571,6 +673,22 @@ export function validate(spec: EntitySpec, values: Values, mode: "create" | "edi
 
     if (field.kind === "select" && !field.options?.some((option) => option.value === value)) {
       errors[field.name] = `${field.label} is not one of the choices.`;
+      continue;
+    }
+
+    if (field.kind === "links") {
+      // The API rejects a link with no label — it would render as a button with
+      // nothing written on it — so catch it here, where the message can name
+      // the row instead of arriving as a 422 the form cannot attribute.
+      const rows = parseLinks(values[field.name] ?? "");
+      const incomplete = rows.findIndex((row) => !row.label || !row.url);
+
+      if (incomplete !== -1) {
+        const row = rows[incomplete];
+        errors[field.name] = row.label
+          ? `Link ${incomplete + 1} (“${row.label}”) has no address.`
+          : `Link ${incomplete + 1} has an address but no label.`;
+      }
     }
   }
 
@@ -604,7 +722,13 @@ export function toPayload(
         payload[field.name] = value ? Number(value) : 0;
         break;
       case "list":
+      // A gallery is a list of URLs on the wire too — the richer control does
+      // not change the payload.
+      case "gallery":
         payload[field.name] = toList(values[field.name] ?? "");
+        break;
+      case "links":
+        payload[field.name] = parseLinks(values[field.name] ?? "");
         break;
       case "datetime":
         payload[field.name] = value ? `${value}T00:00:00Z` : null;
