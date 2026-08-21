@@ -20,6 +20,7 @@
 import { upload } from "@vercel/blob/client";
 import { useRef, useState } from "react";
 
+import { registerUpload } from "@/app/actions/media";
 import { TextField } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
 
@@ -30,6 +31,29 @@ type Status =
 
 /** A cover that is 3:2 is previewed at 3:2. A 80x44 chip told you nothing. */
 const PREVIEW = "h-24 w-36";
+
+/**
+ * Read an image's pixel dimensions from the file, before it is uploaded.
+ *
+ * Stored on the asset so a gallery can reserve the right box before the bytes
+ * arrive rather than reflowing around each one. `createImageBitmap` decodes off
+ * the main thread and needs no element in the document, unlike `new Image()`
+ * with an onload — and it is allowed to fail: a browser that cannot decode the
+ * format still uploads it fine, and a row with no dimensions is better than no
+ * row.
+ */
+async function readDimensions(file: File): Promise<{ width: number; height: number } | null> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const size = { width: bitmap.width, height: bitmap.height };
+    // Frees the decoded buffer now rather than at the next GC. A 5MB PNG
+    // decodes to tens of megabytes.
+    bitmap.close();
+    return size;
+  } catch {
+    return null;
+  }
+}
 
 export function ImageField({
   name,
@@ -68,6 +92,11 @@ export function ImageField({
     setStatus({ state: "uploading" });
 
     try {
+      // Measured before the upload, not after: the File is already in memory
+      // here, and reading it back over the network to find out how big it is
+      // would be a second download of what was just sent.
+      const size = await readDimensions(file);
+
       const blob = await upload(file.name, file, {
         access: "public",
         handleUploadUrl: "/api/admin/upload",
@@ -75,6 +104,22 @@ export function ImageField({
 
       onUrlChange(blob.url);
       setStatus({ state: "idle" });
+
+      /*
+       * Record it in the library. Not awaited before the field updates above,
+       * and its result is ignored: the bytes are stored and the URL is in the
+       * form, so the image will save and render whichever way this goes.
+       * Making the admin wait on it — or worse, reporting a failed upload
+       * because a bookkeeping call did not land — would trade the real outcome
+       * for an index entry. See app/actions/media.ts.
+       */
+      void registerUpload({
+        url: blob.url,
+        pathname: blob.pathname,
+        mime: file.type || undefined,
+        size_bytes: file.size,
+        ...(size ?? {}),
+      });
     } catch (cause) {
       /*
        * The route answers 401 for a dead session and 400 for a rejected file,

@@ -1,6 +1,17 @@
 import enum
 
-from sqlalchemy import JSON, Boolean, Column, Date, DateTime, Enum, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 
 from .base import BaseModel
 
@@ -118,3 +129,69 @@ class Contact(BaseModel):
     subject = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     read = Column(Boolean, default=False)
+
+
+class MediaAsset(BaseModel):
+    """An index of every image uploaded to Blob storage.
+
+    ## Why this table exists
+
+    Before it, nothing recorded an upload. The browser sent bytes straight to
+    Vercel Blob, got a URL back, and that URL survived only if the admin went on
+    to save the form it was typed into. Upload an image, change your mind, and
+    the object stays in the bucket for good — unreferenced, unlistable through
+    the app, impossible to find again. A row is written here when the upload
+    completes, so the objects in the bucket and the rows in this table stay the
+    same set.
+
+    ## Why nothing has a foreign key to it
+
+    Content references images by URL, in ordinary JSON columns, exactly as
+    ``technologies`` and ``features`` already do. No join tables, no ``ON
+    DELETE`` behaviour. That is a deliberate limit rather than an oversight: the
+    alternative is a link table per content type, a nested schema per
+    relationship, and an ordering column to keep a gallery in sequence — a large
+    amount of machinery to enforce integrity over a handful of screenshots.
+
+    The cost is that deleting a row here does not remove the URL from a project
+    using it, so the image keeps rendering from Blob. That is the right way for
+    this to fail: the picture stays up.
+
+    ## What belongs to the asset rather than to the use
+
+    ``alt`` above all. It describes the image, not the place the image appears,
+    so it is written once and every later use inherits it — which is the whole
+    reason a library beats a ``gallery`` column on each table. Width and height
+    are here so a gallery can reserve the right box before the bytes arrive
+    rather than reflowing the page around each one as it lands.
+    """
+
+    __tablename__ = "media_assets"
+
+    # `created_at` comes from BaseModel, which every table shares and none of
+    # them index. The library is only ever read newest-first, so here the sort
+    # *is* the access pattern — but the index has to be declared on this table
+    # rather than by adding `index=True` to the base, which would silently put
+    # one on every table in the schema.
+    #
+    # Declared at all because `alembic check` compares the model to the
+    # database: the migration created this index and the model did not know
+    # about it, so the next autogenerate would have proposed dropping it.
+    __table_args__ = (Index("ix_media_assets_created_at", "created_at"),)
+
+    # Unique, so registering the same upload twice is a no-op rather than a
+    # duplicate row. Blob's `addRandomSuffix` makes collisions between distinct
+    # uploads impossible, so a repeat here only ever means a retry.
+    url = Column(String(1000), unique=True, index=True, nullable=False)
+    # Blob's own path — the filename plus that random suffix. Kept because it
+    # addresses the object for a later delete, and because the original filename
+    # is the only human-readable handle a library has to search on.
+    pathname = Column(String(1000))
+    # Nullable, and deliberately not defaulted from the filename: wrong alt text
+    # is worse than none, and "screenshot-3-a8f2.png" read aloud is worse than
+    # silence.
+    alt = Column(String(500))
+    mime = Column(String(100))
+    size_bytes = Column(Integer)
+    width = Column(Integer)
+    height = Column(Integer)
