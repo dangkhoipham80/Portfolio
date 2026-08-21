@@ -12,9 +12,15 @@ import { cn } from "@/lib/cn";
  */
 /**
  * The treatment on its own, for the places that need this look on an element
- * that is not a <p> — a form's <label> above all. A field's label *is* a field
- * name, so it is the most literal use this style has on the site; copying the
- * four utilities into field.tsx is where the two would have drifted apart.
+ * that is not a <p> — a `<dt>`, a `<figcaption>`, a group heading in the
+ * console's forms.
+ *
+ * Not a form's `<label>`, which is what this comment used to recommend above
+ * all else, on the argument that a field's label *is* a field name. One field
+ * proves that; fifteen disprove it. Uppercase letterspaced mono is a marker
+ * style — it works because it is rare on a screen, and a form that sets every
+ * label in it has no markers left, only noise. Field labels are quiet now and
+ * the eyebrow marks the bands they sit in. See components/ui/field.tsx.
  */
 export const eyebrowClasses =
   "font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground";

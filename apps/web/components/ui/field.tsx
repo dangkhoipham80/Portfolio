@@ -5,7 +5,6 @@ import type {
   TextareaHTMLAttributes,
 } from "react";
 
-import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/cn";
 
 /**
@@ -36,36 +35,87 @@ const controlClasses = cn(
   // treatment; a control adds nothing.
 );
 
+/**
+ * The label treatment, and why it is no longer an eyebrow.
+ *
+ * These were `eyebrowClasses` — mono, uppercase, letterspaced — on the argument
+ * that a field label *is* a field name. That reads well on one field and badly
+ * on fifteen: a form became a column of shouting, every line at identical
+ * weight, and uppercase letterspaced text is measurably slower to scan than
+ * sentence case. The eyebrow moved up a level to the group headings, where
+ * there are four or five per screen and it does what an eyebrow is for.
+ *
+ * So a label is quiet now, and hierarchy inside the form comes from the bands.
+ */
+const labelClasses = "text-sm font-medium text-foreground";
+
 function FieldShell({
   htmlFor,
   label,
   /** Right-aligned mono note on the label row — a counter, a constraint. */
   meta,
+  hint,
+  required,
   error,
   children,
 }: {
   htmlFor: string;
   label: string;
   meta?: ReactNode;
+  hint?: string;
+  required?: boolean;
   error?: string;
   children: ReactNode;
 }) {
   return (
-    <div>
+    /*
+      `h-full` plus the `justify-end` on the control below is what keeps a row
+      of two fields aligned. Grid cells stretch to the tallest in their row, so
+      a field whose neighbour carries a hint would otherwise sit a line higher
+      than it — visible on Timeline, where "Started on" has no hint and "Ended
+      on" does, and the two date inputs landed 24px apart. Labels stay at the
+      top of the cell, controls sit on a common baseline at the bottom.
+    */
+    <div className="flex h-full flex-col">
       {/*
         Label and meta share a baseline row, the same shape the skill list on
         the home page uses for name-plus-level. Consistency here is not
         cosmetic: it teaches that a right-aligned mono value belongs to the
         thing on its left.
       */}
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <label htmlFor={htmlFor} className={eyebrowClasses}>
+      <div className="flex items-baseline justify-between gap-3">
+        <label htmlFor={htmlFor} className={labelClasses}>
           {label}
+          {required ? (
+            /*
+              Marked required, but not `required` on the element. The server
+              validates every field and returns per-field errors; adding the
+              HTML attribute would hand one subset of the rules to the browser,
+              which reports them in a tooltip that looks nothing like the error
+              this form renders for everything else.
+            */
+            <span aria-hidden="true" className="ms-1 text-muted-foreground">
+              *
+            </span>
+          ) : null}
         </label>
         {meta}
       </div>
 
-      {children}
+      {/*
+        Under the label, above the control — which is where the type in
+        content-schema.ts always said hints go. They had drifted into `meta`,
+        the right-aligned slot, which put a full sentence up to 400px from the
+        label it explained and, at 375px, squeezed "Cover image" into 74px of a
+        320px row. `meta` is for a counter.
+      */}
+      {hint ? (
+        <p id={`${htmlFor}-hint`} className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {hint}
+        </p>
+      ) : null}
+
+      <div className="mt-2 flex flex-1 flex-col justify-end">{children}</div>
 
       {error ? (
         <p id={`${htmlFor}-error`} className="mt-2 text-sm text-destructive-text">
@@ -76,10 +126,25 @@ function FieldShell({
   );
 }
 
+/**
+ * Both the hint and the error, in the order they are read.
+ *
+ * The hint used to be a bare `<span>` passed as `meta`, described by nothing —
+ * so a screen reader announced the label and the control and never the sentence
+ * explaining what the field was for. Anyone who could see the form got the
+ * help; anyone who could not, did not.
+ */
+function describedBy(name: string, hint?: string, error?: string) {
+  const ids = [hint && `${name}-hint`, error && `${name}-error`].filter(Boolean);
+  return ids.length > 0 ? ids.join(" ") : undefined;
+}
+
 type SharedProps = {
   name: string;
   label: string;
   meta?: ReactNode;
+  hint?: string;
+  required?: boolean;
   error?: string;
 };
 
@@ -100,17 +165,27 @@ export function TextField({
   name,
   label,
   meta,
+  hint,
+  required,
   error,
   className,
   ...props
-}: SharedProps & Omit<InputHTMLAttributes<HTMLInputElement>, "name" | "id">) {
+}: SharedProps & Omit<InputHTMLAttributes<HTMLInputElement>, "name" | "id" | "required">) {
   return (
-    <FieldShell htmlFor={name} label={label} meta={meta} error={error}>
+    <FieldShell
+      htmlFor={name}
+      label={label}
+      meta={meta}
+      hint={hint}
+      required={required}
+      error={error}
+    >
       <input
         id={name}
         name={name}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${name}-error` : undefined}
+        aria-required={required ? true : undefined}
+        aria-describedby={describedBy(name, hint, error)}
         {...props}
         className={cn(controlClasses, className)}
       />
@@ -122,21 +197,31 @@ export function SelectField({
   name,
   label,
   meta,
+  hint,
+  required,
   error,
   options,
   className,
   ...props
 }: SharedProps & { options: { value: string; label: string }[] } & Omit<
     SelectHTMLAttributes<HTMLSelectElement>,
-    "name" | "id"
+    "name" | "id" | "required"
   >) {
   return (
-    <FieldShell htmlFor={name} label={label} meta={meta} error={error}>
+    <FieldShell
+      htmlFor={name}
+      label={label}
+      meta={meta}
+      hint={hint}
+      required={required}
+      error={error}
+    >
       <select
         id={name}
         name={name}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${name}-error` : undefined}
+        aria-required={required ? true : undefined}
+        aria-describedby={describedBy(name, hint, error)}
         {...props}
         className={cn(controlClasses, className)}
       >
@@ -157,6 +242,11 @@ export function SelectField({
  * type into and wrong for a checkbox — a tickbox belongs beside its label, and
  * the label has to be part of the target rather than sitting above it. So this
  * is a `<label>` wrapping both, giving a 44px row that is entirely clickable.
+ *
+ * It sits on a surface, unlike the other controls, because it is the one field
+ * with no box of its own: on a form of bordered inputs an unadorned tickbox
+ * reads as floating debris between two of them. The border is what makes it a
+ * row rather than a stray.
  */
 export function CheckboxField({
   name,
@@ -170,25 +260,37 @@ export function CheckboxField({
   defaultChecked?: boolean;
 }) {
   return (
-    <div>
-      <label
-        htmlFor={name}
-        className="inline-flex min-h-11 cursor-pointer items-center gap-3"
-      >
-        <input
-          id={name}
-          name={name}
-          type="checkbox"
-          defaultChecked={defaultChecked}
-          // h-5 w-5: the browser default is 13px, which is both hard to hit and
-          // visually lost next to 14px text. accent-primary tints the tick with
-          // the site's own colour instead of the OS blue.
-          className="h-5 w-5 shrink-0 accent-primary"
-        />
-        <span className={eyebrowClasses}>{label}</span>
-      </label>
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-    </div>
+    <label
+      htmlFor={name}
+      className={cn(
+        "flex cursor-pointer items-start gap-3 rounded-[var(--radius-control)] border border-border",
+        "bg-card px-3.5 py-3 transition-colors hover:border-primary/40",
+      )}
+    >
+      <input
+        id={name}
+        name={name}
+        type="checkbox"
+        defaultChecked={defaultChecked}
+        aria-describedby={hint ? `${name}-hint` : undefined}
+        // h-5 w-5: the browser default is 13px, which is both hard to hit and
+        // visually lost next to 14px text. accent-primary tints the tick with
+        // the site's own colour instead of the OS blue.
+        // mt-0.5 aligns it to the cap height of the label rather than the box.
+        className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
+      />
+      <span className="min-w-0">
+        <span className={cn(labelClasses, "block")}>{label}</span>
+        {hint ? (
+          <span
+            id={`${name}-hint`}
+            className="mt-0.5 block text-xs leading-relaxed text-muted-foreground"
+          >
+            {hint}
+          </span>
+        ) : null}
+      </span>
+    </label>
   );
 }
 
@@ -196,21 +298,39 @@ export function TextAreaField({
   name,
   label,
   meta,
+  hint,
+  required,
   error,
   className,
   ...props
-}: SharedProps & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "name" | "id">) {
+}: SharedProps & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "name" | "id" | "required">) {
   return (
-    <FieldShell htmlFor={name} label={label} meta={meta} error={error}>
+    <FieldShell
+      htmlFor={name}
+      label={label}
+      meta={meta}
+      hint={hint}
+      required={required}
+      error={error}
+    >
       <textarea
         id={name}
         name={name}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${name}-error` : undefined}
+        aria-required={required ? true : undefined}
+        aria-describedby={describedBy(name, hint, error)}
         {...props}
         // Vertical resize only: a horizontally resizable textarea can be
         // dragged out past its container and break the column.
-        className={cn(controlClasses, "resize-y", className)}
+        //
+        // `field-sizing-content` grows the box with what is in it, so a list of
+        // six technologies stops rendering as four and a half. It is
+        // Chromium-only for now, which is why `rows` stays on the element:
+        // where it is unsupported nothing changes, and where it is supported
+        // `rows` is ignored and these two bounds take over — the min so an
+        // empty field is still a target worth clicking, the max so a long post
+        // body does not become a page-length input you cannot scroll past.
+        className={cn(controlClasses, "resize-y field-sizing-content min-h-24 max-h-128", className)}
       />
     </FieldShell>
   );

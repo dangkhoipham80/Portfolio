@@ -28,6 +28,9 @@ type Status =
   | { state: "uploading" }
   | { state: "failed"; message: string };
 
+/** A cover that is 3:2 is previewed at 3:2. A 80x44 chip told you nothing. */
+const PREVIEW = "h-24 w-36";
+
 export function ImageField({
   name,
   label,
@@ -48,7 +51,18 @@ export function ImageField({
   // carries a rejected edit's text back into the form.
   const [url, setUrl] = useState(defaultValue);
   const [status, setStatus] = useState<Status>({ state: "idle" });
+  // Whether the URL currently in the box actually resolves to an image. A dead
+  // URL is the normal case here, not an edge one — this field holds whatever
+  // was typed or pasted, and the old preview answered a 404 with the browser's
+  // broken-image glyph on an `alt=""` element, which is an unlabelled broken
+  // graphic that says nothing about what went wrong.
+  const [broken, setBroken] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  function onUrlChange(next: string) {
+    setUrl(next);
+    setBroken(false);
+  }
 
   async function onPick(file: File) {
     setStatus({ state: "uploading" });
@@ -59,7 +73,7 @@ export function ImageField({
         handleUploadUrl: "/api/admin/upload",
       });
 
-      setUrl(blob.url);
+      onUrlChange(blob.url);
       setStatus({ state: "idle" });
     } catch (cause) {
       /*
@@ -89,16 +103,10 @@ export function ImageField({
       <TextField
         name={name}
         label={label}
-        meta={
-          hint ? (
-            <span className="text-xs font-normal normal-case tracking-normal text-muted-foreground">
-              {hint}
-            </span>
-          ) : undefined
-        }
+        hint={hint}
         error={error}
         value={url}
-        onChange={(event) => setUrl(event.target.value)}
+        onChange={(event) => onUrlChange(event.target.value)}
         type="text"
         maxLength={maxLength}
       />
@@ -110,10 +118,16 @@ export function ImageField({
           the keyboard target, so this is focusable and operable without a
           single extra handler.
         */}
+        {/*
+          Sentence case, in the body face. This was mono uppercase, which was
+          the same call the field labels used to make and wrong for the same
+          reason — it is a control, and every other control on the screen is a
+          <Button> that says "Save changes", not "SAVE CHANGES".
+        */}
         <label
           className={cn(
             "inline-flex min-h-11 cursor-pointer items-center rounded-[var(--radius-control)]",
-            "border border-border px-3.5 py-2.5 font-mono text-[11px] uppercase tracking-wider",
+            "border border-border px-3.5 py-2.5 text-sm",
             "text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground",
             status.state === "uploading" && "pointer-events-none opacity-60",
           )}
@@ -132,7 +146,7 @@ export function ImageField({
           />
         </label>
 
-        {url ? (
+        {url && !broken ? (
           /*
            * A plain <img>, not next/image: this is an admin preview of a URL
            * that may be anything the admin typed, and routing it through the
@@ -143,8 +157,30 @@ export function ImageField({
           <img
             src={url}
             alt=""
-            className="h-11 w-20 rounded-[var(--radius-control)] border border-border object-cover"
+            onError={() => setBroken(true)}
+            className={cn(
+              PREVIEW,
+              "rounded-[var(--radius-control)] border border-border bg-muted object-cover",
+            )}
           />
+        ) : null}
+
+        {url && broken ? (
+          /*
+           * Says what happened and what it means, rather than showing a torn
+           * page. The URL is kept and will still save: it may be a host that is
+           * briefly down, or one that refuses hotlinking, and silently clearing
+           * someone's field on a failed GET would be worse than showing this.
+           */
+          <p
+            className={cn(
+              PREVIEW,
+              "flex items-center justify-center rounded-[var(--radius-control)] border border-dashed",
+              "border-border px-3 text-center text-xs leading-relaxed text-muted-foreground",
+            )}
+          >
+            This URL did not load
+          </p>
         ) : null}
       </div>
 
