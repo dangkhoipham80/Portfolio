@@ -61,7 +61,16 @@ export function EntityForm({
     // 3xl rather than the 2xl this was: the fields are two-to-a-row above `sm`
     // now, and at 672px a pair of halves is too narrow for a date plus its
     // label.
-    <form action={formAction} className="mt-8 max-w-3xl">
+    <form
+      action={formAction}
+      // Required fields carry the attribute, so assistive technology announces
+      // them — but this form renders its own per-field errors from `validate`,
+      // and the browser's bubble says "Please fill out this field" in the
+      // browser's voice, over the wrong element, in a style nothing else here
+      // uses. Same arrangement, and the same reasoning, as the contact form.
+      noValidate
+      className="mt-8 max-w-3xl"
+    >
       {state.status === "unavailable" && (
         <Notice className="mb-6 border-destructive/50">
           Nothing was saved — the API did not answer. Your changes are still in

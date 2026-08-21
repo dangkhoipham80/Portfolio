@@ -84,21 +84,27 @@ function FieldShell({
         thing on its left.
       */}
       <div className="flex items-baseline justify-between gap-3">
-        <label htmlFor={htmlFor} className={labelClasses}>
-          {label}
+        {/*
+          The marker sits *beside* the <label>, not inside it.
+
+          Inside, it becomes part of the label's text, and the label's text is
+          how a control is found — by a screen reader user reading it, and by
+          `page.getByLabel("Name", { exact: true })`, which is how every field
+          in the contact-form suite is located. Twelve e2e tests went red on
+          that: `aria-hidden` keeps the asterisk out of the accessible name but
+          not out of the label's text content, and nothing in type-check, lint
+          or the unit suite has an opinion about either.
+        */}
+        <span className="flex items-baseline gap-1">
+          <label htmlFor={htmlFor} className={labelClasses}>
+            {label}
+          </label>
           {required ? (
-            /*
-              Marked required, but not `required` on the element. The server
-              validates every field and returns per-field errors; adding the
-              HTML attribute would hand one subset of the rules to the browser,
-              which reports them in a tooltip that looks nothing like the error
-              this form renders for everything else.
-            */
-            <span aria-hidden="true" className="ms-1 text-muted-foreground">
+            <span aria-hidden="true" className="text-muted-foreground">
               *
             </span>
           ) : null}
-        </label>
+        </span>
         {meta}
       </div>
 
@@ -139,6 +145,22 @@ function describedBy(name: string, hint?: string, error?: string) {
   return ids.length > 0 ? ids.join(" ") : undefined;
 }
 
+/**
+ * `required` does two jobs and both are needed.
+ *
+ * It marks the label *and* stays on the element. An earlier version of this
+ * file took it off the element, reasoning that the browser's validation bubble
+ * looks nothing like the errors these forms render — true, but the attribute is
+ * not only a validation trigger. It is what tells assistive technology the
+ * field is required, which is exactly what the comment on the contact form
+ * says it is relying on, and dropping it silently removed that from four live
+ * inputs.
+ *
+ * The bubble is suppressed where it is unwanted by putting `noValidate` on the
+ * form, which is what the contact form already did and what the console's
+ * entity form now does too. That separates the two concerns properly: the
+ * attribute describes the field, the form decides who reports on it.
+ */
 type SharedProps = {
   name: string;
   label: string;
@@ -170,7 +192,7 @@ export function TextField({
   error,
   className,
   ...props
-}: SharedProps & Omit<InputHTMLAttributes<HTMLInputElement>, "name" | "id" | "required">) {
+}: SharedProps & Omit<InputHTMLAttributes<HTMLInputElement>, "name" | "id">) {
   return (
     <FieldShell
       htmlFor={name}
@@ -183,8 +205,8 @@ export function TextField({
       <input
         id={name}
         name={name}
+        required={required}
         aria-invalid={error ? true : undefined}
-        aria-required={required ? true : undefined}
         aria-describedby={describedBy(name, hint, error)}
         {...props}
         className={cn(controlClasses, className)}
@@ -205,7 +227,7 @@ export function SelectField({
   ...props
 }: SharedProps & { options: { value: string; label: string }[] } & Omit<
     SelectHTMLAttributes<HTMLSelectElement>,
-    "name" | "id" | "required"
+    "name" | "id"
   >) {
   return (
     <FieldShell
@@ -219,8 +241,8 @@ export function SelectField({
       <select
         id={name}
         name={name}
+        required={required}
         aria-invalid={error ? true : undefined}
-        aria-required={required ? true : undefined}
         aria-describedby={describedBy(name, hint, error)}
         {...props}
         className={cn(controlClasses, className)}
@@ -303,7 +325,7 @@ export function TextAreaField({
   error,
   className,
   ...props
-}: SharedProps & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "name" | "id" | "required">) {
+}: SharedProps & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "name" | "id">) {
   return (
     <FieldShell
       htmlFor={name}
@@ -316,8 +338,8 @@ export function TextAreaField({
       <textarea
         id={name}
         name={name}
+        required={required}
         aria-invalid={error ? true : undefined}
-        aria-required={required ? true : undefined}
         aria-describedby={describedBy(name, hint, error)}
         {...props}
         // Vertical resize only: a horizontally resizable textarea can be
