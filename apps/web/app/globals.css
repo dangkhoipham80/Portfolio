@@ -825,37 +825,67 @@
  * and the two themes cannot drift apart because there is only one set of
  * components.
  *
- * Always dark, and not wired to the site's theme toggle. The toggle lives in
- * the public header, which the console does not render; a console that followed
- * a preference set somewhere it cannot be changed from would just be a console
- * that is sometimes wrong.
+ * ## Both modes, and why that changed
+ *
+ * This was dark-only, and the comment here argued it should stay that way: the
+ * toggle lived in the public header, which the console does not render, so a
+ * console that followed a preference it could not change would just be a
+ * console that is sometimes wrong. That was true of the arrangement, not of the
+ * idea — the answer was a toggle in the console's own sidebar, which is now
+ * there. Anyone editing at a desk in daylight was being handed a dark room.
+ *
+ * ## Monochrome, for the same reason the site is
+ *
+ * The console used to carry a signal amber, described here as "matching the
+ * public site". It stopped matching anything: the site dropped its accent hue
+ * entirely (see the header of this file), leaving the console as the last place
+ * the amber survived, and the standing rule is that colour never touches text.
+ * So the console is ink and paper too. The one hue left is `--live`, inherited
+ * from the site's palette rather than redefined here, because a row being
+ * published is exactly the "something is happening" this site spends its only
+ * colour on.
+ *
+ * What still separates the console from the site is density and furniture — a
+ * sidebar, tighter rows, panels — not palette.
  * ========================================================================== */
 
+/*
+ * Both halves of every variable are needed, and the reason is the whole trick.
+ *
+ * The bare `--card`/`--foreground` channels are what this file's own
+ * `hsl(var(--x) / alpha)` rules read. The `--color-*` names are what Tailwind
+ * utilities read. Setting only the first looked correct in the source and did
+ * nothing on screen: `@theme` declares `--color-card: hsl(var(--card))` *on
+ * :root*, so the substitution happens there, and overriding `--card` further
+ * down the tree never recomputes it. The site's own dark mode gets away with
+ * the short version only because `.dark` sits on <html> — the same element as
+ * :root. A nested scope has to name the variables the utilities actually use.
+ */
 .console-theme {
-  /* Slightly blue-black rather than neutral: a pure grey app surface reads as
-     unfinished next to any saturated accent, and the cast gives the violet
-     something to sit on. */
-  --console-bg: 225 18% 7%;
-  --console-panel: 225 15% 10%;
-  --console-raised: 225 14% 14%;
-  --console-line: 225 12% 19%;
-  /* Signal amber, matching the public site — one brand, two surfaces. */
-  --console-accent: 38 90% 62%;
-  --console-text: 225 22% 96%;
-  --console-muted: 225 12% 68%;
-
   /*
-   * Both halves are needed, and the reason is the whole trick.
+   * Light: cool paper, one step deeper than the public site's 97%.
    *
-   * The bare `--card`/`--foreground` channels are what this file's own
-   * `hsl(var(--x) / alpha)` rules read. The `--color-*` names are what Tailwind
-   * utilities read. Setting only the first looked correct in the source and did
-   * nothing on screen: `@theme` declares `--color-card: hsl(var(--card))` *on
-   * :root*, so the substitution happens there, and overriding `--card` further
-   * down the tree never recomputes it. The site's own dark mode gets away with
-   * the short version only because `.dark` sits on <html> — the same element as
-   * :root. A nested scope has to name the variables the utilities actually use.
+   * That step is doing the work that an inner highlight does in dark mode. The
+   * ground is tinted and panels are pure white, so a card lifts off it with no
+   * shadow at all — the inverse of the dark theme, where the ground is the
+   * darkest thing and panels are lighter than it. Same perceived hierarchy,
+   * arrived at from the opposite direction, rather than a dark-mode technique
+   * dimmed down until it stops looking wrong.
    */
+  --console-bg: 220 20% 96%;
+  --console-panel: 0 0% 100%;
+  --console-raised: 220 16% 93%;
+  --console-line: 220 13% 86%;
+  --console-text: 222 22% 12%;
+  --console-muted: 222 10% 40%;
+  /* The selected row in the sidebar, and the row under the pointer. Two steps,
+     far enough apart that "where I am" and "where the mouse is" never read as
+     the same state. */
+  --console-selected: 220 16% 89%;
+  --console-hover: 220 16% 94%;
+  /* A draft: off, not highlighted. Dimmer than the text, never coloured. */
+  --console-dim: 220 9% 60%;
+
   --background: var(--console-bg);
   --foreground: var(--console-text);
   --card: var(--console-panel);
@@ -864,13 +894,13 @@
   --muted-foreground: var(--console-muted);
   --accent: var(--console-raised);
   --accent-foreground: var(--console-text);
-  --primary: var(--console-accent);
-  /* Dark on the accent: the violet is mid-lightness, so near-white on it is
-     light-on-light — the same trap the site's dark palette documents. */
-  --primary-foreground: 225 18% 9%;
-  --ring: var(--console-accent);
-  --destructive: 0 72% 58%;
-  --destructive-text: 0 90% 78%;
+  /* Ink, filled. The loudest control on a console screen is "Save changes", and
+     a solid ink plate says that without spending a hue on it. */
+  --primary: var(--console-text);
+  --primary-foreground: 220 20% 98%;
+  --ring: 222 22% 30%;
+  --destructive: 0 72% 50%;
+  --destructive-text: 0 72% 38%;
 
   --color-background: hsl(var(--console-bg));
   --color-foreground: hsl(var(--console-text));
@@ -880,30 +910,66 @@
   --color-muted-foreground: hsl(var(--console-muted));
   --color-accent: hsl(var(--console-raised));
   --color-accent-foreground: hsl(var(--console-text));
-  --color-primary: hsl(var(--console-accent));
+  --color-primary: hsl(var(--console-text));
+  --color-primary-foreground: hsl(220 20% 98%);
+  --color-ring: hsl(222 22% 30%);
+  --color-destructive: hsl(0 72% 50%);
+  --color-destructive-text: hsl(0 72% 38%);
+
+  color-scheme: light;
+  background-color: hsl(var(--console-bg));
+  color: hsl(var(--console-text));
+}
+
+.dark .console-theme {
+  /* Blue-black rather than neutral: a pure grey app surface reads as
+     unfinished, and the cast gives the white type somewhere to sit. */
+  --console-bg: 225 18% 7%;
+  --console-panel: 225 15% 10%;
+  --console-raised: 225 14% 14%;
+  --console-line: 225 12% 19%;
+  --console-text: 225 22% 96%;
+  --console-muted: 225 12% 68%;
+  --console-selected: 225 14% 18%;
+  --console-hover: 225 14% 13%;
+  --console-dim: 225 10% 46%;
+
+  /* Near-white plate with ink on it — the dark-mode form of the same idea. */
+  --primary: 225 14% 94%;
+  --primary-foreground: 225 18% 9%;
+  --ring: 225 12% 72%;
+  --destructive: 0 62% 45%;
+  --destructive-text: 0 85% 75%;
+
+  --color-primary: hsl(225 14% 94%);
   --color-primary-foreground: hsl(225 18% 9%);
-  --color-ring: hsl(var(--console-accent));
-  --color-destructive: hsl(0 72% 58%);
-  --color-destructive-text: hsl(0 90% 78%);
+  --color-ring: hsl(225 12% 72%);
+  --color-destructive: hsl(0 62% 45%);
+  --color-destructive-text: hsl(0 85% 75%);
 
   color-scheme: dark;
-  background-color: hsl(var(--console-bg));
-  /* The body paints graph paper. This is the layer that stops it. */
-  background-image: none;
-  color: hsl(var(--console-text));
 }
 
 @layer components {
   /*
-   * A panel. Border plus a one-pixel inner highlight along the top edge — the
-   * cheapest way to make a flat dark rectangle read as a raised surface rather
-   * than a hole, and what almost every dark app interface is doing when it
-   * looks "lit".
+   * A panel.
+   *
+   * Light and dark lift it by opposite means. On paper the ground is tinted and
+   * the panel is pure white, so a hairline and the faintest drop shadow finish
+   * a separation the colours have already made. In the dark the panel is
+   * *lighter* than the ground, and a one-pixel inner highlight along the top
+   * edge is what stops a flat rectangle reading as a hole — that highlight is
+   * pure white at 4%, which on paper would be invisible, and the 40%-black
+   * shadow under it would be a smudge.
    */
   .console-theme .c-panel {
     background-color: hsl(var(--card));
     border: 1px solid hsl(var(--border));
     border-radius: var(--radius-card);
+    box-shadow: 0 1px 2px hsl(222 20% 11% / 0.05);
+  }
+
+  .dark .console-theme .c-panel {
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.04),
       0 1px 2px hsl(0 0% 0% / 0.4);
@@ -918,15 +984,16 @@
 
   .console-theme .c-row:hover,
   .console-theme .c-row:focus-within {
-    border-color: hsl(var(--primary) / 0.45);
-    background-color: hsl(var(--muted) / 0.6);
+    border-color: hsl(var(--foreground) / 0.24);
+    background-color: hsl(var(--console-hover));
   }
 
   /*
    * The current section. A filled pill rather than an underline, because a
-   * vertical list has no baseline to underline against — and the accent stays
-   * out of the *text*: violet on a violet tint measures badly, so the fill
-   * carries the colour and the label stays plain.
+   * vertical list has no baseline to underline against. The fill is a surface
+   * step, not a tint of something — `--console-selected` and `--console-hover`
+   * are set per mode so the gap between "where I am" and "where the pointer is"
+   * survives inversion, which an alpha over an unknown ground does not.
    */
   .console-theme .c-nav-item {
     border-radius: var(--radius-control);
@@ -936,18 +1003,23 @@
   }
 
   .console-theme .c-nav-item[aria-current] {
-    background-color: hsl(var(--primary) / 0.16);
+    background-color: hsl(var(--console-selected));
     color: hsl(var(--foreground));
   }
 
   .console-theme .c-nav-item:not([aria-current]):hover {
-    background-color: hsl(var(--muted) / 0.7);
+    background-color: hsl(var(--console-hover));
     color: hsl(var(--foreground));
   }
 
   /*
    * A state dot with a halo. Two pixels of colour say "live" faster than a word
    * does, and the halo is what stops it reading as dust on the screen.
+   *
+   * `--live` is the site's own token, inherited from <html> rather than
+   * redefined here, so the console and the public site cannot end up with two
+   * different greens for the same claim. It is already tuned per mode: darker
+   * on paper, because mid-green on white measures badly.
    */
   .console-theme .c-dot {
     width: 0.4375rem;
@@ -957,30 +1029,59 @@
   }
 
   .console-theme .c-dot-live {
-    background-color: hsl(152 65% 55%);
-    box-shadow: 0 0 0 3px hsl(152 65% 55% / 0.16);
+    background-color: hsl(var(--live));
+    box-shadow: 0 0 0 3px hsl(var(--live) / 0.18);
   }
 
-  /* Dim, not amber: amber is the accent now, and a draft is a thing that is
-     off, not a thing that is highlighted. */
+  /* A draft is a thing that is off, not a thing that is highlighted. */
   .console-theme .c-dot-draft {
-    background-color: hsl(225 12% 55%);
-    box-shadow: 0 0 0 3px hsl(225 12% 55% / 0.16);
+    background-color: hsl(var(--console-dim));
+    box-shadow: 0 0 0 3px hsl(var(--console-dim) / 0.18);
   }
 
   /*
-   * A wash of accent behind the top of the sidebar. One soft light source, so
-   * the shell has a direction rather than being uniformly flat — the single
-   * decorative move in here, and the reason the column does not look like a
-   * grey box.
+   * The form's action bar, pinned near the bottom of the viewport.
+   *
+   * Translucent and blurred because it sits *over* the fields rather than after
+   * them — it has to read as a layer above the page, and an opaque plate
+   * floating mid-form reads as a rendering fault. The shadow is what lifts it;
+   * in light that is a soft cast downward, in dark a deeper one plus the same
+   * top highlight the panels use, because a dark translucent surface with no
+   * edge disappears into whatever scrolls under it.
    */
-  .console-theme .c-sidebar {
-    background-image: radial-gradient(
-      22rem 18rem at 0% 0%,
-      hsl(var(--primary) / 0.1),
-      transparent 70%
-    );
+  .console-theme .c-actionbar {
+    background-color: hsl(var(--card) / 0.92);
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-card);
+    box-shadow:
+      0 8px 24px hsl(222 20% 11% / 0.1),
+      0 2px 6px hsl(222 20% 11% / 0.06);
+    backdrop-filter: blur(8px);
   }
+
+  .dark .console-theme .c-actionbar {
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.05),
+      0 8px 24px hsl(0 0% 0% / 0.5);
+  }
+}
+
+/*
+ * Live or draft, in the action bar, without a hook.
+ *
+ * The publish checkbox is a real checkbox inside the same form, so the DOM
+ * already holds the answer and `:has()` can read it. The alternative is
+ * `useState` on the form, an onChange handler, and a second copy of a value the
+ * browser is tracking anyway — three moving parts to restate a fact, and the
+ * failure mode is a bar that disagrees with the tickbox above it.
+ *
+ * Declared outside `@layer components` on purpose: these have to beat the
+ * `inline-flex` the elements carry as utilities, and a component-layer rule
+ * loses to a utility no matter how specific it is.
+ */
+.console-theme form:has(#published:checked) .c-when-draft,
+.console-theme form:not(:has(#published:checked)) .c-when-published {
+  display: none;
 }
 
 /*
