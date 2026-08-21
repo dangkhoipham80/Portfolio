@@ -19,6 +19,57 @@ def _no_null_list(value):
 StringList = Annotated[List[str], BeforeValidator(_no_null_list)]
 
 
+class ProjectLink(BaseModel):
+    """One labelled link beyond source and live.
+
+    The label is required and short: an unlabelled link renders as a button with
+    nothing written on it, and the detail page lays these out in a row where a
+    sentence-long label would break the line.
+    """
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    label: Annotated[str, StringConstraints(min_length=1, max_length=60)]
+    url: Annotated[str, StringConstraints(min_length=1, max_length=500)]
+
+
+LinkList = Annotated[List[ProjectLink], BeforeValidator(_no_null_list)]
+
+
+class GalleryImage(BaseModel):
+    """A gallery entry as the API *returns* it, which is not how it is stored.
+
+    The column holds bare URL strings. Alt text and dimensions are looked up
+    from ``media_assets`` on the way out, so a consumer can render the image
+    accessibly and without reflow while the project row stays a plain list of
+    strings and a description still lives in exactly one place.
+
+    Everything but the URL is optional, because a gallery may reference an image
+    the library has never seen — one pasted in by hand, or uploaded before the
+    library existed. It renders; it just has nothing to say about itself.
+    """
+
+    url: str
+    alt: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+
+
+def _as_gallery(value):
+    """Accept the stored form (a list of URLs) or the resolved form (objects).
+
+    Reading straight off the ORM row gives strings; the presenter in
+    endpoints/projects.py replaces them with resolved objects. Both have to
+    validate, or the same schema could not describe the column and the response.
+    """
+    if value is None:
+        return []
+    return [{"url": item} if isinstance(item, str) else item for item in value]
+
+
+GalleryList = Annotated[List[GalleryImage], BeforeValidator(_as_gallery)]
+
+
 # Project Schemas
 class ProjectBase(BaseModel):
     title: str
@@ -30,6 +81,7 @@ class ProjectBase(BaseModel):
     technologies: StringList = []
     features: StringList = []
     challenges: StringList = []
+    links: LinkList = []
     started_on: Optional[date] = None
     ended_on: Optional[date] = None
     status: ProjectStatus = ProjectStatus.COMPLETED
@@ -40,6 +92,10 @@ class ProjectBase(BaseModel):
 class ProjectCreate(ProjectBase):
     # Optional on create: left out, it is derived from the title.
     slug: Optional[str] = None
+    # Written as bare URLs, unlike the response — see GalleryImage. Accepting
+    # objects here as well would invite a client to send alt text, which this
+    # table has no column for and would silently drop.
+    gallery: StringList = []
 
 class ProjectUpdate(BaseModel):
     title: Optional[str] = None
@@ -51,6 +107,8 @@ class ProjectUpdate(BaseModel):
     technologies: Optional[List[str]] = None
     features: Optional[List[str]] = None
     challenges: Optional[List[str]] = None
+    gallery: Optional[List[str]] = None
+    links: Optional[List[ProjectLink]] = None
     started_on: Optional[date] = None
     ended_on: Optional[date] = None
     status: Optional[ProjectStatus] = None
@@ -63,6 +121,7 @@ class Project(ProjectBase):
 
     id: int
     slug: str
+    gallery: GalleryList = []
     created_at: datetime
     updated_at: Optional[datetime] = None
 

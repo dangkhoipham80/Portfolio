@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -68,6 +68,22 @@ class MediaService:
 
     def get(self, asset_id: int) -> Optional[MediaAsset]:
         return self.db.query(MediaAsset).filter(MediaAsset.id == asset_id).first()
+
+    def index_by_url(self, urls: Iterable[str]) -> Dict[str, MediaAsset]:
+        """Look up many assets at once, keyed by URL.
+
+        One ``IN`` query for a whole page of projects rather than one per image,
+        which is the difference between a list endpoint doing one extra query
+        and doing thirty. Returns only what it finds: a gallery may reference a
+        URL that was pasted in by hand or uploaded before this table existed,
+        and that is not an error — the image renders, it just has no alt text.
+        """
+        wanted = {url for url in urls if url}
+        if not wanted:
+            return {}
+
+        rows = self.db.query(MediaAsset).filter(MediaAsset.url.in_(wanted)).all()
+        return {row.url: row for row in rows}
 
     def update(self, asset_id: int, payload: MediaAssetUpdate) -> Optional[MediaAsset]:
         asset = self.get(asset_id)

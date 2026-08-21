@@ -127,8 +127,43 @@ async function getJson<T>(
   return data;
 }
 
+/**
+ * Fill in list fields the API may not be sending yet.
+ *
+ * `gallery` and `links` arrived after this app could already be deployed
+ * without them, and the two halves ship independently — Vercel on push, Fly on
+ * a change under apps/api. So there is a window, every time, where the web app
+ * asks for a field the API has never heard of and gets `undefined` back.
+ *
+ * The type says `ProjectLink[]`, and `getJson` only checks that the body is an
+ * object — it does not look inside. Without this, `project.links.length` on the
+ * detail page throws during render and the project 500s, which is precisely the
+ * failure the fallbacks in this file exist to prevent. It is also invisible
+ * locally, because local development points at whichever API you are running.
+ *
+ * Normalising here rather than guarding at each use keeps the type honest:
+ * every consumer can trust the array exists because this is where it is made
+ * to.
+ */
+function withLists(project: Project): Project {
+  return {
+    ...project,
+    technologies: project.technologies ?? [],
+    features: project.features ?? [],
+    challenges: project.challenges ?? [],
+    gallery: project.gallery ?? [],
+    links: project.links ?? [],
+  };
+}
+
 export async function getProjects(): Promise<Project[]> {
-  return getJson<Project[]>("/projects/", [], isList, CONTENT_TAGS.projects);
+  const projects = await getJson<Project[]>(
+    "/projects/",
+    [],
+    isList,
+    CONTENT_TAGS.projects,
+  );
+  return projects.map(withLists);
 }
 
 /**
@@ -140,16 +175,18 @@ export async function getProjects(): Promise<Project[]> {
  * nothing to say about reachability.
  */
 export async function readProjects(): Promise<Read<Project[]>> {
-  return readJson<Project[]>("/projects/", [], isList, CONTENT_TAGS.projects);
+  const read = await readJson<Project[]>("/projects/", [], isList, CONTENT_TAGS.projects);
+  return { ...read, data: read.data.map(withLists) };
 }
 
 export async function getProject(slug: string): Promise<Project | null> {
-  return getJson<Project | null>(
+  const project = await getJson<Project | null>(
     `/projects/slug/${encodeURIComponent(slug)}`,
     null,
     isRecord,
     CONTENT_TAGS.projects,
   );
+  return project && withLists(project);
 }
 
 export async function getSkills(): Promise<Skill[]> {
