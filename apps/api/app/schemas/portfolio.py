@@ -231,3 +231,51 @@ class Contact(ContactBase):
     read: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+# Media Schemas
+class MediaAssetBase(BaseModel):
+    alt: Optional[Annotated[str, StringConstraints(max_length=500)]] = None
+
+
+class MediaAssetCreate(MediaAssetBase):
+    """What the console posts once Blob has taken the bytes.
+
+    Every field but the URL is optional because every field but the URL is
+    something the browser had to measure or was told by the upload, and a
+    registration that fails because an image's dimensions could not be read
+    would leave exactly the orphan this table exists to prevent. A row that
+    knows only where the object is still beats no row.
+    """
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    url: Annotated[str, StringConstraints(min_length=1, max_length=1000)]
+    pathname: Optional[Annotated[str, StringConstraints(max_length=1000)]] = None
+    mime: Optional[Annotated[str, StringConstraints(max_length=100)]] = None
+    size_bytes: Optional[int] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+
+
+class MediaAssetUpdate(MediaAssetBase):
+    """Alt text and nothing else.
+
+    The URL, size and dimensions are facts about an object in a bucket; they are
+    not editable, and offering to edit them would be offering to make this table
+    disagree with Blob. Alt text is the one field a person writes.
+    """
+
+
+class MediaAsset(MediaAssetBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    url: str
+    pathname: Optional[str] = None
+    mime: Optional[str] = None
+    size_bytes: Optional[int] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None

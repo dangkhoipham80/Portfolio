@@ -5,6 +5,7 @@ from app.api.v1.endpoints import (
     career,
     certificates,
     contacts,
+    media,
     posts,
     projects,
     skills,
@@ -24,3 +25,6 @@ api_router.include_router(certificates.router, prefix="/certificates", tags=["ce
 api_router.include_router(career.router, prefix="/career", tags=["career"])
 api_router.include_router(posts.router, prefix="/posts", tags=["blog"])
 api_router.include_router(contacts.router, prefix="/contacts", tags=["contacts"])
+# Admin-only throughout, reads included — the router carries require_admin
+# itself rather than repeating it per route. See endpoints/media.py.
+api_router.include_router(media.router, prefix="/media", tags=["media"])

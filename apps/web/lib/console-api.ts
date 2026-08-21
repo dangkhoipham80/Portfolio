@@ -280,3 +280,86 @@ export async function deleteContent(
   const response = await call(path, { method: "DELETE", token });
   return toResult<unknown>(response, path);
 }
+
+/**
+ * The image library.
+ *
+ * Admin-only on the API including the reads, unlike the content routes — an
+ * asset index lists things that were uploaded and never used, so it is not
+ * public the way a project is. See apps/api/app/api/v1/endpoints/media.py.
+ */
+export type MediaAsset = {
+  id: number;
+  url: string;
+  pathname: string | null;
+  alt: string | null;
+  mime: string | null;
+  size_bytes: number | null;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+};
+
+export async function fetchMedia(
+  token: string,
+  options: { q?: string; limit?: number } = {},
+): Promise<ApiResult<MediaAsset[]>> {
+  const params = new URLSearchParams();
+  if (options.q) params.set("q", options.q);
+  if (options.limit) params.set("limit", String(options.limit));
+
+  const path = `/media/${params.size > 0 ? `?${params}` : ""}`;
+  const response = await call(path, { token });
+  const result = await toResult<MediaAsset[]>(response, path);
+
+  // Same reasoning as fetchContacts: an object where a list belongs throws on
+  // .map() during render, which is a 500 produced by a successful request.
+  if (result.ok && !Array.isArray(result.data)) {
+    console.error(`[console] ${path} returned 200 with a non-list body`);
+    return { ok: false, reason: "error" };
+  }
+
+  return result;
+}
+
+/** Record an upload that has already reached Blob. Idempotent on the URL. */
+export async function registerMedia(
+  token: string,
+  asset: {
+    url: string;
+    pathname?: string;
+    mime?: string;
+    size_bytes?: number;
+    width?: number;
+    height?: number;
+  },
+): Promise<ApiResult<MediaAsset>> {
+  const response = await call("/media/", {
+    method: "POST",
+    token,
+    body: JSON.stringify(asset),
+  });
+  return toResult<MediaAsset>(response, "/media/");
+}
+
+/** Alt text is the only editable field; everything else describes the object. */
+export async function updateMediaAlt(
+  token: string,
+  id: number,
+  alt: string | null,
+): Promise<ApiResult<MediaAsset>> {
+  const path = `/media/${id}`;
+  const response = await call(path, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify({ alt }),
+  });
+  return toResult<MediaAsset>(response, path);
+}
+
+/** Forget an asset. The object stays in Blob; anything using the URL keeps working. */
+export async function deleteMedia(token: string, id: number): Promise<ApiResult<unknown>> {
+  const path = `/media/${id}`;
+  const response = await call(path, { method: "DELETE", token });
+  return toResult<unknown>(response, path);
+}

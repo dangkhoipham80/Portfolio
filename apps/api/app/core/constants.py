@@ -38,6 +38,8 @@ class ErrorMessages:
     # Blog related
     POST_NOT_FOUND = "Post not found"
 
+    MEDIA_NOT_FOUND = "Media asset not found"
+
     # Role & Permission related
     ROLE_NOT_FOUND = "Role not found"
     PERMISSION_NOT_FOUND = "Permission not found"
@@ -65,3 +67,4 @@ class SuccessMessages:
     CERTIFICATE_DELETED = "Certificate deleted successfully"
     CAREER_ENTRY_DELETED = "Career entry deleted successfully"
     POST_DELETED = "Post deleted successfully"
+    MEDIA_DELETED = "Media asset deleted successfully"
