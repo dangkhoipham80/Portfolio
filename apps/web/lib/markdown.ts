@@ -47,7 +47,7 @@ const LANGUAGE_CLASS = /^language-([a-z0-9+#.-]{1,16})$/i;
  * again; and putting this last means the value is derived from a className the
  * sanitiser has already vetted, then matched against the pattern above.
  */
-function labelCodeBlocks() {
+export function labelCodeBlocks() {
   return (tree: Root) => {
     visit(tree, "element", (node: Element) => {
       if (node.tagName !== "pre") return;
@@ -144,7 +144,7 @@ export const shikiOptions: RehypeShikiOptions = {
  * rule is applied identically. A mismatch would not fail anywhere; the contents
  * list would simply scroll to nothing, which is why it is worth stating.
  */
-function anchorHeadings() {
+export function anchorHeadings() {
   return (tree: Root) => {
     const seen = new Map<string, number>();
 

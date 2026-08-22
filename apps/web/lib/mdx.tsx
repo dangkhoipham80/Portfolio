@@ -3,11 +3,15 @@ import "server-only";
 import { compile, run } from "@mdx-js/mdx";
 import type { ReactNode } from "react";
 import * as runtime from "react/jsx-runtime";
-import rehypeSanitize from "rehype-sanitize";
 
 import { MDX_COMPONENTS } from "@/components/mdx-blocks";
 
-import { renderMarkdown, sanitiseSchema, shikiOptions } from "./markdown";
+import {
+  anchorHeadings,
+  labelCodeBlocks,
+  renderMarkdown,
+  shikiOptions,
+} from "./markdown";
 import { messageFor, rejectExecutableMdx } from "./mdx-guard";
 
 /**
@@ -92,6 +96,33 @@ async function renderedMarkdown(body: string): Promise<ReactNode> {
   return <div className={PROSE} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+/**
+ * Why `rehype-sanitize` is absent here, when the Markdown path depends on it.
+ *
+ * Because it silently deletes every component. `hast-util-sanitize` keeps nodes
+ * of type `element` and drops everything it does not recognise, and an MDX
+ * component is an `mdxJsxFlowElement` — so it went, without an error, without a
+ * fallback, leaving the prose in place and the callouts, figures and embeds
+ * simply not there. This file used to carry a comment asserting the opposite,
+ * which was an assumption nobody had run. A post rendered on the real page is
+ * what found it.
+ *
+ * What the sanitiser was doing for this path, and what covers it now:
+ *
+ * * **Raw HTML.** Impossible in MDX — every angle bracket is JSX, and the guard
+ *   refuses any JSX name outside the four components, lowercase ones included.
+ *   `<script>` is rejected by name with a message the author can act on.
+ * * **Inline event handlers and arbitrary attributes.** Same answer: they can
+ *   only arrive on JSX, and the guard allows one attribute shape — a name with
+ *   a plain string value.
+ * * **`javascript:` and `data:` URLs in Markdown links.** This one is real and
+ *   is *not* JSX, so the guard now checks it directly. See `SAFE_PROTOCOLS`.
+ *
+ * The remaining difference from the Markdown path is that a component's own
+ * attributes are not schema-checked. They are plain strings by then, and each
+ * component decides what to do with them — `Video` builds its URL from a
+ * provider key and an id matched against a pattern rather than accepting one.
+ */
 async function renderMdx(body: string): Promise<ReactNode> {
   const compiled = await compile(body, {
     outputFormat: "function-body",
@@ -102,12 +133,13 @@ async function renderMdx(body: string): Promise<ReactNode> {
       (await import("remark-gfm")).default,
     ],
     rehypePlugins: [
-      // The same sanitiser and schema as the Markdown path. It runs over the
-      // Markdown-derived half of the tree; the component tags are MDX nodes it
-      // passes through, which is why the guard's allow-list is what covers
-      // those and not this.
-      [rehypeSanitize, sanitiseSchema],
       [(await import("@shikijs/rehype")).default, shikiOptions],
+      // Both of these were missing, which is why an MDX post had no `data-lang`
+      // labels on its fences and no ids on its headings — so its table of
+      // contents linked to anchors that did not exist. Nothing failed; the
+      // contents list just scrolled nowhere.
+      labelCodeBlocks,
+      anchorHeadings,
     ],
   });
 

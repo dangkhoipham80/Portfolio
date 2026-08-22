@@ -63,6 +63,53 @@ describe("rejecting executable MDX", () => {
   });
 });
 
+/**
+ * The MDX pipeline does not run `rehype-sanitize` — it deletes every component,
+ * silently, because an MDX node is not an `element`. See lib/mdx.tsx.
+ *
+ * Almost everything that sanitiser was doing is covered by the JSX rules above:
+ * MDX has no raw HTML, so `<script>` and `<img onerror>` can only arrive as JSX
+ * and are refused by name. The exception is a URL in ordinary Markdown, which is
+ * not JSX and which nothing else looks at — so these are the cases that would be
+ * a working XSS in a body that had passed every other check.
+ */
+describe("rejecting dangerous URLs", () => {
+  it("refuses a javascript: link", async () => {
+    expect(await validateMdx("[click me](javascript:alert(1))")).toContain("scheme");
+  });
+
+  it("refuses a javascript: image", async () => {
+    expect(await validateMdx("![x](javascript:alert(1))")).toContain("scheme");
+  });
+
+  it("refuses a data: URL, which can carry a scripted SVG", async () => {
+    expect(await validateMdx("[x](data:text/html;base64,PHNjcmlwdD4=)")).toContain("scheme");
+  });
+
+  it("refuses it in a reference definition, not just an inline link", async () => {
+    expect(await validateMdx("[x][ref]\n\n[ref]: javascript:alert(1)\n")).toContain("scheme");
+  });
+
+  it("is not fooled by case or leading space", async () => {
+    expect(await validateMdx("[x](  JaVaScRiPt:alert(1))")).toContain("scheme");
+  });
+
+  it("allows http, https and mailto", async () => {
+    expect(await validateMdx("[a](https://example.com)")).toBeNull();
+    expect(await validateMdx("[a](http://example.com)")).toBeNull();
+    expect(await validateMdx("[a](mailto:someone@example.com)")).toBeNull();
+  });
+
+  it("allows a relative link, a root-relative one and a fragment", async () => {
+    // No scheme to check. `new URL` throws on all three, so they are settled
+    // before any parsing is attempted.
+    expect(await validateMdx("[a](/blog/x)")).toBeNull();
+    expect(await validateMdx("[a](./sibling)")).toBeNull();
+    expect(await validateMdx("[a](#a-section)")).toBeNull();
+    expect(await validateMdx("[a](relative/path)")).toBeNull();
+  });
+});
+
 describe("MDX that is allowed", () => {
   it("accepts a body using one of the site's components", async () => {
     const problem = await validateMdx(

@@ -55,6 +55,45 @@ const EXECUTABLE_NODES = new Set([
 export class MdxRejected extends Error {}
 
 /**
+ * Schemes a link or an image in a post body may use.
+ *
+ * The Markdown pipeline gets this from `rehype-sanitize`. The MDX pipeline
+ * cannot — see lib/mdx.tsx — so the same job is done here, on the one thing
+ * that still needs it.
+ *
+ * Everything else is refused, `javascript:` above all: `[click](javascript:…)`
+ * is a working XSS in a body that has passed every other check, because it is
+ * ordinary Markdown rather than JSX and nothing above this looks at it.
+ * `data:` is refused too — a data URL can carry an SVG, and an SVG can carry a
+ * script.
+ *
+ * A URL with no scheme at all is fine and common: `/blog/x`, `#section`,
+ * `./relative`.
+ */
+const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+
+/** Nodes carrying a URL that ends up in the document. */
+const URL_NODES = new Set(["link", "image", "definition"]);
+
+function urlIsSafe(url: unknown): boolean {
+  if (typeof url !== "string") return true;
+
+  const trimmed = url.trim();
+  if (trimmed === "") return true;
+
+  // Relative, root-relative, protocol-relative or a fragment — no scheme to
+  // check. `new URL` would throw on all of them, so they are settled first.
+  if (/^[/#.?]/.test(trimmed)) return true;
+
+  // A scheme is a letter followed by letters, digits, `+`, `-` or `.`, then a
+  // colon. Anything without one is a relative path such as `foo/bar`.
+  const scheme = /^([a-z][a-z0-9+\-.]*):/i.exec(trimmed);
+  if (!scheme) return true;
+
+  return SAFE_PROTOCOLS.has(scheme[1].toLowerCase() + ":");
+}
+
+/**
  * Refuse anything executable, and any tag that is not one of ours.
  *
  * A remark plugin rather than a check on the source text, because the source
@@ -66,6 +105,16 @@ export class MdxRejected extends Error {}
 export function rejectExecutableMdx() {
   return (tree: Node) => {
     visit(tree, (node: Node) => {
+      if (URL_NODES.has(node.type)) {
+        const url = (node as { url?: unknown }).url;
+        if (!urlIsSafe(url)) {
+          throw new MdxRejected(
+            `The link to "${String(url).slice(0, 60)}" uses a scheme that is not ` +
+              "allowed. Use http, https or mailto.",
+          );
+        }
+      }
+
       if (EXECUTABLE_NODES.has(node.type)) {
         throw new MdxRejected(
           "This post uses JavaScript in MDX — an import, an export, or a {…} " +
