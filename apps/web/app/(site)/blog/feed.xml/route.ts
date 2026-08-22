@@ -52,7 +52,9 @@ export async function GET() {
         `      <guid isPermaLink="true">${escapeXml(url)}</guid>`,
         `      <description>${escapeXml(post.excerpt ?? summarise(post.body))}</description>`,
         published ? `      <pubDate>${published}</pubDate>` : null,
-        ...post.tags.map((tag) => `      <category>${escapeXml(tag)}</category>`),
+        // The display name, not the slug: a category is read by a person in a
+        // feed reader, so "Next.js" rather than "next-js".
+        ...post.tags.map((tag) => `      <category>${escapeXml(tag.name)}</category>`),
         "    </item>",
       ]
         .filter(Boolean)

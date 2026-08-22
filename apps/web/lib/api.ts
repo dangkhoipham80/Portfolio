@@ -1,6 +1,16 @@
 import "server-only";
 
-import type { CareerEntry, Certificate, Post, Project, Skill } from "./types";
+import type {
+  CareerEntry,
+  Certificate,
+  Post,
+  PostComment,
+  Project,
+  Series,
+  Skill,
+  Tag,
+  TagRef,
+} from "./types";
 
 /**
  * Server-side reader for the content API.
@@ -61,6 +71,12 @@ export const CONTENT_TAGS = {
   certificates: "certificates",
   career: "career",
   posts: "posts",
+  // Tags and series are their own content types in the console, but every
+  // public page that reads one also reads posts — a facet list is meaningless
+  // without the posts it counts. They keep their own tag so the console can
+  // invalidate a rename without dropping every post page as well.
+  blogTags: "blog-tags",
+  series: "series",
 } as const;
 
 export type ContentTag = (typeof CONTENT_TAGS)[keyof typeof CONTENT_TAGS];
@@ -77,19 +93,31 @@ export type ContentTag = (typeof CONTENT_TAGS)[keyof typeof CONTENT_TAGS];
  */
 export type Read<T> = { data: T; ok: boolean };
 
+/**
+ * A read that must not be served from cache.
+ *
+ * Comments are the only thing here that changes without the post changing —
+ * approving one in the console has to show up on the next load, and a five
+ * minute hold would make the approval look like it did nothing.
+ */
+type ReadOptions = { fresh?: boolean };
+
 async function readJson<T>(
   path: string,
   fallback: T,
   isExpectedShape: ShapeCheck,
   tag: ContentTag,
+  options: ReadOptions = {},
 ): Promise<Read<T>> {
   const url = `${API_URL}/api/v1${path}`;
 
   try {
     const response = await fetch(url, {
-      // `revalidate` is still the backstop for a change made anywhere but the
-      // console — the seed script, or psql.
-      next: { revalidate: REVALIDATE_SECONDS, tags: [tag] },
+      ...(options.fresh
+        ? { cache: "no-store" as const }
+        : // `revalidate` is still the backstop for a change made anywhere but
+          // the console — the seed script, or psql.
+          { next: { revalidate: REVALIDATE_SECONDS, tags: [tag] } }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { Accept: "application/json" },
     });
@@ -122,8 +150,9 @@ async function getJson<T>(
   fallback: T,
   isExpectedShape: ShapeCheck,
   tag: ContentTag,
+  options: ReadOptions = {},
 ): Promise<T> {
-  const { data } = await readJson(path, fallback, isExpectedShape, tag);
+  const { data } = await readJson(path, fallback, isExpectedShape, tag, options);
   return data;
 }
 
@@ -202,23 +231,156 @@ export async function getCareerEntries(): Promise<CareerEntry[]> {
 }
 
 /**
+ * Fill in the post fields the API may not be sending yet, and normalise tags.
+ *
+ * Same job as `withLists` above, and the same reason: the two halves deploy
+ * independently, so there is a window on every release where the web app asks
+ * for a field the API has never heard of. `post.tags.map()` on `undefined`
+ * throws during render, which 500s the page the fallbacks exist to keep up.
+ *
+ * The tag normalisation is the interesting half. Tags used to be a list of
+ * plain strings and are now `{id, slug, name}` objects. During the window
+ * between deploying the API and deploying this app — and in the other
+ * direction, if a rollback puts the old API back — one side sends strings and
+ * the other expects objects. Accepting both here means the blog degrades to
+ * "tags that link to the right place, derived from the name" rather than
+ * rendering `[object Object]` across the index.
+ */
+function withPostLists(post: Post): Post {
+  const raw = (post.tags ?? []) as unknown as (TagRef | string)[];
+
+  return {
+    ...post,
+    format: post.format ?? "markdown",
+    series: post.series ?? null,
+    series_order: post.series_order ?? 0,
+    tags: raw.map((tag, index) =>
+      typeof tag === "string"
+        ? // Negative ids so a synthesised ref can never collide with a real
+          // row's, in case something downstream keys on it.
+          { id: -1 - index, slug: slugishly(tag), name: tag }
+        : tag,
+    ),
+  };
+}
+
+/**
+ * The old API's tag string, reduced to something usable as a URL segment.
+ *
+ * Deliberately not a copy of the API's `slugify`: it does not need to agree
+ * with it, because it only ever runs when the API is old enough not to be
+ * sending slugs at all. It exists so a link goes *somewhere* during a deploy
+ * rather than being built from a name with spaces in it.
+ */
+function slugishly(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
  * Published posts, newest first — the API decides the order, not the caller.
  *
  * No tag parameter, though the API takes one. The index has to know every tag
  * that exists in order to draw the facets, and a response already filtered to
  * one tag cannot tell it about the others; so the page fetches the whole list
  * once and narrows it itself. One request, complete facets, and the filtered
- * view costs no second round trip.
+ * view, the search and the pagination all cost no second round trip.
  */
 export async function getPosts(): Promise<Post[]> {
-  return getJson<Post[]>("/posts/", [], isList, CONTENT_TAGS.posts);
+  const posts = await getJson<Post[]>("/posts/", [], isList, CONTENT_TAGS.posts);
+  return posts.map(withPostLists);
 }
 
 export async function getPost(slug: string): Promise<Post | null> {
-  return getJson<Post | null>(
+  const post = await getJson<Post | null>(
     `/posts/slug/${encodeURIComponent(slug)}`,
     null,
     isRecord,
     CONTENT_TAGS.posts,
   );
+  return post && withPostLists(post);
 }
+
+/**
+ * Every tag, with the number of published posts under each.
+ *
+ * Empty ones are dropped here rather than by each caller: the API includes them
+ * because the console needs to offer a tag you have just created and not yet
+ * used, and a facet on the public site that leads to an empty list is worse
+ * than no facet at all.
+ */
+export async function getTags(): Promise<Tag[]> {
+  const tags = await getJson<Tag[]>("/tags/", [], isList, CONTENT_TAGS.blogTags);
+  return tags.filter((tag) => tag.post_count > 0);
+}
+
+/** One tag, for its own page. Null covers both a 404 and an outage. */
+export async function getTag(slug: string): Promise<Tag | null> {
+  return getJson<Tag | null>(
+    `/tags/slug/${encodeURIComponent(slug)}`,
+    null,
+    isRecord,
+    CONTENT_TAGS.blogTags,
+  );
+}
+
+export async function getSeriesList(): Promise<Series[]> {
+  return getJson<Series[]>("/series/", [], isList, CONTENT_TAGS.series);
+}
+
+export async function getSeries(slug: string): Promise<Series | null> {
+  return getJson<Series | null>(
+    `/series/slug/${encodeURIComponent(slug)}`,
+    null,
+    isRecord,
+    CONTENT_TAGS.series,
+  );
+}
+
+/** A series' posts in reading order — oldest first, unlike every other listing. */
+export async function getSeriesPosts(slug: string): Promise<Post[]> {
+  const posts = await getJson<Post[]>(
+    `/series/slug/${encodeURIComponent(slug)}/posts`,
+    [],
+    isList,
+    CONTENT_TAGS.series,
+  );
+  return posts.map(withPostLists);
+}
+
+/**
+ * Approved comments on a post, oldest first.
+ *
+ * `no-store`, unlike every other read in this file. A comment approved in the
+ * console has to appear on the next load of the post, and the thread is not
+ * something a page is prerendered from — it is the one part of a post that
+ * changes without the post changing. Caching it for five minutes would mean an
+ * approval that looks like it did nothing.
+ */
+export async function getPostComments(postId: number): Promise<PostComment[]> {
+  return getJson<PostComment[]>(
+    `/posts/${postId}/comments`,
+    [],
+    isList,
+    CONTENT_TAGS.posts,
+    { fresh: true },
+  );
+}
+
+/*
+ * There is deliberately no rating reader here.
+ *
+ * A rating response carries `mine` — this visitor's own standing vote — and
+ * every read in this module is either cached or, at best, made with the Next
+ * server's own identity. Both are wrong for it: a cached entry would show one
+ * reader another reader's choice, and an uncached one would still ask the API
+ * "what did *this server* vote?", because the API keys a visitor on the address
+ * and user agent of whoever called it. Proxied through here, that is always us.
+ *
+ * So ratings live in lib/engagement.ts, which forwards the visitor's own
+ * headers — the same thing app/actions/contact.ts already does so the API rate
+ * limits the right person.
+ */

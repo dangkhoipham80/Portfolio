@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { plainText, readingMinutes, renderMarkdown, summarise } from "./markdown";
+import { headingsOf, plainText, readingMinutes, renderMarkdown, summarise } from "./markdown";
 
 /**
  * The output of `renderMarkdown` goes straight into `dangerouslySetInnerHTML`.
@@ -55,9 +55,36 @@ describe("rendering", () => {
   it("renders headings, emphasis and links", async () => {
     const html = await renderMarkdown("## Heading\n\nSome *emphasis* and [a link](/blog).");
 
-    expect(html).toContain("<h2>Heading</h2>");
+    expect(html).toContain(">Heading</h2>");
     expect(html).toContain("<em>emphasis</em>");
     expect(html).toContain('<a href="/blog">a link</a>');
+  });
+
+  it("gives headings the ids the table of contents links to", async () => {
+    const html = await renderMarkdown("## The `format` column\n");
+
+    expect(html).toContain('id="the-format-column"');
+  });
+
+  it("survives the sanitiser, which does not allow id by default", async () => {
+    // `anchorHeadings` runs after `rehypeSanitize`, but the schema still has to
+    // permit `id` — the sanitiser would otherwise strip it on some future
+    // reordering and the contents list would scroll to nothing, silently.
+    const html = await renderMarkdown("## Kept\n");
+
+    expect(html).toMatch(/<h2 id="kept">/);
+  });
+
+  it("agrees with headingsOf about every anchor", async () => {
+    // The two derive ids from different inputs — this one from the rendered
+    // tree, `headingsOf` from the Markdown source — and nothing fails when they
+    // disagree. The contents list just stops working.
+    const source = "## Why\n\ntext\n\n### Cấu trúc\n\ntext\n\n## Why\n";
+    const html = await renderMarkdown(source);
+
+    for (const heading of headingsOf(source)) {
+      expect(html).toContain(`id="${heading.id}"`);
+    }
   });
 
   it("renders GitHub tables, which plain CommonMark does not", async () => {
