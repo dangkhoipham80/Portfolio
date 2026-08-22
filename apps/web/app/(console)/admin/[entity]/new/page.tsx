@@ -8,6 +8,7 @@ import { Container } from "@/components/ui/container";
 import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
 import { requireAdmin } from "@/lib/admin-guard";
 import { cn } from "@/lib/cn";
+import { choicesFor } from "@/lib/console-choices";
 import { entityFor, fieldsFor } from "@/lib/content-schema";
 
 export async function generateMetadata({
@@ -22,7 +23,11 @@ export default async function NewEntityPage({ params }: PageProps<"/admin/[entit
   const spec = entityFor(entity);
   if (!spec) notFound();
 
-  await requireAdmin(`/admin/${spec.key}/new`);
+  const { accessToken } = await requireAdmin(`/admin/${spec.key}/new`);
+
+  // Tags and series, for the fields whose options are content rather than
+  // schema. Empty for every type that has no such field.
+  const choices = await choicesFor(spec, accessToken);
 
   // Every field starts empty rather than at the API's defaults. A checkbox
   // pre-ticked as published would mean a slip of the mouse puts an unfinished
@@ -54,6 +59,7 @@ export default async function NewEntityPage({ params }: PageProps<"/admin/[entit
         // gets written or where.
         action={saveContent.bind(null, spec.key, null)}
         cancelHref={`/admin/${spec.key}`}
+        choices={choices}
       />
     </Container>
   );

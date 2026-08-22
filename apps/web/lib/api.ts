@@ -93,31 +93,19 @@ export type ContentTag = (typeof CONTENT_TAGS)[keyof typeof CONTENT_TAGS];
  */
 export type Read<T> = { data: T; ok: boolean };
 
-/**
- * A read that must not be served from cache.
- *
- * Comments are the only thing here that changes without the post changing —
- * approving one in the console has to show up on the next load, and a five
- * minute hold would make the approval look like it did nothing.
- */
-type ReadOptions = { fresh?: boolean };
-
 async function readJson<T>(
   path: string,
   fallback: T,
   isExpectedShape: ShapeCheck,
   tag: ContentTag,
-  options: ReadOptions = {},
 ): Promise<Read<T>> {
   const url = `${API_URL}/api/v1${path}`;
 
   try {
     const response = await fetch(url, {
-      ...(options.fresh
-        ? { cache: "no-store" as const }
-        : // `revalidate` is still the backstop for a change made anywhere but
-          // the console — the seed script, or psql.
-          { next: { revalidate: REVALIDATE_SECONDS, tags: [tag] } }),
+      // `revalidate` is still the backstop for a change made anywhere but the
+      // console — the seed script, or psql.
+      next: { revalidate: REVALIDATE_SECONDS, tags: [tag] },
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { Accept: "application/json" },
     });
@@ -150,9 +138,8 @@ async function getJson<T>(
   fallback: T,
   isExpectedShape: ShapeCheck,
   tag: ContentTag,
-  options: ReadOptions = {},
 ): Promise<T> {
-  const { data } = await readJson(path, fallback, isExpectedShape, tag, options);
+  const { data } = await readJson(path, fallback, isExpectedShape, tag);
   return data;
 }
 
@@ -354,20 +341,20 @@ export async function getSeriesPosts(slug: string): Promise<Post[]> {
 /**
  * Approved comments on a post, oldest first.
  *
- * `no-store`, unlike every other read in this file. A comment approved in the
- * console has to appear on the next load of the post, and the thread is not
- * something a page is prerendered from — it is the one part of a post that
- * changes without the post changing. Caching it for five minutes would mean an
- * approval that looks like it did nothing.
+ * Cached and tagged like every other read here, which is what keeps the post
+ * pages prerendered — a `no-store` fetch anywhere in a page opts the whole
+ * route into per-request rendering, and this one turned every post on the site
+ * from static HTML into a server render. The build output is where that showed
+ * up, not the browser.
+ *
+ * Freshness comes from the tag instead: approving a comment calls
+ * `updateTag(CONTENT_TAGS.posts)`, which expires the thread immediately. Same
+ * arrangement the console already uses for publishing a post, and the same
+ * reason it is a tag rather than a path — the action knows an id and nothing
+ * else, so it could not name the post's URL even if it wanted to.
  */
 export async function getPostComments(postId: number): Promise<PostComment[]> {
-  return getJson<PostComment[]>(
-    `/posts/${postId}/comments`,
-    [],
-    isList,
-    CONTENT_TAGS.posts,
-    { fresh: true },
-  );
+  return getJson<PostComment[]>(`/posts/${postId}/comments`, [], isList, CONTENT_TAGS.posts);
 }
 
 /*

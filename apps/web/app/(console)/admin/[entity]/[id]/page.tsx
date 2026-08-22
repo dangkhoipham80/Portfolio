@@ -10,6 +10,7 @@ import { Notice } from "@/components/ui/notice";
 import { requireAdmin } from "@/lib/admin-guard";
 import { cn } from "@/lib/cn";
 import { fetchContentItem } from "@/lib/console-api";
+import { choicesFor } from "@/lib/console-choices";
 import { entityFor, toValues } from "@/lib/content-schema";
 
 export async function generateMetadata({
@@ -28,7 +29,13 @@ export default async function EditEntityPage({ params }: PageProps<"/admin/[enti
   if (!Number.isInteger(numericId) || numericId <= 0) notFound();
 
   const { accessToken } = await requireAdmin(`/admin/${spec.key}/${id}`);
-  const result = await fetchContentItem(accessToken, spec.apiPath, numericId);
+  // Fetched together: the row and the options its form needs. Sequentially
+  // they would add their latencies for no reason — neither depends on the
+  // other, and `choicesFor` is a no-op for every type without such a field.
+  const [result, choices] = await Promise.all([
+    fetchContentItem(accessToken, spec.apiPath, numericId),
+    choicesFor(spec, accessToken),
+  ]);
 
   // A row that is not there is a 404, the same as a bad id. An outage is not:
   // telling the admin their post no longer exists because the backend is asleep
@@ -74,12 +81,30 @@ export default async function EditEntityPage({ params }: PageProps<"/admin/[enti
             </p>
           )}
 
+          {/*
+            Posts are the only type with a history, because they are the only
+            one whose body is worth recovering. Linked from here rather than
+            shown inline: it is a place you go when something has gone wrong,
+            not part of writing.
+          */}
+          {spec.key === "posts" && (
+            <p className="mt-2">
+              <Link
+                href={`/admin/posts/${numericId}/history`}
+                className={cn(eyebrowClasses, "transition-colors hover:text-primary")}
+              >
+                Version history →
+              </Link>
+            </p>
+          )}
+
           <EntityForm
             spec={spec}
             mode="edit"
             initial={toValues(spec, result.data)}
             action={saveContent.bind(null, spec.key, numericId)}
             cancelHref={`/admin/${spec.key}`}
+            choices={choices}
             slug={typeof result.data.slug === "string" ? result.data.slug : undefined}
           />
         </>

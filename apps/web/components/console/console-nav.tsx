@@ -28,6 +28,12 @@ import { ENTITIES } from "@/lib/content-schema";
  */
 const SECTIONS = [
   { href: "/admin", label: "Inbox" },
+  // Comments sit beside the inbox for the same reason: they arrive rather than
+  // being written here, and they are the other thing on this site that a
+  // stranger can put in front of the owner. Listed by hand rather than coming
+  // from ENTITIES because a comment is not a content type — there is no create
+  // screen and no form, only approve, reject and delete.
+  { href: "/admin/comments", label: "Comments" },
   ...ENTITIES.map((entity) => ({ href: `/admin/${entity.key}`, label: entity.plural })),
   { href: "/admin/media", label: "Media" },
 ];

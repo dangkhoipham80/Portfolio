@@ -63,7 +63,24 @@ export type FieldKind =
    * zipped back together by `readForm`, so it needs no JSON in a hidden input
    * and no client component to submit.
    */
-  | "links";
+  | "links"
+  /**
+   * Tag slugs, chosen from the tags that exist.
+   *
+   * Posted as one slug per line, exactly like `list` — the control is richer
+   * but the wire format is not. The API rejects a slug matching no row, which
+   * is the point: a tag has to be created before it can be attached, or the
+   * index grows a facet holding one post nobody meant to make. See
+   * components/console/tag-picker.tsx.
+   */
+  | "tags"
+  /**
+   * A series slug, or empty for "not in a series".
+   *
+   * A `select` whose options come from the API rather than from this file,
+   * which is the only reason it is its own kind.
+   */
+  | "series";
 
 export type FieldSpec = {
   name: string;
@@ -90,6 +107,15 @@ export type FieldSpec = {
    * published to it.
    */
   createOnly?: boolean;
+  /**
+   * The mirror of `createOnly`: shown when editing and hidden when creating.
+   *
+   * One field so far — a post's "what changed" note, which records the reason
+   * for an edit. On a create form there is no previous version for it to
+   * describe, so it would be a box asking what changed about a thing that did
+   * not exist.
+   */
+  editOnly?: boolean;
 };
 
 /**
@@ -303,19 +329,58 @@ const ENTITY_DEFINITIONS: Omit<EntitySpec, "fields">[] = [
           },
           SLUG,
           { name: "cover_image", label: "Cover image", kind: "image", maxLength: 500 },
-          { name: "tags", label: "Tags", kind: "list" },
+          {
+            name: "tag_slugs",
+            label: "Tags",
+            kind: "tags",
+            hint: "Pick from the tags that exist, or make one. A tag has to exist before it can be attached — that is what stops “api”, “API” and “apis” becoming three subjects on the index.",
+          },
         ],
       },
       {
         label: "Body",
         fields: [
           {
+            name: "format",
+            label: "Format",
+            kind: "select",
+            required: true,
+            span: "half",
+            options: [
+              { value: "markdown", label: "Markdown" },
+              { value: "mdx", label: "MDX" },
+            ],
+            hint: "MDX adds the site's own blocks — Callout, Figure, Video, Aside. It cannot run JavaScript.",
+          },
+          {
             name: "body",
             label: "Body",
             kind: "markdown",
             required: true,
             rows: 20,
-            hint: "Markdown. Rendered and sanitised on the server; raw HTML is dropped.",
+            hint: "Rendered and sanitised on the server; raw HTML is dropped. Press Preview to see exactly what the page will show.",
+          },
+          {
+            name: "revision_note",
+            label: "What changed",
+            kind: "text",
+            maxLength: 280,
+            editOnly: true,
+            hint: "Optional, and kept on the revision this save creates rather than on the post. Not shown publicly.",
+          },
+        ],
+      },
+      {
+        label: "Series",
+        hint: "An ordered run of posts. A post belongs to at most one — two would make “next” ambiguous.",
+        fields: [
+          { name: "series_slug", label: "Series", kind: "series", span: "half" },
+          {
+            name: "series_order",
+            label: "Part number",
+            kind: "number",
+            span: "half",
+            hint: "Lowest first. Ignored when the post is not in a series.",
           },
         ],
       },
@@ -331,6 +396,73 @@ const ENTITY_DEFINITIONS: Omit<EntitySpec, "fields">[] = [
             hint: "Left empty, it is stamped the first time the post is published. Set it to backdate.",
           },
         ],
+      },
+    ],
+  },
+  {
+    key: "tags",
+    cacheTag: "blog-tags",
+    apiPath: "/tags/",
+    singular: "tag",
+    plural: "Tags",
+    titleField: "name",
+    subtitleField: "description",
+    // No draft state: a tag is either a subject or it is deleted, and a hidden
+    // tag would leave the posts carrying it filed under nothing.
+    publishable: false,
+    groups: [
+      {
+        label: "Tag",
+        hint: "A subject posts are filed under. The name is what readers see; the slug is its URL.",
+        fields: [
+          { name: "name", label: "Name", kind: "text", required: true, maxLength: 60 },
+          {
+            ...SLUG,
+            maxLength: 120,
+            hint: "The URL segment, at /blog/tag/…. Leave empty to derive it from the name — it cannot be changed later, because links already point at it.",
+          },
+          {
+            name: "description",
+            label: "Description",
+            kind: "textarea",
+            rows: 2,
+            maxLength: 280,
+            hint: "The standfirst on this tag's own page. Most tags do not need one.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    key: "series",
+    cacheTag: "series",
+    apiPath: "/series/",
+    singular: "series",
+    plural: "Series",
+    titleField: "title",
+    subtitleField: "description",
+    publishable: true,
+    groups: [
+      {
+        label: "Series",
+        hint: "Posts are added to a series from the post's own screen, not from here.",
+        fields: [
+          { name: "title", label: "Title", kind: "text", required: true, maxLength: 255 },
+          {
+            name: "description",
+            label: "Description",
+            kind: "textarea",
+            rows: 3,
+            hint: "The standfirst on the series page.",
+          },
+          SLUG,
+          { name: "cover_image", label: "Cover image", kind: "image", maxLength: 500 },
+        ],
+      },
+      {
+        label: "Visibility",
+        hint: "A series can stay a draft while its first parts are already published — the posts show, the navigation between them does not.",
+        fields: [PUBLISHED],
       },
     ],
   },
@@ -490,9 +622,11 @@ export function entityFor(key: string | undefined): EntitySpec | undefined {
   return ENTITIES.find((entity) => entity.key === key);
 }
 
-/** Fields the form shows: everything, minus the create-only ones when editing. */
+/** Fields the form shows in this mode. See `createOnly` and `editOnly`. */
 export function fieldsFor(spec: EntitySpec, mode: "create" | "edit"): FieldSpec[] {
-  return mode === "create" ? spec.fields : spec.fields.filter((field) => !field.createOnly);
+  return spec.fields.filter((field) =>
+    mode === "create" ? !field.editOnly : !field.createOnly,
+  );
 }
 
 /**
@@ -505,7 +639,7 @@ export function groupsFor(spec: EntitySpec, mode: "create" | "edit"): FieldGroup
   return spec.groups
     .map((group) => ({
       ...group,
-      fields: mode === "create" ? group.fields : group.fields.filter((f) => !f.createOnly),
+      fields: group.fields.filter((f) => (mode === "create" ? !f.editOnly : !f.createOnly)),
     }))
     .filter((group) => group.fields.length > 0);
 }
@@ -589,6 +723,33 @@ export function toValues(spec: EntitySpec, record: Record<string, unknown>): Val
   const values: Values = {};
 
   for (const field of spec.fields) {
+    /*
+      Two fields are named for what they *post*, not for what the API returns —
+      the payload takes `tag_slugs` and `series_slug`, and the response carries
+      `tags` and `series` as objects. So these are read before the generic
+      lookup below, which would find `record.tag_slugs` undefined and leave the
+      picker empty on every edit. That is not a hypothetical: it is what
+      happened, and it looks exactly like "the post has no tags".
+    */
+    if (field.kind === "tags") {
+      const tags = record.tags;
+      values[field.name] = Array.isArray(tags)
+        ? tags
+            .map((tag) =>
+              typeof tag === "string" ? tag : String((tag as { slug?: unknown })?.slug ?? ""),
+            )
+            .filter(Boolean)
+            .join("\n")
+        : "";
+      continue;
+    }
+
+    if (field.kind === "series") {
+      const series = record.series as { slug?: unknown } | null | undefined;
+      values[field.name] = typeof series?.slug === "string" ? series.slug : "";
+      continue;
+    }
+
     const raw = record[field.name];
 
     if (raw === null || raw === undefined) {
@@ -722,9 +883,10 @@ export function toPayload(
         payload[field.name] = value ? Number(value) : 0;
         break;
       case "list":
-      // A gallery is a list of URLs on the wire too — the richer control does
-      // not change the payload.
+      // A gallery is a list of URLs on the wire too, and a tag picker a list of
+      // slugs — the richer controls do not change the payload.
       case "gallery":
+      case "tags":
         payload[field.name] = toList(values[field.name] ?? "");
         break;
       case "links":

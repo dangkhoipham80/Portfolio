@@ -16,7 +16,6 @@ import { Notice } from "@/components/ui/notice";
 import { getPost, getPostComments, getPosts, getSeriesPosts } from "@/lib/api";
 import { isOptimisableImage } from "@/lib/blob";
 import { cn } from "@/lib/cn";
-import { readRating } from "@/lib/engagement";
 import { hasContents, headingsOf, summarise } from "@/lib/markdown";
 import { renderPostBody } from "@/lib/mdx";
 import { absoluteUrl } from "@/lib/site";
@@ -75,11 +74,14 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
 
     Every one of these has a fallback, so a failure in any of them costs that
     section and not the post.
+
+    The rating is deliberately not among them: it depends on who is asking, and
+    reading the visitor's headers here would make every post page render per
+    request instead of being prerendered. The stars fetch themselves.
   */
-  const [body, comments, rating, allPosts, seriesPosts] = await Promise.all([
+  const [body, comments, allPosts, seriesPosts] = await Promise.all([
     renderPostBody(post.body, post.format),
     getPostComments(post.id),
-    readRating(post.id),
     getPosts(),
     post.series ? getSeriesPosts(post.series.slug) : Promise.resolve([]),
   ]);
@@ -196,7 +198,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
               ) : null}
 
               <div className="mt-12">
-                <Rating postId={post.id} initial={rating} />
+                <Rating postId={post.id} />
               </div>
 
               <RelatedPosts post={post} posts={allPosts} />

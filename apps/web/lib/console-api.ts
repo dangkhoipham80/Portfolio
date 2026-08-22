@@ -363,3 +363,110 @@ export async function deleteMedia(token: string, id: number): Promise<ApiResult<
   const response = await call(path, { method: "DELETE", token });
   return toResult<unknown>(response, path);
 }
+
+/**
+ * Comment moderation.
+ *
+ * Its own functions rather than another entity in lib/content-schema.ts, and
+ * that is a real difference rather than an omission: every type in that file is
+ * a thing the owner *writes*, edited through one generic form. A comment is
+ * something a stranger wrote, and the only edits are approve, reject and
+ * delete — a form with fifteen fields would be the wrong shape for three
+ * buttons, and would offer to edit words that are not the owner's.
+ */
+export type CommentRow = {
+  id: number;
+  post_id: number;
+  parent_id: number | null;
+  author_name: string;
+  author_email: string;
+  body: string;
+  status: "pending" | "approved" | "rejected";
+  author_hash: string | null;
+  post_slug: string | null;
+  post_title: string | null;
+  created_at: string;
+};
+
+export async function fetchComments(
+  token: string,
+  status?: "pending" | "approved" | "rejected",
+): Promise<ApiResult<CommentRow[]>> {
+  const path = status ? `/comments/?status=${status}` : "/comments/";
+  const response = await call(path, { token });
+  const result = await toResult<CommentRow[]>(response, path);
+
+  // Same reasoning as fetchContentList: an object where a list belongs throws
+  // on .map() during render, which is a 500 caused by a successful request.
+  if (result.ok && !Array.isArray(result.data)) {
+    console.error(`[console] ${path} returned 200 with a non-list body`);
+    return { ok: false, reason: "error" };
+  }
+
+  return result;
+}
+
+export async function moderateComment(
+  token: string,
+  id: number,
+  status: "approved" | "rejected",
+): Promise<ApiResult<CommentRow>> {
+  const path = `/comments/${id}`;
+  const response = await call(path, {
+    method: "PUT",
+    token,
+    body: JSON.stringify({ status }),
+  });
+  return toResult<CommentRow>(response, path);
+}
+
+export async function deleteComment(token: string, id: number): Promise<ApiResult<unknown>> {
+  const path = `/comments/${id}`;
+  const response = await call(path, { method: "DELETE", token });
+  return toResult<unknown>(response, path);
+}
+
+/**
+ * A post's revision history.
+ *
+ * Under /posts rather than being its own entity, because a revision is not
+ * something anyone creates or edits — it is written by the API on every content
+ * save, and the only action on one is to restore it.
+ */
+export type RevisionRow = {
+  id: number;
+  post_id: number;
+  title: string;
+  excerpt: string | null;
+  body: string;
+  format: "markdown" | "mdx";
+  tag_slugs: string[];
+  note: string | null;
+  created_at: string;
+};
+
+export async function fetchRevisions(
+  token: string,
+  postId: number,
+): Promise<ApiResult<RevisionRow[]>> {
+  const path = `/posts/${postId}/revisions`;
+  const response = await call(path, { token });
+  const result = await toResult<RevisionRow[]>(response, path);
+
+  if (result.ok && !Array.isArray(result.data)) {
+    console.error(`[console] ${path} returned 200 with a non-list body`);
+    return { ok: false, reason: "error" };
+  }
+
+  return result;
+}
+
+export async function restoreRevision(
+  token: string,
+  postId: number,
+  revisionId: number,
+): Promise<ApiResult<ContentRecord>> {
+  const path = `/posts/${postId}/revisions/${revisionId}/restore`;
+  const response = await call(path, { method: "POST", token });
+  return toResult<ContentRecord>(response, path);
+}

@@ -5,7 +5,7 @@ import {
   readCommentForm,
   validateComment,
 } from "@/lib/comment-form";
-import { submitComment, submitRating } from "@/lib/engagement";
+import { readRating, submitComment, submitRating } from "@/lib/engagement";
 import type { RatingSummary } from "@/lib/types";
 
 /**
@@ -69,6 +69,24 @@ export async function submitPostComment(
 
 /** What the star control gets back. Null means the vote did not go through. */
 export type RatingState = { summary: RatingSummary | null; failed: boolean };
+
+/**
+ * This visitor's view of a post's rating.
+ *
+ * Called from the browser after the page has loaded, rather than by the page
+ * itself, and that is a rendering decision rather than a stylistic one. The
+ * summary carries `mine` — this visitor's own vote — which means resolving it
+ * needs their headers, and reading headers during render opts the whole route
+ * into per-request rendering. Every post on the site stopped being prerendered
+ * the moment the page awaited this; the build output is where that showed up.
+ *
+ * So the page is static and the stars fill in a moment later. They are a
+ * decoration on someone else's writing: the correct thing for them to cost is
+ * nothing until the article is already on screen.
+ */
+export async function readPostRating(postId: number): Promise<RatingSummary> {
+  return readRating(postId);
+}
 
 /**
  * Record a rating.

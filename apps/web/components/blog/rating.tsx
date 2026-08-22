@@ -4,9 +4,9 @@
 // optimistic redraw, none of which a form post can do without a page reload
 // that loses the reader's place in the article.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
-import { ratePost } from "@/app/actions/engagement";
+import { ratePost, readPostRating } from "@/app/actions/engagement";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/cn";
 import type { RatingSummary } from "@/lib/types";
@@ -27,19 +27,45 @@ import type { RatingSummary } from "@/lib/types";
  * 5.0 from one vote and 4.6 from fifty are not the same claim and an average
  * alone cannot tell them apart. The count is rendered in the same breath as the
  * figure, every time, including when it is zero.
+ *
+ * ## Why it fetches its own summary
+ *
+ * Because the summary depends on who is asking — it carries this visitor's own
+ * standing vote — and resolving that on the server needs their headers, which
+ * would make the whole post page render per request instead of being
+ * prerendered. See `readPostRating`. The control renders its resting state
+ * immediately and fills in a moment later, which is the right cost for a
+ * decoration on someone else's writing.
  */
-export function Rating({
-  postId,
-  initial,
-}: {
-  postId: number;
-  initial: RatingSummary;
-}) {
-  const [summary, setSummary] = useState(initial);
+const UNRATED: RatingSummary = {
+  average: 0,
+  count: 0,
+  distribution: [0, 0, 0, 0, 0],
+  mine: null,
+};
+
+export function Rating({ postId }: { postId: number }) {
+  const [summary, setSummary] = useState(UNRATED);
+  const [loaded, setLoaded] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
   const [justVoted, setJustVoted] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    let live = true;
+
+    readPostRating(postId)
+      .then((current) => live && setSummary(current))
+      // A failure leaves the resting state, which is honest: the control still
+      // works, and a vote is what will tell us whether the API is reachable.
+      .catch(() => {})
+      .finally(() => live && setLoaded(true));
+
+    return () => {
+      live = false;
+    };
+  }, [postId]);
 
   const mine = summary.mine;
   // What the stars show right now: the value being hovered wins over the stored
@@ -108,7 +134,14 @@ export function Rating({
         </div>
 
         <p className="text-sm text-muted-foreground">
-          {summary.count === 0 ? (
+          {!loaded ? (
+            // Not "No ratings yet": that is a claim, and until the summary has
+            // arrived it is a claim we cannot make. The space is held so the
+            // line does not jump when the real figure lands.
+            <span className="opacity-0" aria-hidden="true">
+              Loading
+            </span>
+          ) : summary.count === 0 ? (
             "No ratings yet — be the first."
           ) : (
             <>
