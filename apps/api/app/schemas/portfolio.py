@@ -1,9 +1,16 @@
 from datetime import date, datetime
 from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, StringConstraints
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    EmailStr,
+    Field,
+    StringConstraints,
+)
 
-from app.models.portfolio import ProjectStatus, SkillLevel
+from app.models.portfolio import CommentStatus, PostFormat, ProjectStatus, SkillLevel
 
 
 def _no_null_list(value):
@@ -216,39 +223,252 @@ class CareerEntry(CareerEntryBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
+# Tag Schemas
+class TagBase(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: Annotated[str, StringConstraints(min_length=1, max_length=60)]
+    description: Optional[Annotated[str, StringConstraints(max_length=280)]] = None
+
+
+class TagCreate(TagBase):
+    # Optional on create and fixed afterwards, like every other slug here: it is
+    # the tag's URL, and regenerating it on a rename breaks any link to it.
+    slug: Optional[Annotated[str, StringConstraints(max_length=120)]] = None
+
+
+class TagUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: Optional[Annotated[str, StringConstraints(min_length=1, max_length=60)]] = None
+    description: Optional[Annotated[str, StringConstraints(max_length=280)]] = None
+
+
+class TagRef(BaseModel):
+    """A tag as it appears *inside* a post.
+
+    Slug and name both, because the consumer needs one for the link and the
+    other for the label, and deriving either from the other is what the split
+    exists to avoid.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    name: str
+
+
+class Tag(TagRef):
+    description: Optional[str] = None
+    # How many posts carry it — published-only for an anonymous caller, so the
+    # facet counts on the public index add up to what is actually listed.
+    # Filled in by the route; see endpoints/tags.py.
+    post_count: int = 0
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+# Series Schemas
+class SeriesBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    cover_image: Optional[str] = None
+    published: bool = False
+
+
+class SeriesCreate(SeriesBase):
+    slug: Optional[str] = None
+
+
+class SeriesUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    cover_image: Optional[str] = None
+    published: Optional[bool] = None
+
+
+class SeriesRef(BaseModel):
+    """A series as it appears inside a post — no post list, or this recurses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    title: str
+
+
+class Series(SeriesRef):
+    description: Optional[str] = None
+    cover_image: Optional[str] = None
+    published: bool = False
+    # Filled by the route from the posts actually visible to this caller.
+    post_count: int = 0
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
 # Post Schemas
 class PostBase(BaseModel):
     title: str
     excerpt: Optional[str] = None
-    # Markdown. See the note on the model: the API neither renders nor
-    # sanitises it, because it is not HTML on the way in or the way out.
+    # Markdown or MDX, per `format`. See the note on the model: the API neither
+    # renders nor sanitises it, because it is not HTML on the way in or out.
     body: str
-    tags: StringList = []
+    format: PostFormat = PostFormat.MARKDOWN
     cover_image: Optional[str] = None
     published: bool = False
     # Writable so a post can be backdated to when it was actually written. Left
     # out, the service stamps it the first time the post is published.
     published_at: Optional[datetime] = None
+    series_order: int = 0
 
-class PostCreate(PostBase):
+
+class PostWrite(BaseModel):
+    """The half of a post's payload that is a reference to something else.
+
+    Tags arrive as slugs of rows that already exist, and a slug matching nothing
+    is a 422 naming it rather than a tag invented on the spot. That is the point
+    of tags being rows: a typo has to fail loudly, or the index grows a facet
+    holding one post that nobody meant to create.
+
+    ``series_slug`` is the same, with null meaning "not in a series" — which is
+    why it is spelled as its own field rather than folded into PostUpdate's
+    optionals, where null already means "leave alone".
+    """
+
+    tag_slugs: Optional[List[str]] = None
+    series_slug: Optional[str] = None
+
+
+class PostCreate(PostBase, PostWrite):
     slug: Optional[str] = None
 
-class PostUpdate(BaseModel):
+
+class PostUpdate(PostWrite):
     title: Optional[str] = None
     excerpt: Optional[str] = None
     body: Optional[str] = None
-    tags: Optional[List[str]] = None
+    format: Optional[PostFormat] = None
     cover_image: Optional[str] = None
     published: Optional[bool] = None
     published_at: Optional[datetime] = None
+    series_order: Optional[int] = None
+    # What changed, recorded on the revision this update creates. Never stored
+    # on the post itself.
+    revision_note: Optional[Annotated[str, StringConstraints(max_length=280)]] = None
+
 
 class Post(PostBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     slug: str
+    # Objects, not strings. The web app needs the slug to build a tag URL and
+    # the name to print, and a bare string can only supply one of them — which
+    # is the reason this stopped being a JSON list of names. Ordered by name in
+    # the relationship, so the chips under a post do not reshuffle between
+    # requests.
+    tags: List[TagRef] = []
+    series: Optional[SeriesRef] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+class PostRevision(BaseModel):
+    """A past version of a post. Admin-only; never served publicly."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    post_id: int
+    title: str
+    excerpt: Optional[str] = None
+    body: str
+    format: PostFormat = PostFormat.MARKDOWN
+    tag_slugs: StringList = []
+    note: Optional[str] = None
+    created_at: datetime
+
+
+# Comment Schemas
+class PostCommentCreate(BaseModel):
+    """What a reader posts. The only unauthenticated write besides the contact form.
+
+    Lengths are the column widths from models/portfolio.py, with one exception:
+    ``body`` is TEXT and has none, so the 4000 is a judgement about what a
+    comment is rather than something the database dictates.
+
+    The email is required and never published — see the model. Validating it as
+    an address is not identity verification and is not treated as any; it is
+    there so a typo is caught at the form rather than discovered when a reply
+    bounces.
+    """
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    author_name: Annotated[str, StringConstraints(min_length=1, max_length=80)]
+    author_email: Annotated[EmailStr, StringConstraints(max_length=255)]
+    body: Annotated[str, StringConstraints(min_length=2, max_length=4000)]
+    # A top-level comment on the same post. Anything else is rejected by the
+    # route, which is where the post is known.
+    parent_id: Optional[int] = None
+
+
+class PostComment(BaseModel):
+    """A comment as the public sees it.
+
+    No ``author_email`` and no ``author_hash``, and their absence is the point:
+    this model is what makes the route incapable of leaking either. Adding a
+    field to the model is the only way they could appear, which is a visible
+    edit in review rather than a filter someone forgets to apply.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    post_id: int
+    parent_id: Optional[int] = None
+    author_name: str
+    body: str
+    created_at: datetime
+
+
+class PostCommentAdmin(PostComment):
+    """The moderation view: the same comment, plus what decides its fate."""
+
+    author_email: str
+    status: CommentStatus
+    author_hash: Optional[str] = None
+    # Which post it is on, so the queue can link to it without a second request.
+    post_slug: Optional[str] = None
+    post_title: Optional[str] = None
+
+
+class PostCommentModerate(BaseModel):
+    status: CommentStatus
+
+
+# Rating Schemas
+class PostRatingCreate(BaseModel):
+    stars: Annotated[int, Field(ge=1, le=5)]
+
+
+class PostRatingSummary(BaseModel):
+    """A post's score, and enough of the shape to be honest about it.
+
+    ``count`` sits next to ``average`` everywhere it is shown: 5.0 from one vote
+    and 4.6 from fifty are not the same claim, and an average alone cannot tell
+    them apart. ``distribution`` is the five bucket counts, low to high, so the
+    reader can see a bimodal split rather than a mean hiding it.
+    """
+
+    average: float = 0.0
+    count: int = 0
+    distribution: List[int] = [0, 0, 0, 0, 0]
+    # This caller's own vote, if they have one. Lets the control show what they
+    # chose instead of asking again.
+    mine: Optional[int] = None
 
 # Contact Schemas
 class ContactBase(BaseModel):
