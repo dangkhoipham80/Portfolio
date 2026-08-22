@@ -242,6 +242,16 @@
    * invisible to anyone navigating by keyboard, because Tailwind's preflight
    * removes the browser default outline and nothing put one back. `:focus-visible`
    * rather than `:focus` so a mouse click does not leave a ring behind.
+   *
+   * **Do not add `focus-visible:outline-*` utilities to a component.** This rule
+   * already covers everything, and the utilities are worse than redundant: the
+   * blog's controls carried
+   * `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`
+   * for a while, and `outline-ring` did not resolve to a colour, so the width
+   * and style landed while `outline-color` fell back to `currentColor`. On a
+   * muted control that painted a pale ring on a pale card — a focus indicator
+   * that was technically present and could not be seen. Measured in the
+   * browser with `getComputedStyle`, not spotted in review.
    */
   :focus-visible {
     outline: 2px solid hsl(var(--ring));
@@ -430,6 +440,34 @@
 
   .node-live {
     animation: node-live 3.2s ease-in-out infinite;
+  }
+
+  /*
+   * The "new since you were last here" dot on the blog index.
+   *
+   * The one lit thing on that page, and the one thing on it that moves. It
+   * earns both: a post only carries this mark if it was published after this
+   * browser's previous visit and has not been opened since, so on a typical
+   * visit there are none — and a mark that is usually absent can afford to be
+   * noticed when it is not. See components/blog/new-mark.tsx.
+   *
+   * Slower and shallower than `node-live`: that one is a service reporting it
+   * is up, which is telemetry and reads as a heartbeat. This is a bookmark, and
+   * a bookmark that throbs is a notification badge.
+   *
+   * Applied via `motion-safe:` at the call site rather than being guarded here,
+   * because the reduced-motion block at the foot of this file zeroes durations
+   * rather than removing animations — which for an infinite pulse leaves it
+   * stopped at an arbitrary frame.
+   */
+  @keyframes new-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
   }
 
   /*

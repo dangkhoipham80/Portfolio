@@ -1,6 +1,6 @@
 import "server-only";
 
-import rehypeShiki from "@shikijs/rehype";
+import rehypeShiki, { type RehypeShikiOptions } from "@shikijs/rehype";
 import type { Element, Root } from "hast";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
@@ -9,6 +9,8 @@ import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { visit } from "unist-util-visit";
+
+import { slugifyHeading } from "./headings";
 
 /**
  * Turns a post's Markdown into HTML, on the server.
@@ -45,7 +47,7 @@ const LANGUAGE_CLASS = /^language-([a-z0-9+#.-]{1,16})$/i;
  * again; and putting this last means the value is derived from a className the
  * sanitiser has already vetted, then matched against the pattern above.
  */
-function labelCodeBlocks() {
+export function labelCodeBlocks() {
   return (tree: Root) => {
     visit(tree, "element", (node: Element) => {
       if (node.tagName !== "pre") return;
@@ -82,6 +84,94 @@ function labelCodeBlocks() {
   };
 }
 
+/**
+ * The sanitiser's schema, exported so the MDX pipeline uses the same one.
+ *
+ * Two copies of this would be two answers to "what markup may a post contain",
+ * and the one that drifts is the one nobody is looking at. `id` on headings is
+ * allowed because `anchorHeadings` below writes them and the table of contents
+ * links to them — the sanitiser runs first, so without this the anchors would
+ * survive exactly until the next paragraph of this file was believed.
+ */
+export const sanitiseSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    // Every link out of a post body is untrusted by definition.
+    a: [...(defaultSchema.attributes?.a ?? []), "target", "rel"],
+    h2: [...(defaultSchema.attributes?.h2 ?? []), "id"],
+    h3: [...(defaultSchema.attributes?.h3 ?? []), "id"],
+  },
+};
+
+/**
+ * Shiki's settings, shared with the MDX pipeline for the same reason.
+ *
+ * Highlighting runs *after* the sanitiser in both: everything Shiki emits — the
+ * spans, the inline colour variables — is generated from code text the
+ * sanitiser has already vetted, so none of it can smuggle markup in. Both
+ * themes are emitted as CSS variables (`defaultColor: false`) and globals.css
+ * picks a side per mode; on the server only, so the browser ships zero
+ * highlighter code.
+ */
+export const shikiOptions: RehypeShikiOptions = {
+  themes: { light: "vitesse-light", dark: "vitesse-dark" },
+  defaultColor: false,
+  defaultLanguage: "text",
+  fallbackLanguage: "text",
+  // Keeps `language-x` on the <code>, which labelCodeBlocks reads next.
+  addLanguageClass: true,
+  /*
+   * Spelled out because the default is every grammar Shiki ships — which
+   * makes the first render pay seconds of initialisation, in production
+   * cold starts and in the test suite alike. This is the vocabulary of the
+   * posts this blog actually writes; a fence in anything else degrades to
+   * unhighlighted text via fallbackLanguage rather than failing.
+   */
+  langs: [
+    "python", "javascript", "typescript", "tsx", "jsx", "json", "yaml",
+    "toml", "bash", "shell", "sql", "css", "html", "dockerfile", "java",
+    "markdown", "diff",
+  ],
+};
+
+/**
+ * Give every `h2` and `h3` the id its table-of-contents entry links to.
+ *
+ * The ids have to be derived the same way in two places that never see each
+ * other's output — here, from the rendered tree, and in `headingsOf`, from the
+ * Markdown source — so both call `slugifyHeading` and the duplicate-suffixing
+ * rule is applied identically. A mismatch would not fail anywhere; the contents
+ * list would simply scroll to nothing, which is why it is worth stating.
+ */
+export function anchorHeadings() {
+  return (tree: Root) => {
+    const seen = new Map<string, number>();
+
+    visit(tree, "element", (node: Element) => {
+      if (node.tagName !== "h2" && node.tagName !== "h3") return;
+
+      const base = slugifyHeading(textOf(node));
+      const count = seen.get(base) ?? 0;
+      seen.set(base, count + 1);
+
+      node.properties = {
+        ...node.properties,
+        id: count === 0 ? base : `${base}-${count + 1}`,
+      };
+    });
+  };
+}
+
+/** A node's visible text, which for a heading is what the slug is made of. */
+function textOf(node: Element): string {
+  let text = "";
+  visit(node, "text", (child: { value: string }) => {
+    text += child.value;
+  });
+  return text;
+}
+
 const processor = unified()
   .use(remarkParse)
   // Tables, strikethrough, task lists and bare-URL autolinks. Plain CommonMark
@@ -90,44 +180,20 @@ const processor = unified()
   // `allowDangerousHtml` is deliberately absent: raw HTML in a post body is
   // dropped at this step, before the sanitiser is even asked about it.
   .use(remarkRehype)
-  .use(rehypeSanitize, {
-    ...defaultSchema,
-    attributes: {
-      ...defaultSchema.attributes,
-      // Every link out of a post body is untrusted by definition.
-      a: [...(defaultSchema.attributes?.a ?? []), "target", "rel"],
-    },
-  })
-  /*
-   * Highlighting runs *after* the sanitiser: everything Shiki emits — the
-   * spans, the inline colour variables — is generated from code text the
-   * sanitiser has already vetted, so none of it can smuggle markup in. Both
-   * themes are emitted as CSS variables (`defaultColor: false`) and
-   * globals.css picks a side per mode; on the server only, like the rest of
-   * this module, so the browser ships zero highlighter code.
-   */
-  .use(rehypeShiki, {
-    themes: { light: "vitesse-light", dark: "vitesse-dark" },
-    defaultColor: false,
-    defaultLanguage: "text",
-    fallbackLanguage: "text",
-    // Keeps `language-x` on the <code>, which labelCodeBlocks reads next.
-    addLanguageClass: true,
-    /*
-     * Spelled out because the default is every grammar Shiki ships — which
-     * makes the first render pay seconds of initialisation, in production
-     * cold starts and in the test suite alike. This is the vocabulary of the
-     * posts this blog actually writes; a fence in anything else degrades to
-     * unhighlighted text via fallbackLanguage rather than failing.
-     */
-    langs: [
-      "python", "javascript", "typescript", "tsx", "jsx", "json", "yaml",
-      "toml", "bash", "shell", "sql", "css", "html", "dockerfile", "java",
-      "markdown", "diff",
-    ],
-  })
+  .use(rehypeSanitize, sanitiseSchema)
+  .use(rehypeShiki, shikiOptions)
   .use(labelCodeBlocks)
+  .use(anchorHeadings)
   .use(rehypeStringify);
+
+/*
+ * Re-exported so a caller reaching for "the headings of this post" finds them
+ * next to the renderer. The definitions live in lib/headings.ts because the
+ * table of contents is a client component and this module is `server-only` —
+ * importing it there would ship remark, rehype and Shiki to the browser.
+ */
+export { hasContents, headingsOf, MINIMUM_HEADINGS, slugifyHeading } from "./headings";
+export type { Heading } from "./headings";
 
 export async function renderMarkdown(markdown: string): Promise<string> {
   const file = await processor.process(markdown);
@@ -137,10 +203,10 @@ export async function renderMarkdown(markdown: string): Promise<string> {
 /**
  * Roughly what the post says, with the Markdown taken off.
  *
- * Only ever used for the meta description and the index blurb when a post has
- * no `excerpt`, so approximate is fine — it does not have to survive a
- * round trip. Code fences go first and whole: a description opening with three
- * backticks and a language name describes nothing.
+ * Only ever used for the meta description, the index blurb when a post has no
+ * `excerpt`, and the reading estimate — so approximate is fine; it does not
+ * have to survive a round trip. Code fences go first and whole: a description
+ * opening with three backticks and a language name describes nothing.
  */
 export function plainText(markdown: string): string {
   return markdown

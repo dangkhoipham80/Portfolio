@@ -37,6 +37,16 @@ class ErrorMessages:
 
     # Blog related
     POST_NOT_FOUND = "Post not found"
+    TAG_NOT_FOUND = "Tag not found"
+    SERIES_NOT_FOUND = "Series not found"
+    COMMENT_NOT_FOUND = "Comment not found"
+    REVISION_NOT_FOUND = "Revision not found"
+    # A reply must attach to a top-level comment on the same post. Both halves
+    # matter: threading is one level deep, and a parent from another post would
+    # put a reply under a comment the reader cannot see.
+    COMMENT_PARENT_INVALID = "That comment cannot be replied to"
+
+    MEDIA_NOT_FOUND = "Media asset not found"
 
     # Role & Permission related
     ROLE_NOT_FOUND = "Role not found"
@@ -65,3 +75,10 @@ class SuccessMessages:
     CERTIFICATE_DELETED = "Certificate deleted successfully"
     CAREER_ENTRY_DELETED = "Career entry deleted successfully"
     POST_DELETED = "Post deleted successfully"
+    MEDIA_DELETED = "Media asset deleted successfully"
+    TAG_DELETED = "Tag deleted successfully"
+    SERIES_DELETED = "Series deleted successfully"
+    COMMENT_DELETED = "Comment deleted successfully"
+    # Said to the reader, not the admin — so it explains the wait rather than
+    # reporting a database write.
+    COMMENT_QUEUED = "Thanks — your comment is waiting to be approved."

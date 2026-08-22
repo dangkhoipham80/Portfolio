@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { StatusBadge, chipClasses } from "@/components/ui/badge";
 import { Container } from "@/components/ui/container";
+import { ProjectGallery } from "@/components/project-gallery";
 import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
 import { ExternalLink } from "@/components/ui/external-link";
 import { ProjectMedia } from "@/components/ui/project-media";
@@ -143,7 +144,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
                 </div>
               ) : null}
 
-              {project.github_url || project.live_url ? (
+              {project.github_url || project.live_url || project.links.length > 0 ? (
                 <div>
                   <dt className={eyebrowClasses}>Links</dt>
                   <dd className="mt-1 flex flex-col items-start">
@@ -153,6 +154,17 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
                     {project.live_url ? (
                       <ExternalLink href={project.live_url}>Visit site</ExternalLink>
                     ) : null}
+                    {/*
+                      After the two fixed ones, in the order they were entered.
+                      Source and live keep their positions and their wording
+                      because they are the two a recruiter looks for by name;
+                      the rest are whatever this particular project has.
+                    */}
+                    {project.links.map((link) => (
+                      <ExternalLink key={link.url} href={link.url}>
+                        {link.label}
+                      </ExternalLink>
+                    ))}
                   </dd>
                 </div>
               ) : null}
@@ -170,6 +182,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
 
             <DetailList title="Features" items={project.features} />
             <DetailList title="Challenges" items={project.challenges} />
+
+            <ProjectGallery images={project.gallery} title={project.title} />
           </div>
         </div>
 

@@ -19,7 +19,11 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
+import { BodyEditor } from "@/components/console/body-editor";
+import { GalleryField } from "@/components/console/gallery-field";
 import { ImageField } from "@/components/console/image-field";
+import { LinksField } from "@/components/console/links-field";
+import { TagPicker } from "@/components/console/tag-picker";
 import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { CheckboxField, SelectField, TextAreaField, TextField } from "@/components/ui/field";
@@ -33,6 +37,7 @@ import {
   type Values,
   groupsFor,
 } from "@/lib/content-schema";
+import type { SeriesRef, TagRef } from "@/lib/types";
 
 export function EntityForm({
   spec,
@@ -41,6 +46,7 @@ export function EntityForm({
   action,
   cancelHref,
   slug,
+  choices,
 }: {
   spec: EntitySpec;
   mode: "create" | "edit";
@@ -50,6 +56,15 @@ export function EntityForm({
   cancelHref: string;
   /** The saved slug, for the action bar. Absent while creating — there is none yet. */
   slug?: string;
+  /**
+   * Options that come from the API rather than from lib/content-schema.ts.
+   *
+   * The schema describes shapes, not content, and the tags that exist change
+   * every time someone makes one — so they are fetched by the page and passed
+   * down rather than baked into the description. Empty for every entity that
+   * has no such field, which is all of them but posts.
+   */
+  choices?: { tags: TagRef[]; series: SeriesRef[] };
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL_CONTENT_STATE);
 
@@ -118,6 +133,7 @@ export function EntityForm({
                     field={field}
                     value={values[field.name] ?? ""}
                     error={errors[field.name]}
+                    choices={choices}
                   />
                 </div>
               ))}
@@ -214,10 +230,12 @@ function Control({
   field,
   value,
   error,
+  choices,
 }: {
   field: FieldSpec;
   value: string;
   error?: string;
+  choices?: { tags: TagRef[]; series: SeriesRef[] };
 }) {
   // Every control gets these three the same way, which is the point of pulling
   // them out: `hint` used to be handed to `meta` here and to `hint` in one
@@ -268,21 +286,45 @@ function Control({
         />
       );
 
-    case "textarea":
+    case "gallery":
+      return <GalleryField {...shared} defaultValue={value} />;
+
+    case "tags":
+      return <TagPicker {...shared} value={value} available={choices?.tags ?? []} />;
+
+    case "series":
+      return (
+        <SelectField
+          {...shared}
+          options={[
+            // The empty option is not a placeholder — it is a real choice, and
+            // choosing it takes the post out of the series it is in.
+            { value: "", label: "Not in a series" },
+            ...(choices?.series ?? []).map((entry) => ({
+              value: entry.slug,
+              label: entry.title,
+            })),
+          ]}
+          defaultValue={value}
+        />
+      );
+
+    case "links":
+      return <LinksField {...shared} value={value} />;
+
     case "markdown":
+      // The full editor: a toolbar, image insertion from the media library, and
+      // a preview rendered by the same pipeline the public page uses. Still a
+      // plain textarea underneath, so it posts with scripting off.
+      return <BodyEditor {...shared} defaultValue={value} />;
+
+    case "textarea":
       return (
         <TextAreaField
           {...shared}
           required={field.required}
           rows={field.rows ?? 4}
           defaultValue={value}
-          // Markdown is written in the same face it is read in; the body of a
-          // post is largely code fences and indentation, and a proportional
-          // font makes both unreadable while editing. It also starts far
-          // taller: a post body opening at four rows is a slot, not a page.
-          className={
-            field.kind === "markdown" ? "min-h-96 font-mono text-[0.8125rem]" : undefined
-          }
         />
       );
 

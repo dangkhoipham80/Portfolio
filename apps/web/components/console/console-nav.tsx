@@ -18,10 +18,24 @@ import { ENTITIES } from "@/lib/content-schema";
 /**
  * The inbox first, because it is the only section that receives things rather
  * than holding things — it is the one with something new in it.
+ *
+ * Media last, and listed by hand rather than coming from ENTITIES, because it
+ * is not a content type: it has no slug, no publish state and no create screen,
+ * and forcing it into that description to save a line here would put four
+ * meaningless fields on it. It also belongs at the bottom for the same reason
+ * it has no upload button — it is where you go to tidy up, not to make
+ * something.
  */
 const SECTIONS = [
   { href: "/admin", label: "Inbox" },
+  // Comments sit beside the inbox for the same reason: they arrive rather than
+  // being written here, and they are the other thing on this site that a
+  // stranger can put in front of the owner. Listed by hand rather than coming
+  // from ENTITIES because a comment is not a content type — there is no create
+  // screen and no form, only approve, reject and delete.
+  { href: "/admin/comments", label: "Comments" },
   ...ENTITIES.map((entity) => ({ href: `/admin/${entity.key}`, label: entity.plural })),
+  { href: "/admin/media", label: "Media" },
 ];
 
 export function ConsoleNav() {

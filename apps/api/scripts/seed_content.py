@@ -30,6 +30,7 @@ from app.models.portfolio import (
     ProjectStatus,
     Skill,
     SkillLevel,
+    Tag,
 )
 
 # Every `image_url` below is None. The Vite components referenced paths under
@@ -584,6 +585,24 @@ def _upsert(db, model, key_field, key_value, values, dry_run):
     return "update"
 
 
+def _tag_for(db, name: str) -> Tag:
+    """The tag row for a display name, creating it the first time.
+
+    Looked up by slug rather than by name, so "Next.js" seeded here and a
+    "next.js" already in the database are one tag rather than two that render
+    identically and filter differently.
+    """
+    slug = slugify(name, max_length=120)
+    existing = db.query(Tag).filter(Tag.slug == slug).first()
+    if existing is not None:
+        return existing
+
+    created = Tag(slug=slug, name=name)
+    db.add(created)
+    db.flush()
+    return created
+
+
 def seed(dry_run: bool = False) -> None:
     db = SessionLocal()
     tally = {"create": 0, "update": 0, "unchanged": 0}
@@ -627,11 +646,24 @@ def seed(dry_run: bool = False) -> None:
 
         print("Posts")
         for entry in POSTS:
-            values = dict(entry, published=True)
-            record(
-                _upsert(db, Post, "slug", slugify(entry["title"]), values, dry_run),
-                entry["title"],
-            )
+            # Tags are rows, so they have to exist before a post can reference
+            # them — and `tags` on the model is a relationship, so handing it a
+            # list of strings raises rather than being coerced. Both are why the
+            # key is lifted out of `values` here instead of going through
+            # `_upsert` with everything else.
+            names = entry.get("tags", [])
+            values = {k: v for k, v in entry.items() if k != "tags"}
+            values["published"] = True
+
+            outcome = _upsert(db, Post, "slug", slugify(entry["title"]), values, dry_run)
+
+            if not dry_run:
+                # Flushed so a freshly-created post has an id to link against.
+                db.flush()
+                post = db.query(Post).filter(Post.slug == slugify(entry["title"])).one()
+                post.tags = [_tag_for(db, name) for name in names]
+
+            record(outcome, entry["title"])
 
         if dry_run:
             db.rollback()

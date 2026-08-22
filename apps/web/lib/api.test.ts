@@ -170,8 +170,63 @@ describe("when the API works", () => {
     const projects = [{ id: 1, slug: "portfolio", title: "Portfolio" }];
     fetchMock.mockResolvedValue(json(projects));
 
-    await expect(getProjects()).resolves.toEqual(projects);
+    // toMatchObject, not toEqual: `getProjects` fills in list fields the
+    // response may not carry — see the test below for why. What this case is
+    // about is that nothing the API *did* send gets lost or rewritten.
+    await expect(getProjects()).resolves.toMatchObject(projects);
     expect(errorLog).not.toHaveBeenCalled();
+  });
+
+  it("fills in list fields the API has not started sending yet", async () => {
+    /*
+     * The deploy-skew guard, and the reason it is not paranoia.
+     *
+     * apps/web ships on push and apps/api ships on a change under its own
+     * path, so the two are never atomic: there is a window on every schema
+     * addition where this app asks for a field the deployed API has never
+     * heard of. `readJson` only checks that the body is an object — it does
+     * not look inside — so the field arrives as `undefined`, and the detail
+     * page's `project.links.map(...)` throws during render. That is a 500
+     * produced by a *successful* request, which is the one failure this whole
+     * module exists to rule out, and it is invisible in development because
+     * local dev points at whichever API you happen to be running.
+     */
+    fetchMock.mockResolvedValue(json([{ id: 1, slug: "portfolio", title: "Portfolio" }]));
+
+    const [project] = await getProjects();
+
+    expect(project.gallery).toEqual([]);
+    expect(project.links).toEqual([]);
+    expect(project.technologies).toEqual([]);
+  });
+
+  it("does not overwrite lists the API did send", async () => {
+    fetchMock.mockResolvedValue(
+      json([
+        {
+          id: 1,
+          slug: "portfolio",
+          technologies: ["Next.js"],
+          links: [{ label: "Docs", url: "https://example.invalid/docs" }],
+        },
+      ]),
+    );
+
+    const [project] = await getProjects();
+
+    expect(project.technologies).toEqual(["Next.js"]);
+    expect(project.links).toEqual([{ label: "Docs", url: "https://example.invalid/docs" }]);
+  });
+
+  it("fills in list fields on a single project too", async () => {
+    // getProject is a separate code path from getProjects, and the detail page
+    // is the one that actually reads `gallery`.
+    fetchMock.mockResolvedValue(json({ id: 1, slug: "portfolio" }));
+
+    const project = await getProject("portfolio");
+
+    expect(project?.gallery).toEqual([]);
+    expect(project?.links).toEqual([]);
   });
 
   it("returns the project a detail route sends", async () => {

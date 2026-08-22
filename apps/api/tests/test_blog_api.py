@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 
 from app.core.slugs import unique_slug
 from app.main import app
-from app.models.portfolio import Post
+from app.models.portfolio import Post, Tag
 
 client = TestClient(app)
 
@@ -43,7 +43,42 @@ def track_post(db):
     yield _track
 
     for post_id in made:
-        db.query(Post).filter(Post.id == post_id).delete()
+        record = db.query(Post).filter(Post.id == post_id).first()
+        # Through the ORM rather than a bulk delete, so the cascades on
+        # comments, ratings and revisions actually run. A `.delete()` on the
+        # query emits one DELETE and leaves the children behind, which then
+        # fail the foreign key on the next run.
+        if record:
+            db.delete(record)
+    db.commit()
+
+
+@pytest.fixture
+def make_tag(db):
+    """Tags a test needs, cleaned up afterwards.
+
+    Tags are rows now, so a post cannot be seeded with a tag that does not
+    exist — which is the whole point of the change and makes this fixture the
+    only way to get one.
+    """
+    made = []
+
+    def _make(name: str) -> Tag:
+        slug = unique_slug(db, Tag, name)
+        record = Tag(slug=slug, name=name)
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        made.append(record.id)
+        return record
+
+    yield _make
+
+    for tag_id in made:
+        record = db.query(Tag).filter(Tag.id == tag_id).first()
+        if record:
+            record.posts = []
+            db.delete(record)
     db.commit()
 
 
@@ -54,10 +89,11 @@ def make_post(db, track_post):
             slug=unique_slug(db, Post, title),
             title=title,
             body="Seeded by the test suite.",
-            tags=tags,
             published=published,
             published_at=published_at,
         )
+        if tags:
+            record.tags = list(tags)
         db.add(record)
         db.commit()
         db.refresh(record)
@@ -236,7 +272,7 @@ def test_an_explicit_slug_is_honoured(admin_token, track_post):
 
 
 def test_a_post_with_no_tags_serialises_them_as_empty_not_null(make_post):
-    """The JSON column is nullable; a NULL would 500 the list on the way out."""
+    """An untagged post has an empty list, not null — the consumer maps over it."""
     live = make_post("No Tags At All", published=True, tags=None)
 
     assert client.get(f"/api/v1/posts/{live.id}").json()["tags"] == []
@@ -253,20 +289,42 @@ def test_the_body_is_returned_verbatim(admin_token, track_post):
 
 # --- tags ------------------------------------------------------------------
 
-def test_the_tag_filter_selects_matching_posts(make_post):
-    tagged = make_post("Tagged Post", published=True, tags=["Tailwind", "CSS"])
-    untagged = make_post("Differently Tagged Post", published=True, tags=["FastAPI"])
+def test_the_tag_filter_selects_matching_posts(make_post, make_tag):
+    """The filter takes a tag *slug* now, not the display name."""
+    wanted = make_tag("Tailwind")
+    other = make_tag("FastAPI")
+    tagged = make_post("Tagged Post", published=True, tags=[wanted, make_tag("CSS")])
+    untagged = make_post("Differently Tagged Post", published=True, tags=[other])
 
-    slugs = [p["slug"] for p in client.get("/api/v1/posts/?tag=Tailwind").json()]
+    slugs = [p["slug"] for p in client.get(f"/api/v1/posts/?tag={wanted.slug}").json()]
 
     assert tagged.slug in slugs
     assert untagged.slug not in slugs
 
 
-def test_the_tag_filter_still_excludes_drafts(make_post):
+def test_the_tag_filter_still_excludes_drafts(make_post, make_tag):
     """Two filters compose here, and the publish one has to survive."""
-    draft = make_post("Tagged But Unpublished", published=False, tags=["Tailwind"])
+    wanted = make_tag("Tailwind")
+    draft = make_post("Tagged But Unpublished", published=False, tags=[wanted])
 
-    slugs = [p["slug"] for p in client.get("/api/v1/posts/?tag=Tailwind").json()]
+    slugs = [p["slug"] for p in client.get(f"/api/v1/posts/?tag={wanted.slug}").json()]
 
     assert draft.slug not in slugs
+
+
+def test_a_posts_tags_carry_both_slug_and_name(make_post, make_tag):
+    """The consumer needs the slug for the URL and the name for the label.
+
+    A bare string could only supply one of them, which is the reason this
+    stopped being a JSON list of names.
+    """
+    tag = make_tag("Next.js")
+    live = make_post("Tagged With An Awkward Name", published=True, tags=[tag])
+
+    returned = client.get(f"/api/v1/posts/{live.id}").json()["tags"]
+
+    # Against the fixture's own tag rather than a literal slug: the suite shares
+    # a database, so "next-js" may already be taken and the fixture will have
+    # been given "next-js-2". The shape is what this pins down.
+    assert returned == [{"id": tag.id, "slug": tag.slug, "name": "Next.js"}]
+    assert tag.slug.startswith("next-js")

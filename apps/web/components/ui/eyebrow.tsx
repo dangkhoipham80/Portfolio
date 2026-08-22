@@ -28,6 +28,7 @@ export const eyebrowClasses =
 export function Eyebrow({
   as: Tag = "p",
   className,
+  id,
   children,
 }: {
   /**
@@ -37,7 +38,13 @@ export function Eyebrow({
    */
   as?: "p" | "h2" | "h3";
   className?: string;
+  /** For `aria-labelledby`, where the eyebrow *is* a section's accessible name. */
+  id?: string;
   children: ReactNode;
 }) {
-  return <Tag className={cn(eyebrowClasses, className)}>{children}</Tag>;
+  return (
+    <Tag id={id} className={cn(eyebrowClasses, className)}>
+      {children}
+    </Tag>
+  );
 }
