@@ -58,7 +58,7 @@ export function PostMeta({ post }: { post: Post }) {
                   href={`/blog/tag/${tag.slug}`}
                   className={cn(
                     "inline-flex min-h-11 items-center text-sm text-muted-foreground transition-colors lg:min-h-8",
-                    "hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                    "hover:text-foreground",
                   )}
                 >
                   {tag.name}

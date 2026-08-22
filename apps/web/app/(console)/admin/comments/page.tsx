@@ -213,7 +213,7 @@ function Decision({
       <input type="hidden" name="status" value={status} />
       <button
         type="submit"
-        className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
       >
         {label}
       </button>

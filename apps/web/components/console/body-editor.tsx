@@ -213,7 +213,7 @@ export function BodyEditor({
           type="button"
           onClick={showPreview}
           disabled={rendering}
-          className="inline-flex min-h-9 items-center rounded-[var(--radius-control)] border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60"
+          className="inline-flex min-h-9 items-center rounded-[var(--radius-control)] border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
         >
           {rendering ? "Rendering…" : preview ? "Refresh preview" : "Preview"}
         </button>
@@ -262,7 +262,6 @@ export function BodyEditor({
         // a proportional face makes both unreadable while editing.
         className={cn(
           "min-h-96 w-full rounded-b-[var(--radius-control)] border border-t-0 bg-card px-3 py-2.5 font-mono text-[0.8125rem] leading-relaxed text-foreground",
-          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           error ? "border-destructive" : "border-border",
         )}
       />
@@ -402,7 +401,7 @@ function Tool({ onClick, children }: { onClick: () => void; children: string }) 
         // surface, used with a pointer on a desktop console. The console is
         // not a phone screen and never has been.
         "inline-flex min-h-8 items-center rounded-[var(--radius-control)] px-2 text-xs text-muted-foreground transition-colors",
-        "hover:bg-card hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        "hover:bg-card hover:text-foreground",
       )}
     >
       {children}

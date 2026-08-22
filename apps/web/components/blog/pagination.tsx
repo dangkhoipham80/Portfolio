@@ -45,7 +45,6 @@ export function Pagination({
               aria-current={number === page ? "page" : undefined}
               className={cn(
                 "inline-flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-control)] font-mono text-sm tabular-nums transition-colors",
-                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                 number === page
                   ? "bg-primary font-semibold text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -84,7 +83,6 @@ function Step({ href, label }: { href: string | null; label: string }) {
       className={cn(
         eyebrowClasses,
         "inline-flex min-h-11 items-center rounded-[var(--radius-control)] px-1 transition-colors hover:text-primary",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
       )}
     >
       {label}

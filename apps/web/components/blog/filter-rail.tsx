@@ -105,7 +105,7 @@ export function FilterRail({
         href="/blog/feed.xml"
         className={cn(
           "inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-4 transition-colors lg:min-h-9",
-          "hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+          "hover:text-foreground",
         )}
       >
         RSS feed
@@ -138,11 +138,11 @@ function SearchField({ query }: { query?: string }) {
           // server component, and a `value` with no handler would freeze it.
           defaultValue={query}
           placeholder="A phrase you remember"
-          className="min-h-11 min-w-0 flex-1 rounded-[var(--radius-control)] border border-border bg-card px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="min-h-11 min-w-0 flex-1 rounded-[var(--radius-control)] border border-border bg-card px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground"
         />
         <button
           type="submit"
-          className="min-h-11 shrink-0 rounded-[var(--radius-control)] border border-border px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="min-h-11 shrink-0 rounded-[var(--radius-control)] border border-border px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
         >
           Find
         </button>
@@ -185,7 +185,6 @@ function RailLink({
           // kind of thing, so the spacing between rows is what stops a mis-tap.
           // Measured at 375 rather than assumed — they were 36px.
           "flex min-h-11 items-center justify-between gap-3 rounded-[var(--radius-control)] px-2 text-sm transition-colors lg:min-h-9",
-          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           active
             ? "bg-accent font-medium text-foreground"
             : "text-muted-foreground hover:bg-muted hover:text-foreground",

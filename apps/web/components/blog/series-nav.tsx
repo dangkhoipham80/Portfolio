@@ -44,7 +44,7 @@ export function SeriesNav({
       <p className="text-sm font-semibold text-foreground">
         <Link
           href={`/blog/series/${series.slug}`}
-          className="transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="transition-colors hover:text-primary"
         >
           {series.title}
         </Link>
@@ -76,7 +76,7 @@ export function SeriesNav({
               ) : (
                 <Link
                   href={`/blog/${post.slug}`}
-                  className="text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {post.title}
                 </Link>
@@ -136,7 +136,6 @@ function Step({
       href={`/blog/${post.slug}`}
       className={cn(
         "group rounded-[var(--radius-card)] border border-border p-4 transition-colors hover:border-foreground/30 hover:bg-muted",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         direction === "next" && "sm:text-right",
       )}
     >

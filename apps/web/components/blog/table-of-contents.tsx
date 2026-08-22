@@ -78,7 +78,6 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
               aria-current={active === heading.id ? "location" : undefined}
               className={cn(
                 "-ml-px block border-l-2 py-1.5 pl-3 text-sm transition-colors",
-                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                 heading.level === 3 && "pl-6",
                 active === heading.id
                   ? "border-l-foreground text-foreground"

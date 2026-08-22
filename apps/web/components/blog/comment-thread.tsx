@@ -151,7 +151,6 @@ function Comment({
             className={cn(
               eyebrowClasses,
               "mt-3 inline-flex min-h-11 items-center rounded-[var(--radius-control)] transition-colors hover:text-primary lg:min-h-9",
-              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
             )}
           >
             Reply

@@ -118,7 +118,6 @@ export function TagPicker({
                   aria-pressed={on}
                   className={cn(
                     "inline-flex min-h-9 items-center rounded-[var(--radius-pill)] border px-3 text-xs transition-colors",
-                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                     on
                       ? "border-transparent bg-primary text-primary-foreground"
                       : "border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground",
@@ -154,13 +153,13 @@ export function TagPicker({
           placeholder="New tag name"
           maxLength={60}
           aria-label="New tag name"
-          className="min-h-9 w-48 rounded-[var(--radius-control)] border border-border bg-card px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="min-h-9 w-48 rounded-[var(--radius-control)] border border-border bg-card px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground"
         />
         <button
           type="button"
           onClick={create}
           disabled={pending || !draft.trim()}
-          className="inline-flex min-h-9 items-center rounded-[var(--radius-control)] border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
+          className="inline-flex min-h-9 items-center rounded-[var(--radius-control)] border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
         >
           {pending ? "Creating…" : "Create tag"}
         </button>
@@ -191,7 +190,6 @@ export function TagPicker({
         aria-describedby={error ? `${name}-error` : undefined}
         className={cn(
           "mt-1.5 w-full rounded-[var(--radius-control)] border bg-card px-3 py-2 font-mono text-xs text-foreground",
-          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           error ? "border-destructive" : "border-border",
         )}
       />

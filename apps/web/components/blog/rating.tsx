@@ -123,9 +123,19 @@ export function Rating({ postId }: { postId: number }) {
               className={cn(
                 // 44px tap target, which the star glyph alone is nowhere near.
                 "inline-flex h-11 w-9 items-center justify-center rounded-[var(--radius-control)] transition-colors",
-                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                 "disabled:cursor-progress",
-                stars <= shown ? "text-foreground" : "text-border hover:text-muted-foreground",
+                // An unchosen star is `muted-foreground`, not `border`.
+                //
+                // `border` was the first choice and measured 1.37:1 against the
+                // card — the outline was very nearly invisible, on the control's
+                // *resting* state, which is the thing that has to say "there are
+                // five of these and you can press them". WCAG 1.4.11 wants 3:1
+                // for a control's own graphics; this measures 7.8:1 and still
+                // reads as quieter than a filled star, because the difference
+                // that carries the value is outline versus fill.
+                stars <= shown
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               <Star filled={stars <= shown} />

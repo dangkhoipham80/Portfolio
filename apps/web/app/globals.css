@@ -242,6 +242,16 @@
    * invisible to anyone navigating by keyboard, because Tailwind's preflight
    * removes the browser default outline and nothing put one back. `:focus-visible`
    * rather than `:focus` so a mouse click does not leave a ring behind.
+   *
+   * **Do not add `focus-visible:outline-*` utilities to a component.** This rule
+   * already covers everything, and the utilities are worse than redundant: the
+   * blog's controls carried
+   * `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`
+   * for a while, and `outline-ring` did not resolve to a colour, so the width
+   * and style landed while `outline-color` fell back to `currentColor`. On a
+   * muted control that painted a pale ring on a pale card — a focus indicator
+   * that was technically present and could not be seen. Measured in the
+   * browser with `getComputedStyle`, not spotted in review.
    */
   :focus-visible {
     outline: 2px solid hsl(var(--ring));

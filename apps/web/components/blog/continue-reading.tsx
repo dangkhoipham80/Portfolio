@@ -54,7 +54,6 @@ export function ContinueReading() {
           className={cn(
             eyebrowClasses,
             "inline-flex min-h-11 items-center rounded-[var(--radius-control)] px-1 transition-colors hover:text-primary lg:min-h-8",
-            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           )}
         >
           Clear
@@ -66,7 +65,7 @@ export function ContinueReading() {
           <li key={entry.slug}>
             <Link
               href={`/blog/${entry.slug}`}
-              className="group block rounded-[var(--radius-control)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="group block rounded-[var(--radius-control)]"
             >
               <span className="line-clamp-2 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
                 {entry.title}

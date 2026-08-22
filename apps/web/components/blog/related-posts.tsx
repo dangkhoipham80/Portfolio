@@ -73,7 +73,6 @@ export function RelatedPosts({
               href={`/blog/${entry.slug}`}
               className={cn(
                 "group flex h-full flex-col rounded-[var(--radius-card)] border border-border p-4 transition-colors hover:border-foreground/30 hover:bg-muted",
-                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
               )}
             >
               <span className={cn(eyebrowClasses, "tracking-normal")}>
