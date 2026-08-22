@@ -81,6 +81,37 @@ jobs:
         # database, which a developer with an existing one never re-tests.
         run: alembic upgrade head
 
+      - name: Check the models still match the migrations
+        # `alembic check` compares the mapped models to the migrated schema and
+        # fails if they have drifted — a model column added without a migration,
+        # or an index declared in one place and not the other.
+        #
+        # It was run by hand, when someone remembered. That is how the
+        # media_assets index nearly got dropped by the next autogenerate: the
+        # migration created it, the model did not declare it, and nothing said
+        # so. Fly runs `alembic upgrade head` on deploy, so drift does not fail
+        # the release — it just means production's schema and the code's idea of
+        # it quietly disagree.
+        run: alembic check
+
+      - name: Check the newest migration can be undone
+        # Only the head revision, and only on this throwaway database.
+        #
+        # Downgrades are written in this repo and, until now, never executed —
+        # so a typo in one sat undiscovered until the moment somebody needed it.
+        # Round-tripping the newest one costs about a second.
+        #
+        # What this proves is that the SQL is valid, and no more than that. The
+        # database here is empty, so a downgrade that rebuilds a column from a
+        # link table runs against zero rows; whether the *data* survives a round
+        # trip is a separate question, and the answer is checked by hand against
+        # seeded rows before a destructive migration ships.
+        #
+        # `upgrade head` again at the end so pytest finds the schema it expects.
+        run: |
+          alembic downgrade -1
+          alembic upgrade head
+
       - run: ruff check .
 
       - run: pytest
@@ -231,9 +262,54 @@ jobs:
       # The deploy reports success when the machine passes its health check,
       # which only proves the process started. This asks the running API for
       # real content, which is what the site actually depends on.
+      #
+      # Four routes, not one. It checked `/projects/` alone, which was fine
+      # while every migration touched every table — and stopped being fine the
+      # moment one reshaped the blog and nothing else. A migration that half
+      # applied, or a relationship that 500s on serialisation, would have left
+      # this green because projects were never involved.
+      #
+      # The status code is not enough either: a gateway answering 200 with an
+      # error object passes a status check and fails the site. `jq -e type` is
+      # the cheapest thing that proves a list came back as a list — the same
+      # question lib/api.ts asks of every response, for the same reason.
       - if: steps.changed.outputs.api == 'true'
+        name: Smoke-test the routes the site reads
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' \
-            https://khoi-portfolio-api.fly.dev/api/v1/projects/)
-          echo "GET /api/v1/projects/ -> $code"
-          test "$code" = "200"
+          set -euo pipefail
+          base=https://khoi-portfolio-api.fly.dev/api/v1
+          failed=0
+
+          # Checked rather than assumed. ubuntu-latest ships jq, but when it is
+          # missing the shape check below fails for every route and reports
+          # "not a JSON array" — blaming the API for a tool that was not there.
+          # Found by running this script on a machine without jq.
+          command -v jq > /dev/null || {
+            echo "jq is not installed on this runner, so the shape check cannot run."
+            exit 1
+          }
+
+          for path in projects posts tags series; do
+            body=$(mktemp)
+            # `|| true` so a connection failure is reported as this route
+            # failing rather than aborting the loop under `set -e` — which would
+            # tell you the step failed without telling you where.
+            #
+            # Not `|| echo 000`: curl already writes 000 on a failed connection,
+            # so the fallback appended a second one and the log read "-> 000000".
+            code=$(curl -s -o "$body" -w '%{http_code}' "$base/$path/" || true)
+            code=${code:-000}
+
+            if [ "$code" != "200" ]; then
+              echo "FAIL  GET /$path/ -> $code"
+              failed=1
+            elif ! jq -e 'type == "array"' "$body" > /dev/null 2>&1; then
+              echo "FAIL  GET /$path/ -> 200 but not a JSON array"
+              head -c 200 "$body"
+              failed=1
+            else
+              echo "ok    GET /$path/ -> 200, $(jq 'length' "$body") rows"
+            fi
+          done
+
+          exit "$failed"
