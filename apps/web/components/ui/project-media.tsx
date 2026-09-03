@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { CSSProperties } from "react";
 
 import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { isOptimisableImage } from "@/lib/blob";
@@ -9,8 +10,9 @@ import { cn } from "@/lib/cn";
  *
  * ## Three renderings, picked by what the record actually holds
  *
- * 1. **No image** — the project's stack, drawn as the chain of services it is
- *    (see `StackCover` below), but only where a `cover` was asked for.
+ * 1. **No image** — the project's stack, laid out as a cluster of tiles on a
+ *    lit panel (see `StackCover` below), but only where a `cover` was asked
+ *    for.
  * 2. **An uploaded image** — `next/image`, so it is resized, served as AVIF or
  *    WebP, and lazy below the fold. This is the path the console's upload
  *    button produces and the one that should be normal.
@@ -36,87 +38,24 @@ function unitFromSlug(slug: string, salt: number): number {
 }
 
 /* --------------------------------------------------------------------------
- * The stack, as a request path.
+ * The stack, as a cluster.
  *
- * Every project on this site currently has `image_url: null`, and a
- * placeholder gradient with a ghosted initial in it was the honest but
- * underwhelming answer: it said "no picture" in five different colours. This
- * says something true instead. A project's stack *is* a chain of services a
- * request passes through, so the cover draws it as one — in exactly the
- * vocabulary the hero uses for this site's own request path, so the covers
- * and the hero read as the same drawing at two scales.
+ * Every project on this site currently has `image_url: null`. The first
+ * answer to that was a placeholder gradient with a ghosted initial, which
+ * read as a broken image. The second drew the technologies as a chain of
+ * services with a packet running between them — the hero's vocabulary at a
+ * second scale — and the owner's verdict was that it wired the skills up
+ * "all over the place": Java Servlet → JSP → HTML → CSS is not a path a
+ * request takes, and a diagram that draws one is a lie told in the site's
+ * most honest idiom.
  *
- * Up to four services, folded into a serpentine for the same reason the hero
- * is: long open wires between the nodes, so the packet that runs them is
- * visible for most of its journey. The wires draw in as the row scrolls into
- * view and the packet is pushed along by the reader's own scrolling; under the
- * pointer the wires go live. All CSS — the SVG is server-rendered and static.
+ * So no wires. The stack is what the record holds, and it is shown as what
+ * it is: a set. Up to six technologies as large mono tiles, centred on the
+ * lit panel, the rest as a count. The tiles arrive one after another on the
+ * reader's scroll (`.stagger`), which is all the motion a list needs.
  * ----------------------------------------------------------------------- */
 
-const COVER_W = 360;
-const COVER_H = 180;
-const NODE_H = 30;
-const ROW_Y = [30, 120] as const;
-const EDGE_INSET = 8;
-/** Mono at 11px runs about 6.6px per character; the padding is the hero's. */
-const CHAR_W = 6.6;
-const NODE_PAD = 24;
-const MAX_LABEL = 16;
-const COVER_NODES = 4;
-
-type CoverNode = { label: string; x: number; y: number; w: number };
-
-function fitLabel(label: string): string {
-  return label.length > MAX_LABEL ? `${label.slice(0, MAX_LABEL - 1)}…` : label;
-}
-
-/**
- * Lay the first four technologies out as two rows, right-to-left on the second
- * so the chain folds. Each column shares a centre line so the vertical wire is
- * vertical whatever the two labels' widths are.
- */
-function layoutStack(technologies: string[]): {
-  nodes: CoverNode[];
-  /** Each wire with its length, which the draw and flow animations need in real units. */
-  edges: { d: string; len: number }[];
-  packetPath: string | null;
-} {
-  const labels = technologies.slice(0, COVER_NODES).map(fitLabel);
-  const widths = labels.map((l) => Math.max(64, Math.round(l.length * CHAR_W + NODE_PAD)));
-
-  const leftCentre = EDGE_INSET + Math.max(widths[0] ?? 0, widths[3] ?? 0) / 2;
-  const rightCentre = COVER_W - EDGE_INSET - Math.max(widths[1] ?? 0, widths[2] ?? 0) / 2;
-  const centres = [leftCentre, rightCentre, rightCentre, leftCentre];
-
-  const nodes: CoverNode[] = labels.map((label, i) => ({
-    label,
-    w: widths[i],
-    x: centres[i] - widths[i] / 2,
-    y: ROW_Y[i < 2 ? 0 : 1],
-  }));
-
-  const mid = (n: CoverNode) => n.y + NODE_H / 2;
-  const edges: { d: string; len: number }[] = [];
-  const path: string[] = [];
-
-  if (nodes.length >= 2) {
-    const from = nodes[0].x + nodes[0].w;
-    edges.push({ d: `M${from},${mid(nodes[0])} L${nodes[1].x},${mid(nodes[1])}`, len: nodes[1].x - from });
-    path.push(`M${from},${mid(nodes[0])}`, `L${rightCentre},${mid(nodes[1])}`);
-  }
-  if (nodes.length >= 3) {
-    const from = nodes[1].y + NODE_H;
-    edges.push({ d: `M${rightCentre},${from} L${rightCentre},${nodes[2].y}`, len: nodes[2].y - from });
-    path.push(`L${rightCentre},${mid(nodes[2])}`);
-  }
-  if (nodes.length >= 4) {
-    const to = nodes[3].x + nodes[3].w;
-    edges.push({ d: `M${nodes[2].x},${mid(nodes[2])} L${to},${mid(nodes[3])}`, len: nodes[2].x - to });
-    path.push(`L${to},${mid(nodes[3])}`);
-  }
-
-  return { nodes, edges, packetPath: path.length > 1 ? path.join(" ") : null };
-}
+const COVER_TILES = 6;
 
 function StackCover({
   slug,
@@ -127,8 +66,8 @@ function StackCover({
   technologies: string[];
   className?: string;
 }) {
-  const { nodes, edges, packetPath } = layoutStack(technologies);
-  const remainder = technologies.length - nodes.length;
+  const shown = technologies.slice(0, COVER_TILES);
+  const remainder = technologies.length - shown.length;
 
   // Where the light falls on this panel: one of the upper corners, biased so
   // neighbouring covers are not lit identically. Inline because the values
@@ -136,78 +75,46 @@ function StackCover({
   const lightX = `${Math.round(10 + unitFromSlug(slug, 7) * 40)}%`;
   const lightY = `${Math.round(unitFromSlug(slug, 13) * 30)}%`;
 
+  const tile =
+    "inline-flex items-center rounded-[var(--radius-control)] border px-4 py-2.5 font-mono text-sm sm:px-5 sm:py-3 sm:text-base lg:px-6 lg:py-3.5 lg:text-lg";
+
   return (
     <div
       className={cn(
         "cover-lit relative flex flex-col overflow-hidden rounded-[var(--radius-card)] border border-border/60",
         className,
       )}
-      style={{ "--light-x": lightX, "--light-y": lightY } as React.CSSProperties}
+      style={{ "--light-x": lightX, "--light-y": lightY } as CSSProperties}
       role="presentation"
     >
-      <svg
-        viewBox={`0 0 ${COVER_W} ${COVER_H}`}
-        aria-hidden="true"
-        className="h-full w-full flex-1 p-4 sm:p-5"
-        preserveAspectRatio="xMidYMid meet"
-      >
-        {edges.map((edge) => (
-          <path
-            key={edge.d}
-            d={edge.d}
-            fill="none"
-            stroke="hsl(var(--border))"
-            strokeWidth="1.5"
-            className="cover-edge"
-            // Real length rather than `pathLength="1"`: the hover flow's dash
-            // pattern is in user units, and a `3 9` dash on a path normalised
-            // to 1 is a solid line. See `.cover-edge` in globals.css.
-            style={{ "--len": edge.len } as React.CSSProperties}
-          />
+      <ul className="stagger flex flex-1 flex-wrap content-center items-center justify-center gap-2.5 p-8 sm:gap-3 sm:p-12">
+        {shown.map((tech, i) => (
+          <li
+            key={tech}
+            style={{ "--i": i } as CSSProperties}
+            className={cn(tile, "border-border/70 bg-background/80 text-foreground")}
+          >
+            {tech}
+          </li>
         ))}
-
-        {/* Drawn before the nodes, so it passes behind each service. */}
-        {packetPath ? (
-          <circle
-            r="3.5"
-            fill="hsl(var(--sig-cool))"
-            className="cover-packet"
-            style={{ offsetPath: `path("${packetPath}")` }}
-          />
+        {remainder > 0 ? (
+          <li
+            style={{ "--i": shown.length } as CSSProperties}
+            className={cn(tile, "border-dashed border-border/70 text-muted-foreground")}
+          >
+            +{remainder} more
+          </li>
         ) : null}
-
-        {nodes.map((node) => (
-          <g key={node.label}>
-            <rect
-              x={node.x}
-              y={node.y}
-              width={node.w}
-              height={NODE_H}
-              rx="8"
-              fill="hsl(var(--background))"
-              stroke="hsl(var(--border))"
-              strokeWidth="1.5"
-            />
-            <text
-              x={node.x + node.w / 2}
-              y={node.y + NODE_H / 2}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="hsl(var(--foreground))"
-              className="font-mono text-[11px]"
-            >
-              {node.label}
-            </text>
-          </g>
-        ))}
-      </svg>
+      </ul>
 
       <p
         aria-hidden="true"
-        className={cn(eyebrowClasses, "flex justify-between border-t border-border/40 px-4 py-2.5")}
+        className={cn(eyebrowClasses, "flex justify-between border-t border-border/40 px-5 py-3")}
       >
         <span>/{slug}</span>
-        {remainder > 0 ? <span>+{remainder} more</span> : null}
+        <span>
+          {technologies.length} in the stack
+        </span>
       </p>
     </div>
   );
@@ -225,7 +132,7 @@ export function ProjectMedia({
   slug: string;
   title: string;
   imageUrl: string | null;
-  /** What the generated cover draws when there is no image. */
+  /** What the generated cover shows when there is no image. */
   technologies?: string[];
   /**
    * Set on the first case row only. That panel is usually the page's LCP once
@@ -234,7 +141,7 @@ export function ProjectMedia({
    */
   priority?: boolean;
   /**
-   * Draw the stack as a cover when the record has no image. Off by default:
+   * Show the stack as a cover when the record has no image. Off by default:
    * in a dense grid an identical panel per card reads as a grid of failed
    * downloads. A case row is different — the layout promises a spread, so the
    * panel must exist, and what it shows is real content rather than a swatch.
@@ -313,11 +220,11 @@ export function ProjectMedia({
           alt=""
           fill
           /*
-           * The panel is half the layout at `lg` and full width below it.
-           * Without this, next/image assumes 100vw everywhere and ships a
-           * desktop-width file to fill a 700px column.
+           * The panel is a little over half the viewport at `lg` and full
+           * width below it. Without this, next/image assumes 100vw everywhere
+           * and ships a desktop-width file to fill a phone.
            */
-          sizes="(min-width: 1024px) 46rem, 100vw"
+          sizes="(min-width: 1024px) 55vw, 100vw"
           priority={priority}
           className="object-cover"
         />

@@ -1,13 +1,22 @@
-import { Eyebrow } from "@/components/ui/eyebrow";
+import type { CSSProperties } from "react";
+
+import { Container } from "@/components/ui/container";
 import { cn } from "@/lib/cn";
 import { levelLabel } from "@/lib/format";
 import type { Skill, SkillLevel } from "@/lib/types";
 
 /**
- * Capabilities as an architecture drawing: one layer per category, skills as
- * mono chips inside it, proficiency carried by the chip's fill rather than a
- * percentage bar. Bars answer "how much of this do I claim" — a CV question.
- * A stack answers "where in the system do I work" — an engineering one.
+ * Capabilities as an architecture drawing: one layer per category, run as a
+ * band across the full width of the page, skills as mono chips inside it,
+ * proficiency carried by the chip's fill rather than a percentage bar. Bars
+ * answer "how much of this do I claim" — a CV question. A stack answers
+ * "where in the system do I work" — an engineering one.
+ *
+ * The layers used to sit in a card. They are bands now, edge to edge, and
+ * each one lights as the reader crosses it (`.stack-band` in globals.css):
+ * the stack is ordered top to bottom the way a request descends through one,
+ * so the scan runs in that order at the reader's own pace. The chips inside
+ * a band arrive one after another, left to right, on the same scroll.
  */
 
 /*
@@ -30,35 +39,34 @@ const LEGEND: SkillLevel[] = ["expert", "advanced", "intermediate", "beginner"];
 export function StackDiagram({ groups }: { groups: [string, Skill[]][] }) {
   return (
     <div>
-      <div className="reveal-row overflow-hidden rounded-[var(--radius-card)] border border-border/60 bg-card/50">
-        {groups.map(([category, entries], i) => (
-          <section
-            key={category}
-            className={cn(
-              // stack-layer is the scan: an ink tick at the left of every
-              // layer that lights as that layer crosses the viewport. See
-              // globals.css — it needs `relative` for the tick to anchor to.
-              "stack-layer relative grid gap-3 p-5 pl-6 sm:grid-cols-[9rem_1fr] sm:gap-6 sm:p-6 sm:pl-7",
-              i > 0 && "border-t border-border/60",
-            )}
-          >
-            <Eyebrow as="h3" className="pt-1">
-              {category}
-            </Eyebrow>
-            <ul className="flex flex-wrap gap-2">
-              {entries.map((skill) => (
-                <li
-                  key={skill.id}
-                  title={levelLabel(skill.level)}
-                  className={cn(
-                    "inline-flex items-center rounded-[var(--radius-control)] border px-2.5 py-1 font-mono text-xs",
-                    LEVEL_CHIP[skill.level],
-                  )}
-                >
-                  {skill.name}
-                </li>
-              ))}
-            </ul>
+      <div className="border-t border-border/60">
+        {groups.map(([category, entries]) => (
+          <section key={category} className="stack-band border-b border-border/60">
+            <Container
+              width="full"
+              className="grid gap-4 py-7 sm:grid-cols-[minmax(9rem,18vw)_1fr] sm:gap-10 lg:py-9"
+            >
+              {/* The layer's name at display weight, not as an eyebrow: in a
+                  band this wide it is the thing the eye lands on first. */}
+              <h3 className="font-display text-xl font-bold tracking-tight text-foreground sm:pt-0.5 sm:text-2xl">
+                {category}
+              </h3>
+              <ul className="stagger flex flex-wrap gap-2">
+                {entries.map((skill, i) => (
+                  <li
+                    key={skill.id}
+                    title={levelLabel(skill.level)}
+                    style={{ "--i": i } as CSSProperties}
+                    className={cn(
+                      "inline-flex items-center rounded-[var(--radius-control)] border px-3 py-1.5 font-mono text-xs sm:text-sm",
+                      LEVEL_CHIP[skill.level],
+                    )}
+                  >
+                    {skill.name}
+                  </li>
+                ))}
+              </ul>
+            </Container>
           </section>
         ))}
       </div>
@@ -67,20 +75,22 @@ export function StackDiagram({ groups }: { groups: [string, Skill[]][] }) {
         The encoding, stated rather than assumed: a reader has no reason to
         know that fill means depth until this line says so.
       */}
-      <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-        <span>Depth:</span>
-        {LEGEND.map((level) => (
-          <span
-            key={level}
-            className={cn(
-              "inline-flex items-center rounded-[var(--radius-control)] border px-2 py-0.5",
-              LEVEL_CHIP[level],
-            )}
-          >
-            {levelLabel(level)}
-          </span>
-        ))}
-      </p>
+      <Container width="full">
+        <p className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+          <span>Depth:</span>
+          {LEGEND.map((level) => (
+            <span
+              key={level}
+              className={cn(
+                "inline-flex items-center rounded-[var(--radius-control)] border px-2 py-0.5",
+                LEVEL_CHIP[level],
+              )}
+            >
+              {levelLabel(level)}
+            </span>
+          ))}
+        </p>
+      </Container>
     </div>
   );
 }

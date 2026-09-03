@@ -25,7 +25,8 @@ export function ContactSection() {
       // container's left edge, and this is the one section that broke the
       // line by centring a narrower container. The reading measure survives
       // as the max-width on the content below.
-      width="layout"
+      width="full"
+      warm
       // This read "Contact · POST /contacts" — the route the form submits to,
       // which is true and is the one thing that distinguishes this form from
       // the EmailJS one it replaces. It does not survive the eyebrow's

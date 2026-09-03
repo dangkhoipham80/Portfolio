@@ -1,12 +1,15 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { StatusBadge, chipClasses } from "@/components/ui/badge";
+import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { ExternalLink } from "@/components/ui/external-link";
 import { ProjectMedia } from "@/components/ui/project-media";
+import { isOptimisableImage } from "@/lib/blob";
 import { cn } from "@/lib/cn";
 import { formatPeriod } from "@/lib/format";
-import type { Project } from "@/lib/types";
+import type { GalleryImage, Project } from "@/lib/types";
 import { ViewTransition } from "@/lib/view-transition";
 
 /**
@@ -36,8 +39,8 @@ const CASE_ROW_CHIPS = 5;
 /** The heading, stretched over its row so the whole article is the target. */
 function ProjectTitle({ project }: { project: Project }) {
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <h3 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <h3 className="font-display text-3xl font-extrabold tracking-[-0.03em] text-foreground sm:text-4xl lg:text-5xl">
         <Link
           href={`/projects/${project.slug}`}
           // The ::after stretches this anchor over the row while the link text
@@ -90,62 +93,153 @@ function ProjectLinks({ project, className }: { project: Project; className?: st
 }
 
 /**
- * A featured project as a spread: the cover beside the argument for it,
- * alternating sides so the section reads as a sequence rather than a grid of
- * tiles. The grid treats every project as the same size; featured work is not
- * the same size, and the spread is the layout saying so.
+ * One supporting screenshot in the strip. The same three-way choice the
+ * detail page's gallery makes, for the same reason (see project-gallery.tsx):
+ * a gallery URL is free text, and next/image on an unlisted host throws at
+ * render rather than degrading.
+ */
+function StripImage({ image, sizes }: { image: GalleryImage; sizes: string }) {
+  const frame =
+    "relative aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-card)] border border-border bg-muted";
+
+  if (!isOptimisableImage(image.url)) {
+    return (
+      <div className={frame}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={image.url}
+          alt={image.alt ?? ""}
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={frame}>
+      <Image src={image.url} alt={image.alt ?? ""} fill sizes={sizes} className="object-cover" />
+    </div>
+  );
+}
+
+/**
+ * A featured project as a case block: the argument on top, in the gutter,
+ * and the evidence underneath as a strip of screens that runs off the right
+ * edge of the screen.
  *
- * ## The cover is always real
+ * ## Why not a spread
  *
- * This used to fall back to a dense record layout when the project had no
- * `image_url`, because the alternative was a generated gradient with a ghost
- * initial in it and four of those stacked read as four broken images. The
- * cover is now the project's own stack drawn as a request path (see
- * `StackCover` in ui/project-media.tsx) — content the record does hold — so
- * the spread is the right promise again whether or not a screenshot has been
- * uploaded. When one is, it replaces the drawing with no other change here.
+ * The last layout put the cover on one side and the text on the other, and
+ * the owner did not like it — and it was the wrong shape for what a project
+ * here is going to hold: one main screenshot and a dozen supporting ones.
+ * A half-width panel has room for exactly one image. A strip has room for
+ * all of them, in the order the console lists them, and the reader scrolls
+ * it sideways the way they would flip through a case study. The main cover
+ * is first and largest; the gallery follows at a smaller size so the
+ * hierarchy is in the layout, not in a caption.
+ *
+ * The strip is full bleed on the right only. It begins at the text's left
+ * gutter so the cover lines up with the title above it, and it is allowed
+ * to run out under the right edge because that is what tells the reader
+ * there is more to drag. On the reader's scroll it slides in from that edge
+ * (`.spread-media`).
+ *
+ * ## Before the images arrive
+ *
+ * Every project currently has `image_url: null` and an empty gallery. The
+ * cover slot then shows the project's own stack as a cluster of tiles (see
+ * `StackCover` in ui/project-media.tsx) — content the record does hold —
+ * and there is no strip to scroll. Uploading a cover in the console replaces
+ * the tiles; adding gallery images extends the strip. Nothing here changes.
  */
 export function CaseRow({
   project,
-  flip,
   priority,
 }: {
   project: Project;
-  flip?: boolean;
   /** True for the first row only — see ProjectMedia's `priority`. */
   priority?: boolean;
 }) {
   const period = formatPeriod(project.started_on, project.ended_on);
+  const gallery = project.gallery ?? [];
+  // With nothing to scroll to, the cover takes the whole gutter width as a
+  // wide banner instead of leaving a third of the strip empty. The moment a
+  // gallery image is added the cover narrows and the strip appears.
+  const hasStrip = gallery.length > 0;
 
   return (
-    <article className="group relative grid items-center gap-8 pt-14 first:pt-0 lg:grid-cols-2 lg:gap-14 lg:pt-20">
-      {/* Shared-element morph: this panel and the detail page's header carry
-          the same transition name, so clicking through animates the panel
-          into the header instead of cutting. */}
-      <ViewTransition name={`project-media-${project.slug}`}>
-        <ProjectMedia
-          slug={project.slug}
-          title={project.title}
-          imageUrl={project.image_url}
-          technologies={project.technologies}
-          cover
-          priority={priority}
-          className={cn(
-            "aspect-video w-full transition-transform duration-500 group-hover:scale-[1.01]",
-            flip && "lg:order-2",
-          )}
-        />
-      </ViewTransition>
+    // overflow-hidden on the row: the strip arrives from beyond the viewport
+    // edge (`.spread-media`), and until the reader scrolls to it that start
+    // position would otherwise be 60px of horizontal scrollbar.
+    <article className="group relative overflow-hidden border-t border-border/60 py-10 sm:py-14 lg:py-16">
+      <Container width="full">
+        <div className="reveal-row grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-end lg:gap-16">
+          <div>
+            <Eyebrow>
+              /{project.slug}
+              {period ? ` · ${period}` : null}
+            </Eyebrow>
+            <div className="mt-4">
+              <ProjectTitle project={project} />
+            </div>
+          </div>
 
-      <div>
-        <Eyebrow>/{project.slug}</Eyebrow>
-        <div className="mt-3">
-          <ProjectTitle project={project} />
+          <div>
+            <p className="max-w-xl text-[1.0625rem] leading-relaxed text-muted-foreground sm:text-lg">
+              {project.description}
+            </p>
+            {/* Only beside a photograph. When the cover is the stack itself,
+                listing the same names again under the title says it twice. */}
+            {project.image_url ? (
+              <TechChips technologies={project.technologies} className="mt-5" />
+            ) : null}
+            <ProjectLinks project={project} className="mt-3" />
+          </div>
         </div>
-        {period ? <Eyebrow className="mt-2">{period}</Eyebrow> : null}
-        <p className="mt-4 max-w-xl text-muted-foreground">{project.description}</p>
-        <TechChips technologies={project.technologies} className="mt-5" />
-        <ProjectLinks project={project} className="mt-4" />
+      </Container>
+
+      {/*
+        The strip. Snap points so a flick lands on an image rather than
+        between two; the gutter is scroll padding so the first snap position
+        is the aligned one. `scrollbar-width: thin` because the strip is a
+        scroll container and hiding the bar entirely would hide the only
+        non-drag affordance it has.
+      */}
+      <div className="spread-media mt-8 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-3 [scrollbar-width:thin] sm:mt-10 sm:gap-4 sm:px-8 lg:px-12 [scroll-padding-inline:1.25rem] sm:[scroll-padding-inline:2rem] lg:[scroll-padding-inline:3rem]">
+        <div
+          className={cn(
+            "shrink-0 snap-start",
+            hasStrip ? "w-[86vw] max-w-[72rem] sm:w-[74vw] lg:w-[62vw]" : "w-full",
+          )}
+        >
+          {/* Shared-element morph: this panel and the detail page's header
+              carry the same transition name, so clicking through animates the
+              panel into the header instead of cutting. */}
+          <ViewTransition name={`project-media-${project.slug}`}>
+            <ProjectMedia
+              slug={project.slug}
+              title={project.title}
+              imageUrl={project.image_url}
+              technologies={project.technologies}
+              cover
+              priority={priority}
+              className={cn(
+                "w-full transition-transform duration-700 ease-out group-hover:scale-[1.01]",
+                hasStrip ? "aspect-[16/9]" : "aspect-[16/10] sm:aspect-[21/9] lg:aspect-[3/1]",
+              )}
+            />
+          </ViewTransition>
+        </div>
+
+        {gallery.map((image) => (
+          <div
+            key={image.url}
+            className="w-[70vw] shrink-0 snap-start sm:w-[44vw] lg:w-[30vw] lg:max-w-[36rem]"
+          >
+            <StripImage image={image} sizes="(min-width: 1024px) 30vw, (min-width: 640px) 44vw, 70vw" />
+          </div>
+        ))}
       </div>
     </article>
   );

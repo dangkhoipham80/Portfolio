@@ -152,8 +152,10 @@
     --sig-warm: 14 88% 54%;
     /* Darker on paper than on ink: mid-green on white measures badly. */
     --live: 158 72% 32%;
-    /* How strongly the light fields show. Paper takes less than ink does. */
-    --light-strength: 0.16;
+    /* How strongly the light fields show. Paper takes less than ink does.
+       Raised from 0.16: at that strength the lights were a rumour, and a
+       page lit by a rumour reads as flat grey. */
+    --light-strength: 0.24;
   }
 
   /*
@@ -186,7 +188,7 @@
     --sig-cool: 228 100% 66%;
     --sig-warm: 14 100% 64%;
     --live: 152 68% 55%;
-    --light-strength: 0.26;
+    --light-strength: 0.4;
   }
 
   html {
@@ -370,27 +372,6 @@
   }
 
   /*
-   * The hero topology's "data on the wire".
-   *
-   * A dashed stroke whose offset animates reads as packets moving along an
-   * edge, and costs one CSS rule — no canvas, no WebGL, no client component,
-   * nothing competing with LCP. It also stops dead under reduced motion via
-   * the block below, which a SMIL <animateMotion> would not.
-   */
-  @keyframes wire-flow {
-    to {
-      stroke-dashoffset: -24;
-    }
-  }
-
-  .wire-flow {
-    stroke-dasharray: 3 9;
-    animation: wire-flow 1.6s linear infinite;
-    /* A request in flight is cool light, here as everywhere on the site. */
-    stroke: hsl(var(--sig-cool));
-  }
-
-  /*
    * One request, running the path.
    *
    * The hero used to put a dashed `wire-flow` on every edge at once, which
@@ -472,91 +453,6 @@
     .packet-path .packet-back {
       animation: packet-back 3.6s linear infinite;
       animation-delay: 900ms;
-    }
-  }
-
-  /*
-   * A cover's request path, pushed along by the reader.
-   *
-   * The project covers draw each project's stack as a chain of services, and
-   * a packet runs the chain — but on a scroll timeline rather than a clock.
-   * Four covers each looping their own packet would be four things moving at
-   * once for no reason; tied to `view()`, the packet is wherever the reader
-   * has scrolled the row to, arrives as the row reaches the middle of the
-   * viewport, and runs backwards if they scroll back up. One rule, no
-   * orchestration, nothing moving on a page nobody is scrolling.
-   *
-   * The base state parks the packet at the end of the path and hides it, so a
-   * browser without scroll timelines sees a drawn graph and no stray dot.
-   */
-  .cover-packet {
-    offset-rotate: 0deg;
-    offset-distance: 100%;
-    opacity: 0;
-  }
-
-  @keyframes cover-packet-run {
-    0% {
-      offset-distance: 0%;
-      opacity: 0;
-    }
-    8%,
-    92% {
-      opacity: 1;
-    }
-    100% {
-      offset-distance: 100%;
-      opacity: 0;
-    }
-  }
-
-  /*
-   * A cover edge carries its own length in `--len` (they are straight lines,
-   * so the component can compute it) rather than `pathLength="1"`, because the
-   * hover state below needs real units: a `3 9` dash on a path normalised to
-   * length 1 is one dash three paths long, which is a solid line.
-   */
-  .cover-edge {
-    stroke-dasharray: var(--len);
-  }
-
-  @keyframes cover-edge-draw {
-    from {
-      stroke-dashoffset: var(--len);
-    }
-    to {
-      stroke-dashoffset: 0;
-    }
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    @supports (animation-timeline: view()) {
-      .cover-packet {
-        animation: cover-packet-run linear both;
-        animation-timeline: view();
-        /* The whole run happens while the cover crosses the middle band of the
-           viewport, so it is always seen and never hurried. */
-        animation-range: entry 40% exit 60%;
-      }
-
-      /* The rails draw in as the cover arrives, before the packet sets off. */
-      .cover-edge {
-        animation: cover-edge-draw linear both;
-        animation-timeline: view();
-        animation-range: entry 10% entry 60%;
-      }
-    }
-
-    /*
-     * Under the pointer the wires go live: the same dashed flow as the hero.
-     * `animation-timeline` is named explicitly because the shorthand above
-     * would otherwise leave the scroll timeline attached to a clock animation.
-     */
-    .group:hover .cover-edge {
-      stroke-dasharray: 3 9;
-      stroke: hsl(var(--sig-cool));
-      animation: wire-flow 1.6s linear infinite;
-      animation-timeline: auto;
     }
   }
 
@@ -731,27 +627,6 @@
         animation-range: entry 0% cover 35%;
       }
     }
-  }
-
-  /*
-   * Topology nodes respond to the pointer the way a service-mesh dashboard's
-   * do: the hovered node joins the data path's colour. Class selectors
-   * outrank SVG presentation attributes, so this overrides the inline
-   * stroke/fill without touching the markup. Sighted-only by design — the
-   * whole SVG is aria-hidden.
-   */
-  .topology-node rect,
-  .topology-node text {
-    transition: stroke 200ms, fill 200ms;
-  }
-
-  .topology-node:hover rect {
-    stroke: hsl(var(--sig-cool));
-    fill: hsl(var(--sig-cool) / 0.1);
-  }
-
-  .topology-node:hover text {
-    fill: hsl(var(--primary));
   }
 
   /*
@@ -1625,5 +1500,275 @@
         hsl(var(--sig-warm) / calc(var(--light-strength) * 0.7)),
         transparent 70%
       );
+  }
+}
+
+/* ==========================================================================
+ * Full bleed, and the motion that goes with it.
+ *
+ * The home page used to sit in a 1280px box with a spine down its left
+ * gutter, and the owner's verdict on the result was three things at once:
+ * ugly, hardly animated, and "left and right are not full". This block is
+ * the answer to the second and third. Layout-wise the page now runs to the
+ * viewport — `Container width="full"` keeps a gutter for text, and the
+ * things that are not text (covers, the request wire, the ticker, the
+ * capability bands) touch the edges. Motion-wise every section gets one
+ * orchestrated idea rather than a fade: words rise out of a mask, the wire
+ * draws and carries traffic across the whole screen, covers slide in from
+ * the edge they sit on, bands light as the reader crosses them.
+ *
+ * Same guards as everything above. Base rules are the resting state, so a
+ * browser without scroll timelines and a reader who asked for reduced motion
+ * both get the finished page; the animations only ever take something away
+ * and give it back.
+ * ========================================================================== */
+
+/* A word rising out of a slot cut in the page. */
+@keyframes word-rise {
+  from {
+    translate: 0 calc(100% + 0.4em);
+  }
+}
+
+/*
+ * A streak runs the wire: it starts entirely off the left end (its own width
+ * before the band) and ends entirely off the right, so the whole tail is
+ * seen leaving. The moving legs ease — a signal accelerates out of a node
+ * and settles into the next — and the two legs share one cycle so the
+ * response never sets off before the request has landed.
+ */
+@keyframes wire-streak-out {
+  0% {
+    translate: -100% -50%;
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  42% {
+    translate: 100cqw -50%;
+    opacity: 1;
+  }
+  42.1%,
+  100% {
+    translate: 100cqw -50%;
+    opacity: 0;
+  }
+}
+
+@keyframes wire-streak-back {
+  0%,
+  49.9% {
+    translate: 100cqw -50%;
+    opacity: 0;
+  }
+  50% {
+    translate: 100cqw -50%;
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  92% {
+    translate: -100% -50%;
+    opacity: 1;
+  }
+  92.1%,
+  100% {
+    translate: -100% -50%;
+    opacity: 0;
+  }
+}
+
+@keyframes ticker-run {
+  to {
+    translate: -50% 0;
+  }
+}
+
+/* A strip of screens arriving from the edge of the screen it runs off. */
+@keyframes spread-in {
+  from {
+    translate: var(--from) 0;
+    opacity: 0.3;
+  }
+}
+
+/* A capability band lighting as the reader crosses it. */
+@keyframes band-scan {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: hsl(var(--sig-cool) / 0.08);
+  }
+}
+
+@layer base {
+  /*
+   * The mask. Padding on the slot and the same amount of negative margin, so
+   * the slot is larger than the line box — Vietnamese carries marks below the
+   * baseline (the nặng dot) and above the cap height (the breve, the
+   * circumflex), and a slot cut to the line box would clip both. The inner
+   * span is what moves; `word-rise` starts it a full slot below.
+   */
+  .mask-word {
+    display: inline-block;
+    overflow: hidden;
+    vertical-align: top;
+    padding: 0.12em 0.04em 0.28em;
+    margin: -0.12em -0.04em -0.28em;
+  }
+
+  .mask-word > span {
+    display: inline-block;
+  }
+
+  /* On a clock, for the hero: one word after another, from the left. */
+  .hero-words .mask-word > span {
+    animation: word-rise 900ms var(--ease-enter) both;
+    animation-delay: calc(120ms + var(--i, 0) * 110ms);
+  }
+
+  /* Wires are drawn from the left, in request order, on the same clock. */
+  .wire-run {
+    transform-origin: left;
+    animation: rule-draw 700ms var(--ease-enter) both;
+    animation-delay: var(--d, 0ms);
+  }
+
+  /*
+   * The band is a size container so the packets can travel its full width
+   * in `cqw` — one keyframe, whatever the viewport. The packets sit under
+   * the nodes (z-index at the call site) so a request visibly disappears into
+   * a service and comes out the other side, which is the whole point of
+   * drawing it.
+   */
+  .wire-band {
+    container-type: inline-size;
+  }
+
+  .wire-streak {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 18cqw;
+    height: 2px;
+    border-radius: 9999px;
+    translate: -100% -50%;
+    /* Pure motion: parked off the band and invisible unless it is running. */
+    opacity: 0;
+  }
+
+  /* The head is at the leading end; the tail fades behind it. */
+  .wire-streak-out {
+    background: linear-gradient(90deg, transparent, hsl(var(--sig-cool)));
+  }
+
+  .wire-streak-back {
+    background: linear-gradient(270deg, transparent, hsl(var(--sig-warm)));
+  }
+
+  /*
+   * The ticker. Two copies of the list on one track, translated by half its
+   * width, so the loop is seamless. Under reduced motion the track stops,
+   * wraps, and the second copy is removed — a still list of technologies is
+   * a fine thing to show, a list that stops mid-scroll is not.
+   */
+  .ticker-track {
+    display: flex;
+    width: max-content;
+  }
+
+  /* The strip arrives from the edge it runs off: the right. */
+  .spread-media {
+    --from: 6%;
+  }
+
+  .pointer-light {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 600ms var(--ease-enter);
+    background: radial-gradient(
+      36vmax circle at var(--px, 50%) var(--py, 40%),
+      hsl(var(--sig-cool) / calc(var(--light-strength) * 0.8)),
+      hsl(var(--sig-cool) / calc(var(--light-strength) * 0.25)) 40%,
+      transparent 66%
+    );
+  }
+
+  /* A warm room for the contact block: the response light, at the bottom. */
+  .section-warm {
+    background-image: radial-gradient(
+      80% 90% at 85% 100%,
+      hsl(var(--sig-warm) / calc(var(--light-strength) * 0.9)),
+      transparent 70%
+    );
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .wire-streak-out {
+      animation: wire-streak-out 6s linear infinite;
+      /* Held until the last node has landed. */
+      animation-delay: 1400ms;
+    }
+
+    .wire-streak-back {
+      animation: wire-streak-back 6s linear infinite;
+      animation-delay: 1400ms;
+    }
+
+    .ticker-track {
+      animation: ticker-run 56s linear infinite;
+    }
+
+    .ticker:hover .ticker-track {
+      animation-play-state: paused;
+    }
+
+    @supports (animation-timeline: view()) {
+      /* On the reader's scroll, for section titles: the same rise. */
+      .reveal-words .mask-word > span {
+        animation: word-rise linear both;
+        animation-timeline: view();
+        animation-range: entry calc(var(--i, 0) * 6%) cover calc(30% + var(--i, 0) * 6%);
+      }
+
+      .spread-media {
+        animation: spread-in linear both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 85%;
+      }
+
+      /* Chips arrive one after another, left to right, on the row's scroll. */
+      .stagger > * {
+        animation: reveal-in linear both;
+        animation-timeline: view();
+        animation-range: entry calc(var(--i, 0) * 2.5%) cover calc(24% + var(--i, 0) * 2.5%);
+      }
+
+      .stack-band {
+        animation: band-scan linear both;
+        animation-timeline: view();
+        animation-range: cover 20% cover 80%;
+      }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ticker-track {
+      animation: none;
+      width: auto;
+      flex-wrap: wrap;
+    }
+
+    .ticker-copy[aria-hidden="true"] {
+      display: none;
+    }
+  }
+
+  @media (hover: none) {
+    .pointer-light {
+      display: none;
+    }
   }
 }
