@@ -10,6 +10,18 @@
 # and NIST dropped the recommendation in SP 800-63B.
 MIN_PASSWORD_LENGTH = 12
 
+# How long a password-reset link stays good for.
+#
+# One hour was already the answer in three places — the token's expiry, the
+# sentence in the mail, and the copy on the web app's reset screen — which is
+# three chances for the link to outlive what it claims. Long enough to survive a
+# mail client's delay and a walk to another device; short enough that a reset
+# mail sitting in an unattended inbox is not a standing key to the account.
+PASSWORD_RESET_EXPIRE_MINUTES = 60
+
+# Same shape, for the verification mail.
+EMAIL_VERIFICATION_EXPIRE_MINUTES = 60
+
 
 # Error Messages
 class ErrorMessages:

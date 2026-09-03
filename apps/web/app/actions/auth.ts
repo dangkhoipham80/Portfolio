@@ -3,7 +3,21 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { login, logout as revokeTokens } from "@/lib/console-api";
+import {
+  confirmPasswordReset,
+  login,
+  logout as revokeTokens,
+  requestPasswordReset as askForResetLink,
+} from "@/lib/console-api";
+import {
+  type NewPasswordState,
+  type ResetRequestState,
+  readNewPasswordForm,
+  readResetRequestForm,
+  readResetToken,
+  validateNewPassword,
+  validateResetRequest,
+} from "@/lib/password-reset";
 import { retryAfterSeconds } from "@/lib/retry-after";
 import {
   ACCESS_COOKIE,
@@ -112,6 +126,98 @@ export async function signOut(): Promise<void> {
   }
 
   redirect(LOGIN_PATH);
+}
+
+/**
+ * Ask for a reset link.
+ *
+ * The success state says "if that address has an account" rather than "we have
+ * sent you a mail", and that wording is load-bearing rather than cautious. The
+ * API answers the same 200 either way so the form cannot be used to discover
+ * which addresses exist; a screen that claimed a mail had been sent would give
+ * that back in the copy, which is the same leak one layer up.
+ */
+export async function requestPasswordReset(
+  _previous: ResetRequestState,
+  formData: FormData,
+): Promise<ResetRequestState> {
+  const email = readResetRequestForm(formData);
+
+  // The browser ran this too. It runs again because the browser's copy is a
+  // convenience, not a control — this form posts fine with JavaScript off.
+  const errors = validateResetRequest(email);
+  if (errors.email) {
+    return { status: "invalid", errors, email };
+  }
+
+  const result = await askForResetLink(email.trim(), await forwardedFor());
+
+  if (!result.ok) {
+    if (result.reason === "rate_limited") {
+      return {
+        status: "rate_limited",
+        retryAfterSeconds: retryAfterSeconds(result.response),
+        email,
+      };
+    }
+
+    // `unauthorized` cannot happen on this route — it takes no token — but it
+    // is part of ApiResult, and folding it in here beats a switch that only
+    // looks exhaustive. Every remaining case means the same thing to the person
+    // waiting: no link is coming.
+    return { status: "unavailable", email };
+  }
+
+  return { status: "sent", email };
+}
+
+/**
+ * Spend a reset link on a new password.
+ *
+ * No redirect and no cookie. The API revokes every token the account holds as
+ * part of the reset — which is the point of a reset, and the reason a stolen
+ * session cannot survive one — so there is nothing to sign this browser in
+ * with. The screen says so and sends them to /login.
+ */
+export async function resetPassword(
+  _previous: NewPasswordState,
+  formData: FormData,
+): Promise<NewPasswordState> {
+  const token = readResetToken(
+    typeof formData.get("token") === "string" ? (formData.get("token") as string) : undefined,
+  );
+
+  // The field is hidden and filled by the page from the URL, so an empty or
+  // mangled one means a truncated link rather than anything the person did.
+  if (!token) return { status: "token_rejected" };
+
+  const values = readNewPasswordForm(formData);
+
+  const errors = validateNewPassword(values);
+  if (Object.keys(errors).length > 0) {
+    return { status: "invalid", errors };
+  }
+
+  const result = await confirmPasswordReset(token, values.password);
+
+  if (result.ok) return { status: "done" };
+
+  if (result.reason === "token_rejected") return { status: "token_rejected" };
+
+  if (result.reason === "weak_password") {
+    // The API's rule turned out to be stricter than this app's copy of it.
+    // Landing it on the field beats reporting it as an outage.
+    return {
+      status: "invalid",
+      errors: { password: "The API refused this password. Try a longer one." },
+    };
+  }
+
+  if (result.reason === "rate_limited") {
+    return { status: "rate_limited", retryAfterSeconds: retryAfterSeconds(result.response) };
+  }
+
+  return { status: "unavailable" };
 }
 
 /*

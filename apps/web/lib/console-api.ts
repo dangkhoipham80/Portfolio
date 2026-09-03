@@ -113,6 +113,78 @@ export async function login(
   return toResult<TokenPair>(response, "/auth/login");
 }
 
+/**
+ * Ask the API to mail a reset link.
+ *
+ * Answers `ok` for an unknown address as readily as for a real one. That is the
+ * API's design, not an oversight here — see request_password_reset in
+ * apps/api/app/services/auth_service.py — and the console must not undo it by
+ * inspecting the response for a difference that is deliberately not there.
+ */
+export async function requestPasswordReset(
+  email: string,
+  forwardedFor?: string,
+): Promise<ApiResult<{ message: string }>> {
+  const response = await call("/auth/password-reset-request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    // Same reason as login(): the API's cap is 5/hour per IP, and without this
+    // header the IP it counts is this server's — so five requests from anywhere
+    // in the world would lock the form for everybody.
+    headers: forwardedFor ? { "X-Forwarded-For": forwardedFor } : {},
+  });
+
+  return toResult<{ message: string }>(response, "/auth/password-reset-request");
+}
+
+/**
+ * Outcomes of spending a reset link. Not `ApiResult`, on purpose.
+ *
+ * The API answers 422 to two quite different things here — a token it will not
+ * accept, and a password its schema rejects — and `toResult` folds every 422
+ * into `error`, which would report both as "the API did not answer". They need
+ * different sentences: one means ask for a new link, the other means choose a
+ * longer password.
+ *
+ * The two are told apart by the shape of `detail`: FastAPI's own validation
+ * failures carry a list, and the API's `ValidationError` carries a string.
+ */
+export type PasswordResetOutcome =
+  | { ok: true }
+  | { ok: false; reason: "token_rejected" }
+  | { ok: false; reason: "weak_password" }
+  | { ok: false; reason: "rate_limited"; response: Response }
+  | { ok: false; reason: "error" };
+
+/** Spend a reset link on a new password. Revokes every session the account had. */
+export async function confirmPasswordReset(
+  token: string,
+  newPassword: string,
+): Promise<PasswordResetOutcome> {
+  const path = "/auth/password-reset-confirm";
+  const response = await call(path, {
+    method: "POST",
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+
+  if (!response) return { ok: false, reason: "error" };
+
+  if (response.ok) return { ok: true };
+
+  if (response.status === 429) return { ok: false, reason: "rate_limited", response };
+
+  if (response.status === 422) {
+    const detail = (await response.json().catch(() => null))?.detail;
+    // A list is pydantic rejecting `new_password`; the browser and the Server
+    // Action both check the length first, so this is the case where the API's
+    // rule is stricter than ours rather than the everyday one.
+    return { ok: false, reason: Array.isArray(detail) ? "weak_password" : "token_rejected" };
+  }
+
+  console.error(`[console] ${response.status} ${response.statusText} from ${path}`);
+  return { ok: false, reason: "error" };
+}
+
 /** Trade a refresh token for a new pair. The old one is revoked API-side. */
 export async function refreshSession(refreshToken: string): Promise<ApiResult<TokenPair>> {
   const response = await call("/auth/refresh", {

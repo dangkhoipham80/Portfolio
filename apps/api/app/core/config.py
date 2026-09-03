@@ -29,6 +29,19 @@ class Settings(BaseSettings):
             return [i.strip() for i in v.split(",") if i.strip()]
         return []
 
+    # Where the web app lives, for the links in outbound mail.
+    #
+    # The reset and verification mails carry a link into apps/web, not into this
+    # API, and there was no setting for it: both built the link from
+    # BACKEND_CORS_ORIGINS[0]. That happens to be right locally and is wrong the
+    # moment a second origin is listed or the list is reordered — a preview
+    # deployment added to the front of it silently starts collecting the live
+    # site's password-reset links.
+    #
+    # Blank falls back to the old behaviour rather than to localhost, so an
+    # existing deployment keeps working until this is set.
+    FRONTEND_URL: str = ""
+
     DATABASE_URL: str
 
     # Security
@@ -93,6 +106,19 @@ class Settings(BaseSettings):
         verbatim, producing `Portfolio Contact <>`, which Gmail rejects outright.
         """
         return self.EMAILS_FROM_EMAIL or self.SMTP_USER
+
+    @property
+    def frontend_base_url(self) -> str:
+        """Origin for links in mail, with no trailing slash.
+
+        The strip matters: FRONTEND_URL is pasted from a browser and arrives as
+        "https://example.com/" about half the time, which would make every link
+        in every mail a double slash.
+        """
+        base = self.FRONTEND_URL or (
+            self.BACKEND_CORS_ORIGINS[0] if self.BACKEND_CORS_ORIGINS else "http://localhost:3000"
+        )
+        return base.rstrip("/")
 
     @property
     def contact_notify_recipient(self) -> str:

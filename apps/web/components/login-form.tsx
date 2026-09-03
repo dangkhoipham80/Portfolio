@@ -12,6 +12,7 @@
  */
 
 import { useActionState, useRef, useState } from "react";
+import Link from "next/link";
 
 import { signIn } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -177,6 +178,35 @@ export function LoginForm({ next }: { next: string }) {
         error={clientErrors.password}
         onBlur={() => clearError("password")}
       />
+
+      {/*
+        The way out for someone who cannot get in.
+
+        Beside the password rather than at the foot of the page, because that is
+        where a person looks when the password is the thing that is not working
+        — but on its own row rather than in the field's `meta` slot, which is
+        the obvious place and is wrong. `meta` sits on the label row, 8px above
+        the input; a link there large enough to be a 44px tap target would
+        extend its hit area down over the top edge of the password field, and
+        tapping into the field on a phone would follow the link instead.
+
+        Here the form's own `gap-5` leaves 20px above and below, so the padded
+        target clears both neighbours. A real <a>: it is a navigation, and it
+        has to work with JavaScript off, as the rest of this form does.
+
+        py-4 rather than the py-3.5 that looks like it should be enough: an
+        inline element's box is its font metrics, not its line-height, so 12px
+        mono measures 15px and not 16 — 3.5 came to 43px, one short of the
+        floor, which is the kind of miss only a measurement catches.
+      */}
+      <p className="text-right leading-none">
+        <Link
+          href="/forgot-password"
+          className="py-4 font-mono text-xs text-muted-foreground underline underline-offset-4 hover:text-primary"
+        >
+          Forgot your password?
+        </Link>
+      </p>
 
       <Wire active={isPending} />
 
