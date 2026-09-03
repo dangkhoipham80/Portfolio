@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { StatusBadge, chipClasses } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/badge";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { ExternalLink } from "@/components/ui/external-link";
@@ -12,28 +12,14 @@ import { formatPeriod } from "@/lib/format";
 import type { GalleryImage, Project } from "@/lib/types";
 import { ViewTransition } from "@/lib/view-transition";
 
-/**
- * How many technology chips a case row shows before it stops counting.
- *
- * This row used to render every one, which meant eleven identical chips under
- * EduPath and Food Forum and nine under Cenematic. Past about five they stop
- * being read: they are all the same size, weight and colour, so the eye takes
- * them as one grey texture and the two that actually matter are buried in it.
- * A wall of chips also reads as a generated interface rather than an edited
- * one — someone chose to list eleven things, or nobody chose anything.
- *
- * The remainder is shown as a count rather than dropped silently, and the
- * detail page still lists the full stack, so nothing becomes unreachable.
- */
-const CASE_ROW_CHIPS = 5;
-
 /*
- * The three pieces both case-row layouts share.
+ * The pieces both case-row layouts share. Components rather than a copied
+ * class string because "which links exist" is logic, not styling.
  *
- * They are components rather than a copied class string because the capping
- * rule above and the "which links exist" question are logic, not styling —
- * duplicating them is how the two layouts would end up disagreeing about how
- * many chips is too many.
+ * No technology chips here, on purpose. The home page used to list five
+ * under every title and a tile cluster in the cover; the owner's call is
+ * that a project on this page is its description and its cover image, and
+ * nothing else. The detail page lists the full stack.
  */
 
 /** The heading, stretched over its row so the whole article is the target. */
@@ -54,28 +40,6 @@ function ProjectTitle({ project }: { project: Project }) {
       </h3>
       <StatusBadge status={project.status} />
     </div>
-  );
-}
-
-function TechChips({ technologies, className }: { technologies: string[]; className?: string }) {
-  if (technologies.length === 0) return null;
-
-  const shown = technologies.slice(0, CASE_ROW_CHIPS);
-  const remainder = technologies.length - shown.length;
-
-  return (
-    <ul className={cn("flex flex-wrap items-center gap-1.5", className)}>
-      {shown.map((tech) => (
-        <li key={tech} className={chipClasses}>
-          {tech}
-        </li>
-      ))}
-      {remainder > 0 ? (
-        <li className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-          +{remainder}
-        </li>
-      ) : null}
-    </ul>
   );
 }
 
@@ -147,11 +111,13 @@ function StripImage({ image, sizes }: { image: GalleryImage; sizes: string }) {
  *
  * ## Before the images arrive
  *
- * Every project currently has `image_url: null` and an empty gallery. The
- * cover slot then shows the project's own stack as a cluster of tiles (see
- * `StackCover` in ui/project-media.tsx) — content the record does hold —
- * and there is no strip to scroll. Uploading a cover in the console replaces
- * the tiles; adding gallery images extends the strip. Nothing here changes.
+ * Every project currently has `image_url: null` and an empty gallery, and
+ * the block is then the title, the description and the links — no panel.
+ * Two generated stand-ins were tried (a gradient with a ghost initial, then
+ * the stack as tiles) and the owner's call was to show nothing rather than
+ * something invented: a project here is its description and its cover.
+ * Uploading a cover in the console adds the banner; adding gallery images
+ * turns it into the strip. Nothing here changes.
  */
 export function CaseRow({
   project,
@@ -163,10 +129,12 @@ export function CaseRow({
 }) {
   const period = formatPeriod(project.started_on, project.ended_on);
   const gallery = project.gallery ?? [];
+  const hasCover = Boolean(project.image_url);
   // With nothing to scroll to, the cover takes the whole gutter width as a
   // wide banner instead of leaving a third of the strip empty. The moment a
   // gallery image is added the cover narrows and the strip appears.
   const hasStrip = gallery.length > 0;
+  const hasMedia = hasCover || hasStrip;
 
   return (
     // overflow-hidden on the row: the strip arrives from beyond the viewport
@@ -189,11 +157,6 @@ export function CaseRow({
             <p className="max-w-xl text-[1.0625rem] leading-relaxed text-muted-foreground sm:text-lg">
               {project.description}
             </p>
-            {/* Only beside a photograph. When the cover is the stack itself,
-                listing the same names again under the title says it twice. */}
-            {project.image_url ? (
-              <TechChips technologies={project.technologies} className="mt-5" />
-            ) : null}
             <ProjectLinks project={project} className="mt-3" />
           </div>
         </div>
@@ -206,31 +169,32 @@ export function CaseRow({
         scroll container and hiding the bar entirely would hide the only
         non-drag affordance it has.
       */}
+      {hasMedia ? (
       <div className="spread-media mt-8 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-3 [scrollbar-width:thin] sm:mt-10 sm:gap-4 sm:px-8 lg:px-12 [scroll-padding-inline:1.25rem] sm:[scroll-padding-inline:2rem] lg:[scroll-padding-inline:3rem]">
-        <div
-          className={cn(
-            "shrink-0 snap-start",
-            hasStrip ? "w-[86vw] max-w-[72rem] sm:w-[74vw] lg:w-[62vw]" : "w-full",
-          )}
-        >
-          {/* Shared-element morph: this panel and the detail page's header
-              carry the same transition name, so clicking through animates the
-              panel into the header instead of cutting. */}
-          <ViewTransition name={`project-media-${project.slug}`}>
-            <ProjectMedia
-              slug={project.slug}
-              title={project.title}
-              imageUrl={project.image_url}
-              technologies={project.technologies}
-              cover
-              priority={priority}
-              className={cn(
-                "w-full transition-transform duration-700 ease-out group-hover:scale-[1.01]",
-                hasStrip ? "aspect-[16/9]" : "aspect-[16/10] sm:aspect-[21/9] lg:aspect-[3/1]",
-              )}
-            />
-          </ViewTransition>
-        </div>
+        {hasCover ? (
+          <div
+            className={cn(
+              "shrink-0 snap-start",
+              hasStrip ? "w-[86vw] max-w-[72rem] sm:w-[74vw] lg:w-[62vw]" : "w-full",
+            )}
+          >
+            {/* Shared-element morph: this panel and the detail page's header
+                carry the same transition name, so clicking through animates
+                the panel into the header instead of cutting. */}
+            <ViewTransition name={`project-media-${project.slug}`}>
+              <ProjectMedia
+                slug={project.slug}
+                title={project.title}
+                imageUrl={project.image_url}
+                priority={priority}
+                className={cn(
+                  "w-full transition-transform duration-700 ease-out group-hover:scale-[1.01]",
+                  hasStrip ? "aspect-[16/9]" : "aspect-[16/10] sm:aspect-[21/9] lg:aspect-[3/1]",
+                )}
+              />
+            </ViewTransition>
+          </div>
+        ) : null}
 
         {gallery.map((image) => (
           <div
@@ -241,6 +205,7 @@ export function CaseRow({
           </div>
         ))}
       </div>
+      ) : null}
     </article>
   );
 }
