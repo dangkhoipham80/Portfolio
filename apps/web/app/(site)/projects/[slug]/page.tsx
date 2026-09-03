@@ -105,6 +105,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
             slug={project.slug}
             title={project.title}
             imageUrl={project.image_url}
+            technologies={project.technologies}
             cover
             // A fixed height, not an aspect ratio: 21/9 of the layout container
             // is most of a viewport of empty panel. This is a header, not the

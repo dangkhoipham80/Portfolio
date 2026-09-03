@@ -41,7 +41,7 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
         otherwise leave the footer floating mid-screen with paper below it.
       */}
       <footer className="mt-auto border-t border-border/60 bg-card">
-        <Container width="layout" className="pt-10">
+        <Container width="full" className="pt-10">
           {/*
             The end of the line. Every page's spine has to terminate somewhere,
             and a file that ends cleanly ends at EOF — the one quiet joke the
@@ -54,7 +54,7 @@ export default function SiteLayout({ children }: LayoutProps<"/">) {
           </p>
         </Container>
         <Container
-          width="layout"
+          width="full"
           className="flex flex-col gap-8 py-8 sm:flex-row sm:items-start sm:justify-between"
         >
           {/*

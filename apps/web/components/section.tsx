@@ -1,8 +1,29 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/cn";
+
+/**
+ * A heading whose words rise out of the page one after another as the
+ * section scrolls in. Each word sits in its own mask (`.mask-word`), indexed
+ * so the CSS can stagger them; see `.reveal-words` in globals.css. With
+ * motion off or unsupported the spans are plain inline text.
+ */
+export function RisingWords({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(" ").map((word, i) => (
+        <span key={`${word}-${i}`}>
+          <span className="mask-word" style={{ "--i": i } as CSSProperties}>
+            <span>{word}</span>
+          </span>
+          {/* A real space between slots, so the heading is still one string. */}{" "}
+        </span>
+      ))}
+    </>
+  );
+}
 
 export function Section({
   id,
@@ -20,6 +41,10 @@ export function Section({
    * Passed through to Container. Sections of cards want the wide measure; a
    * section that is mostly text or a single column of form fields does not,
    * and stretching one to 5xl leaves a very long line and a lot of dead space.
+   *
+   * `full` is the home page: no maximum, a gutter, no spine, and the title
+   * set at display scale — a section that runs to the edges of the screen
+   * needs a heading that can hold that width.
    */
   width = "wide",
   /**
@@ -29,6 +54,13 @@ export function Section({
    * rows in a query result: it marks a layer boundary without decorating it.
    */
   tinted = false,
+  /** The warm light, for the one section at the end of the page. */
+  warm = false,
+  /**
+   * Render the body outside the Container, so it can touch the viewport
+   * edges. The heading stays in the gutter; the body is on its own.
+   */
+  flush = false,
   children,
 }: {
   id?: string;
@@ -37,11 +69,14 @@ export function Section({
   title: string;
   description?: string;
   level?: "h1" | "h2";
-  width?: "wide" | "layout" | "reading";
+  width?: "full" | "wide" | "layout" | "reading";
   tinted?: boolean;
+  warm?: boolean;
+  flush?: boolean;
   children: ReactNode;
 }) {
   const Heading = level;
+  const full = width === "full";
 
   return (
     <section
@@ -57,6 +92,7 @@ export function Section({
         // starts; the padding does not have to do it a third time.
         "section-rule relative py-20 sm:py-24 lg:py-28",
         tinted && "bg-muted",
+        warm && "section-warm",
       )}
     >
       {/*
@@ -66,31 +102,48 @@ export function Section({
         the content box's left edge at every viewport. Decorative — the
         structure it draws is already in the headings — so hidden from
         assistive tech, and absent below lg where its gutter does not exist.
+
+        Not on the full-width page: there the sections themselves run edge to
+        edge and a rail down one side would be the box coming back.
       */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden lg:block">
-        <Container width={width} className="h-full">
-          <div className="spine-rail" />
-        </Container>
-      </div>
+      {full ? null : (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden lg:block">
+          <Container width={width} className="h-full">
+            <div className="spine-rail" />
+          </Container>
+        </div>
+      )}
 
       <Container width={width}>
-        <div className="relative lg:pl-16">
+        <div className={cn("relative", !full && "lg:pl-16")}>
           {/* The junction: this section, docked to the path. */}
-          <span
-            aria-hidden="true"
-            className="spine-node absolute left-0 top-1 ml-px hidden -translate-x-1/2 lg:block"
-          />
+          {full ? null : (
+            <span
+              aria-hidden="true"
+              className="spine-node absolute left-0 top-1 ml-px hidden -translate-x-1/2 lg:block"
+            />
+          )}
 
           {eyebrow ? <Eyebrow className="reveal mb-3">{eyebrow}</Eyebrow> : null}
-          <Heading className="reveal font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-            {title}
-          </Heading>
+          {full ? (
+            <Heading className="reveal-words font-display text-[clamp(2.75rem,7vw,7.5rem)] font-extrabold leading-[0.95] tracking-[-0.04em] text-foreground">
+              <RisingWords text={title} />
+            </Heading>
+          ) : (
+            <Heading className="reveal font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+              {title}
+            </Heading>
+          )}
           {description ? (
-            <p className="reveal mt-4 max-w-2xl text-lg text-muted-foreground">{description}</p>
+            <p className={cn("reveal mt-4 max-w-2xl text-lg text-muted-foreground", full && "mt-6 sm:text-xl")}>
+              {description}
+            </p>
           ) : null}
-          <div className="mt-10">{children}</div>
+          {flush ? null : <div className={cn("mt-10", full && "mt-12 lg:mt-16")}>{children}</div>}
         </div>
       </Container>
+
+      {flush ? <div className="mt-12 lg:mt-16">{children}</div> : null}
     </section>
   );
 }

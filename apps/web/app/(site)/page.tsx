@@ -1,9 +1,12 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 import { CaseRow, ProjectIndexRow } from "@/components/case-row";
 import { ContactSection } from "@/components/contact-section";
-import { HeroTopology } from "@/components/hero-topology";
+import { HeroWire } from "@/components/hero-wire";
+import { PointerLight } from "@/components/pointer-light";
 import { EmptyState, Section } from "@/components/section";
+import { SkillTicker } from "@/components/skill-ticker";
 import { StackDiagram } from "@/components/stack-diagram";
 import { buttonClasses } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
@@ -31,11 +34,14 @@ function groupByCategory(skills: Skill[]): [string, Skill[]][] {
 /** How many recent posts the home page previews before pointing at /blog. */
 const WRITING_PREVIEW_COUNT = 3;
 
+/** The name, one slot per word so each can rise on its own. */
+const NAME = ["Phạm", "Đăng", "Khôi"];
+
 export default async function HomePage() {
   // All three reads are independent, so let them overlap rather than waterfall.
-  // The projects read keeps its outcome as well as its data: the hero's
-  // topology lights the API node from it, so an empty list caused by an outage
-  // and one caused by an empty database do not look the same.
+  // The projects read keeps its outcome as well as its data: the hero's wire
+  // lights the API node from it, so an empty list caused by an outage and one
+  // caused by an empty database do not look the same.
   const [projectsRead, skills, posts] = await Promise.all([
     readProjects(),
     getSkills(),
@@ -54,106 +60,123 @@ export default async function HomePage() {
   return (
     <>
       {/*
-        The hero owns the first viewport. The name is the logo, set at display
-        scale in one ink, and the topology sits beside the thesis as supporting
-        evidence rather than competing with the name for the top row.
+        The hero owns the first viewport, and it uses all of it.
 
-        The `hero-name-accent` spans below currently render no differently from
-        the rest of the name — see the note on that class in globals.css. They
-        are left in place because the diacritics are still the right thing to
-        single out; what they need is a treatment that is not colour.
+        The name is the logo, set to run the width of the screen — the size
+        is in `vw` so it does at every width, and each word rises out of a
+        slot cut in the page as the site boots. Below it the request path
+        that served this response runs edge to edge as one wire, which is the
+        page's thesis and its signature in the same drawing. The light on the
+        hero follows the pointer: the only thing on the page that answers to
+        the reader directly.
       */}
-      <section className="relative flex min-h-[calc(100svh-4.25rem)] items-center py-20 sm:py-24">
-        <Container width="layout">
-          <Eyebrow className="hero-item">Backend · Data · AI</Eyebrow>
+      <section className="relative flex min-h-[calc(100svh-4.25rem)] flex-col justify-between overflow-hidden pb-10 pt-10 sm:pt-14 lg:pb-12">
+        <PointerLight />
+
+        <Container width="full" className="relative">
+          <div className="hero-item flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+            <Eyebrow>Backend · Data · AI</Eyebrow>
+            {/*
+              A status line, in the same dot-plus-mono shape the career
+              timeline uses: the one fact a recruiter scans for, styled as a
+              health check rather than a banner. Lit, with a halo: this is a
+              live status, which is exactly what the hue is reserved for.
+            */}
+            <p className="flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-foreground">
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 rounded-full bg-live shadow-[0_0_0_3px_hsl(var(--live)/0.18)]"
+              />
+              Open to mid-level+ roles
+            </p>
+          </div>
+
           {/*
-            Leading opens up until the name fits on one line. Vietnamese
-            stacks diacritics both ways — the nặng dot under "ạ" and the
-            breve over "ă" — so at 1.04 a wrapped name has the dot of one
-            line landing in the breve of the next. It only shows below `lg`,
-            where the name wraps, which is exactly where it must not.
+            The name measures about 8.1em set in Be Vietnam Pro 800. At 11.9vw
+            it filled the gutters exactly and the owner's verdict was "too
+            big" — a name that is the whole screen is a billboard, not a
+            signature. 8.4vw is a line that owns the top of the page and
+            leaves the right third to the air the wire below needs. Below
+            `lg` it wraps, and Vietnamese stacks diacritics both ways — the
+            nặng dot under "ạ" and the circumflex over "ô" — so the leading
+            opens up exactly where the lines meet.
           */}
-          <h1 className="hero-item mt-5 font-display text-[clamp(3.25rem,9vw,7.5rem)] font-extrabold leading-[1.16] tracking-[-0.03em] text-foreground lg:leading-[1.04] [animation-delay:80ms]">
-            Ph<span className="hero-name-accent">ạ</span>m{" "}
-            <span className="hero-name-accent">Đă</span>ng Kh
-            <span className="hero-name-accent">ô</span>i
+          <h1 className="hero-words mt-8 font-display text-[clamp(3.25rem,8.4vw,11rem)] font-extrabold leading-[1.08] tracking-[-0.04em] text-foreground sm:mt-10 lg:leading-[0.94]">
+            {NAME.map((word, i) => (
+              <span key={word}>
+                <span className="mask-word" style={{ "--i": i } as CSSProperties}>
+                  <span>{word}</span>
+                </span>{" "}
+              </span>
+            ))}
           </h1>
 
-          <div className="mt-8 grid items-center gap-10 lg:mt-10 lg:grid-cols-2 lg:gap-14">
-            <div>
-              <p className="hero-item max-w-xl text-lg text-muted-foreground sm:text-xl [animation-delay:180ms]">
+          <div className="mt-10 grid items-end gap-8 sm:mt-12 lg:grid-cols-[1.4fr_1fr] lg:gap-14">
+            {/*
+              Two tiers, not one grey paragraph. The claim is set in the
+              display face at a reading size the name has just earned; the
+              biography under it is body copy and muted, because it is the
+              supporting fact, not the thesis.
+            */}
+            <div className="hero-item max-w-2xl [animation-delay:520ms]">
+              <p className="font-display text-2xl font-medium leading-[1.25] tracking-[-0.02em] text-foreground sm:text-3xl lg:text-[2rem]">
                 I build the parts you do not see: APIs, schemas, queues and the
-                services between them. Software engineering student at FPT
-                University, working in Python and Java, moving toward data and
-                AI engineering.
+                services between them.
               </p>
-              {/*
-                A status line, in the same dot-plus-mono shape the career
-                timeline uses: the one fact a recruiter scans for, styled as a
-                health check rather than a banner.
-              */}
-              <p className="hero-item mt-8 flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-primary [animation-delay:280ms]">
-                {/* Lit, with a halo: this is a live status, which is exactly
-                    what the hue is reserved for. */}
-                <span
-                  aria-hidden="true"
-                  className="h-1.5 w-1.5 rounded-full bg-live shadow-[0_0_0_3px_hsl(var(--live)/0.18)]"
-                />
-                Open to mid-level+ roles
+              <p className="mt-4 max-w-xl text-base text-muted-foreground sm:text-lg">
+                Software engineering student at FPT University, working in
+                Python and Java, moving toward data and AI engineering.
               </p>
-
-              <div className="hero-item mt-10 flex flex-wrap gap-3 [animation-delay:360ms]">
-                <Link href="/#projects" className={buttonClasses("primary")}>
-                  View work
-                </Link>
-                <Link href="/blog" className={buttonClasses("quiet")}>
-                  Read writing
-                </Link>
-              </div>
             </div>
 
-            <HeroTopology
-              projectCount={projects.length}
-              apiOk={projectsRead.ok}
-              className="hero-item w-full max-w-xl justify-self-center [animation-delay:440ms] lg:justify-self-end"
-            />
+            <div className="hero-item flex flex-wrap gap-3 lg:justify-end [animation-delay:640ms]">
+              <Link href="/#projects" className={buttonClasses("primary")}>
+                View work
+              </Link>
+              <Link href="/blog" className={buttonClasses("quiet")}>
+                Read writing
+              </Link>
+            </div>
           </div>
         </Container>
+
+        <HeroWire
+          projectCount={projects.length}
+          apiOk={projectsRead.ok}
+          className="mt-14 sm:mt-20"
+        />
       </section>
+
+      <SkillTicker skills={skills} />
 
       <Section
         id="projects"
-        width="layout"
+        width="full"
+        flush
         eyebrow={`/selected-work · ${projects.length}`}
         title="Selected work"
       >
         {projects.length === 0 ? (
-          <EmptyState>No entries returned — the write-up queue is still draining.</EmptyState>
+          <Container width="full">
+            <EmptyState>No entries returned — the write-up queue is still draining.</EmptyState>
+          </Container>
         ) : (
           <>
-            {/* No gap: each row carries its own top spacing, because a record
-                row separates itself with a rule and a spread needs more air
-                than a rule. */}
             <div className="flex flex-col">
               {(featured.length > 0 ? featured : projects).map((project, i) => (
-                <CaseRow
-                  key={project.id}
-                  project={project}
-                  flip={i % 2 === 1}
-                  priority={i === 0}
-                />
+                <CaseRow key={project.id} project={project} priority={i === 0} />
               ))}
             </div>
 
             {featured.length > 0 && rest.length > 0 ? (
-              <div className="mt-20 lg:mt-24">
+              <Container width="full" className="mt-16 lg:mt-20">
                 <Eyebrow as="h3">/more-builds · {rest.length}</Eyebrow>
                 <div className="mt-4 divide-y divide-border/60 border-t border-border/60">
                   {rest.map((project) => (
                     <ProjectIndexRow key={project.id} project={project} />
                   ))}
                 </div>
-              </div>
+              </Container>
             ) : null}
           </>
         )}
@@ -161,13 +184,15 @@ export default async function HomePage() {
 
       <Section
         id="skills"
-        tinted
-        width="layout"
+        width="full"
+        flush
         eyebrow={`/capabilities · ${skills.length}`}
         title="Where in the stack I work"
       >
         {skills.length === 0 ? (
-          <EmptyState>No capabilities published yet.</EmptyState>
+          <Container width="full">
+            <EmptyState>No capabilities published yet.</EmptyState>
+          </Container>
         ) : (
           <StackDiagram groups={groupByCategory(skills)} />
         )}
@@ -187,7 +212,7 @@ export default async function HomePage() {
       {recentPosts.length > 0 ? (
         <Section
           id="writing"
-          width="layout"
+          width="full"
           eyebrow={`/writing · ${posts.length}`}
           title="Notes from the build"
         >
@@ -202,10 +227,10 @@ export default async function HomePage() {
                     {isoDay(post.published_at)}
                   </time>
                   <div>
-                    <h3 className="font-display text-xl font-semibold tracking-tight text-foreground">
+                    <h3 className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
                       <Link
                         href={`/blog/${post.slug}`}
-                        className="after:absolute after:inset-0 group-hover:text-primary"
+                        className="link-draw after:absolute after:inset-0"
                       >
                         {post.title}
                       </Link>

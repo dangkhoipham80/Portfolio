@@ -1,5 +1,7 @@
 import Image from "next/image";
+import type { CSSProperties } from "react";
 
+import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { isOptimisableImage } from "@/lib/blob";
 import { cn } from "@/lib/cn";
 
@@ -8,8 +10,9 @@ import { cn } from "@/lib/cn";
  *
  * ## Three renderings, picked by what the record actually holds
  *
- * 1. **No image** — a designed generative cover (slug-derived gradient, ghost
- *    initial, slug), but only where a `cover` was asked for.
+ * 1. **No image** — the project's stack, laid out as a cluster of tiles on a
+ *    lit panel (see `StackCover` below), but only where a `cover` was asked
+ *    for.
  * 2. **An uploaded image** — `next/image`, so it is resized, served as AVIF or
  *    WebP, and lazy below the fold. This is the path the console's upload
  *    button produces and the one that should be normal.
@@ -23,24 +26,105 @@ import { cn } from "@/lib/cn";
  * fails to load simply does not paint, the gradient shows through, and there is
  * no broken-image icon, no layout shift, and no `onError` handler — so no
  * client component either.
- *
- * The gradient angle is derived from the slug so each project reads as its own
- * tile, but the colours stay on the site's palette — this is meant to look
- * deliberate, not like five random swatches.
  */
 
-function angleFromSlug(slug: string): number {
-  let hash = 0;
+/** A stable number in [0, 1) from a slug, so a cover looks the same on every render. */
+function unitFromSlug(slug: string, salt: number): number {
+  let hash = salt;
   for (let i = 0; i < slug.length; i += 1) {
-    hash = (hash * 31 + slug.charCodeAt(i)) % 360;
+    hash = (hash * 31 + slug.charCodeAt(i)) % 1000003;
   }
-  return hash;
+  return (hash % 1000) / 1000;
+}
+
+/* --------------------------------------------------------------------------
+ * The stack, as a cluster.
+ *
+ * Every project on this site currently has `image_url: null`. The first
+ * answer to that was a placeholder gradient with a ghosted initial, which
+ * read as a broken image. The second drew the technologies as a chain of
+ * services with a packet running between them — the hero's vocabulary at a
+ * second scale — and the owner's verdict was that it wired the skills up
+ * "all over the place": Java Servlet → JSP → HTML → CSS is not a path a
+ * request takes, and a diagram that draws one is a lie told in the site's
+ * most honest idiom.
+ *
+ * So no wires. The stack is what the record holds, and it is shown as what
+ * it is: a set. Up to six technologies as large mono tiles, centred on the
+ * lit panel, the rest as a count. The tiles arrive one after another on the
+ * reader's scroll (`.stagger`), which is all the motion a list needs.
+ * ----------------------------------------------------------------------- */
+
+const COVER_TILES = 6;
+
+function StackCover({
+  slug,
+  technologies,
+  className,
+}: {
+  slug: string;
+  technologies: string[];
+  className?: string;
+}) {
+  const shown = technologies.slice(0, COVER_TILES);
+  const remainder = technologies.length - shown.length;
+
+  // Where the light falls on this panel: one of the upper corners, biased so
+  // neighbouring covers are not lit identically. Inline because the values
+  // are per record and Tailwind's scanner would never see them.
+  const lightX = `${Math.round(10 + unitFromSlug(slug, 7) * 40)}%`;
+  const lightY = `${Math.round(unitFromSlug(slug, 13) * 30)}%`;
+
+  const tile =
+    "inline-flex items-center rounded-[var(--radius-control)] border px-4 py-2.5 font-mono text-sm sm:px-5 sm:py-3 sm:text-base lg:px-6 lg:py-3.5 lg:text-lg";
+
+  return (
+    <div
+      className={cn(
+        "cover-lit relative flex flex-col overflow-hidden rounded-[var(--radius-card)] border border-border/60",
+        className,
+      )}
+      style={{ "--light-x": lightX, "--light-y": lightY } as CSSProperties}
+      role="presentation"
+    >
+      <ul className="stagger flex flex-1 flex-wrap content-center items-center justify-center gap-2.5 p-8 sm:gap-3 sm:p-12">
+        {shown.map((tech, i) => (
+          <li
+            key={tech}
+            style={{ "--i": i } as CSSProperties}
+            className={cn(tile, "border-border/70 bg-background/80 text-foreground")}
+          >
+            {tech}
+          </li>
+        ))}
+        {remainder > 0 ? (
+          <li
+            style={{ "--i": shown.length } as CSSProperties}
+            className={cn(tile, "border-dashed border-border/70 text-muted-foreground")}
+          >
+            +{remainder} more
+          </li>
+        ) : null}
+      </ul>
+
+      <p
+        aria-hidden="true"
+        className={cn(eyebrowClasses, "flex justify-between border-t border-border/40 px-5 py-3")}
+      >
+        <span>/{slug}</span>
+        <span>
+          {technologies.length} in the stack
+        </span>
+      </p>
+    </div>
+  );
 }
 
 export function ProjectMedia({
   slug,
   title,
   imageUrl,
+  technologies = [],
   cover = false,
   priority = false,
   className,
@@ -48,6 +132,8 @@ export function ProjectMedia({
   slug: string;
   title: string;
   imageUrl: string | null;
+  /** What the generated cover shows when there is no image. */
+  technologies?: string[];
   /**
    * Set on the first case row only. That panel is usually the page's LCP once
    * real covers exist, and everything below it should stay lazy — marking them
@@ -55,11 +141,10 @@ export function ProjectMedia({
    */
   priority?: boolean;
   /**
-   * Render a designed generative cover when the record has no image. Off by
-   * default: in a dense grid an identical box per card reads as a grid of
-   * failed downloads. A case row is different — the layout promises a spread,
-   * so the panel must exist, and the cover below is composed (ghost initial,
-   * slug, slug-derived gradient) rather than an empty swatch.
+   * Show the stack as a cover when the record has no image. Off by default:
+   * in a dense grid an identical panel per card reads as a grid of failed
+   * downloads. A case row is different — the layout promises a spread, so the
+   * panel must exist, and what it shows is real content rather than a swatch.
    */
   cover?: boolean;
   className?: string;
@@ -67,37 +152,11 @@ export function ProjectMedia({
   // No image on the record means draw nothing — unless a cover was asked for.
   if (!imageUrl && !cover) return null;
 
-  const angle = angleFromSlug(slug);
-
   if (!imageUrl) {
-    return (
-      <div
-        className={cn(
-          "relative flex aspect-video items-end overflow-hidden rounded-[var(--radius-card)] border border-border/60",
-          className,
-        )}
-        style={{
-          backgroundImage: `linear-gradient(${angle}deg, hsl(var(--primary) / 0.16), hsl(var(--primary) / 0.03) 60%)`,
-        }}
-        role="presentation"
-      >
-        {/* The project's initial as a ghosted plate mark — cover art the data
-            cannot fail to provide. */}
-        <span
-          aria-hidden="true"
-          className="absolute -right-5 top-1/2 -translate-y-1/2 select-none font-display text-[9rem] font-extrabold leading-none text-foreground/[0.06] sm:text-[12rem]"
-        >
-          {title.slice(0, 1)}
-        </span>
-        <span
-          aria-hidden="true"
-          className="p-4 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground"
-        >
-          /{slug}
-        </span>
-      </div>
-    );
+    return <StackCover slug={slug} technologies={technologies} className={className} />;
   }
+
+  const angle = Math.round(unitFromSlug(slug, 1) * 360);
 
   const tile =
     "relative flex items-end overflow-hidden rounded-[var(--radius-control)] border border-border";
@@ -161,11 +220,11 @@ export function ProjectMedia({
           alt=""
           fill
           /*
-           * The panel is half the layout at `lg` and full width below it.
-           * Without this, next/image assumes 100vw everywhere and ships a
-           * desktop-width file to fill a 700px column.
+           * The panel is a little over half the viewport at `lg` and full
+           * width below it. Without this, next/image assumes 100vw everywhere
+           * and ships a desktop-width file to fill a phone.
            */
-          sizes="(min-width: 1024px) 46rem, 100vw"
+          sizes="(min-width: 1024px) 55vw, 100vw"
           priority={priority}
           className="object-cover"
         />
@@ -178,7 +237,7 @@ export function ProjectMedia({
   // when it loads and is invisible when it does not.
   const backgroundImage = [
     `url(${JSON.stringify(imageUrl)})`,
-    `linear-gradient(${angle}deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.04))`,
+    `linear-gradient(${angle}deg, hsl(var(--sig-cool) / 0.22), hsl(var(--sig-warm) / 0.08))`,
   ].join(", ");
 
   return (

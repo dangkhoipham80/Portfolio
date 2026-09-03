@@ -17,12 +17,13 @@ import { cn } from "@/lib/cn";
 
 const VARIANTS = {
   /**
-   * The one action a screen is asking for. The hover glow is the amber
-   * "signal" identity doing its job on the single loudest control — nothing
-   * else on a screen is allowed to bloom like this.
+   * The one action a screen is asking for: the only control filled with the
+   * site's hue. It lifts a pixel and brightens under the pointer; it does not
+   * glow, because a coloured blur under a button on a dark page is the
+   * best-known AI-interface tell there is, and the fill is loud enough.
    */
   primary:
-    "bg-primary text-primary-foreground font-semibold hover:shadow-[0_0_28px_hsl(var(--signal)/0.35)] hover:brightness-105",
+    "bg-primary text-primary-foreground font-semibold hover:-translate-y-px hover:brightness-110",
   /** Secondary actions that should not compete: "send another", "cancel". */
   quiet: "bg-muted text-foreground hover:bg-accent hover:text-primary",
   /**
