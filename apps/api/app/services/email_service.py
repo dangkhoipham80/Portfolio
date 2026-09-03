@@ -243,3 +243,151 @@ def send_contact_notification(
         )
     else:
         logger.info("Contact notification sent for contact id=%s", contact_id)
+
+
+def _reset_text(*, greeting: str, reset_url: str, expires_minutes: int) -> str:
+    """The plain-text part of the reset mail.
+
+    Carries the full URL on its own line rather than hiding it behind a phrase.
+    A password-reset link is exactly the kind of mail a careful person wants to
+    read before clicking, and a text part that says "click the button above"
+    gives them nothing to read.
+    """
+    return (
+        f"{greeting}\n\n"
+        f"Someone asked to reset the password on your {settings.PROJECT_NAME} account.\n"
+        f"Open this link to choose a new one:\n\n"
+        f"{reset_url}\n\n"
+        f"The link works once and expires in {_minutes_in_words(expires_minutes)}.\n\n"
+        f"If this wasn't you, ignore this mail — nothing has changed, and the\n"
+        f"link stops working on its own.\n"
+    )
+
+
+def _minutes_in_words(minutes: int) -> str:
+    """"60" is not what a person reading a deadline wants to be handed."""
+    if minutes % 60 == 0:
+        hours = minutes // 60
+        return f"{hours} hour" if hours == 1 else f"{hours} hours"
+    return f"{minutes} minutes"
+
+
+def _reset_html(*, greeting: str, reset_url: str, expires_minutes: int) -> str:
+    """The HTML part.
+
+    Same construction as the contact notification above and for the same
+    reasons: tables and inline styles because Outlook renders through Word's
+    HTML engine, every interpolated value escaped, and a preheader so the inbox
+    list shows the point of the mail rather than the first words of the body.
+
+    The link is printed underneath the button as well as wired into it. A button
+    whose destination cannot be read is the shape of every phishing mail there
+    is, and this one is asking someone to type a password on the other side of
+    it.
+    """
+    safe_greeting = escape(greeting)
+    safe_url = escape(reset_url, quote=True)
+    window = escape(_minutes_in_words(expires_minutes))
+
+    return f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Reset your password</title>
+</head>
+<body style="margin:0;padding:0;background:{_BACKGROUND};">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+  Choose a new password. The link expires in {window}.
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="background:{_BACKGROUND};padding:32px 16px;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:560px;background:{_CARD};border:1px solid {_BORDER};
+                    border-radius:12px;overflow:hidden;">
+        <tr>
+          <td style="padding:28px 28px 0 28px;">
+            <p style="margin:0 0 6px 0;font-family:{_MONO};font-size:11px;
+                      letter-spacing:0.12em;text-transform:uppercase;color:{_PRIMARY};">
+              Password reset
+            </p>
+            <h1 style="margin:0;font-family:{_SANS};font-size:20px;line-height:1.35;
+                       font-weight:600;color:{_INK};">
+              Choose a new password
+            </h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 28px 0 28px;font-family:{_SANS};font-size:15px;
+                     line-height:1.6;color:{_INK};">
+            <p style="margin:0 0 12px 0;">{safe_greeting}</p>
+            <p style="margin:0;">
+              Someone asked to reset the password on your
+              {escape(settings.PROJECT_NAME)} account. Use the button below to set
+              a new one. The link works once and expires in {window}.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 28px 0 28px;">
+            <a href="{safe_url}"
+               style="display:inline-block;background:{_PRIMARY};color:#ffffff;
+                      font-family:{_SANS};font-size:14px;font-weight:600;
+                      text-decoration:none;padding:10px 18px;border-radius:8px;">
+              Set a new password
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px 0 28px;">
+            <p style="margin:0;font-family:{_MONO};font-size:11px;line-height:1.7;
+                      color:{_MUTED};word-break:break-all;">
+              {safe_url}
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 28px 28px 28px;">
+            <p style="margin:0;border-top:1px solid {_BORDER};padding-top:20px;
+                      font-family:{_SANS};font-size:14px;line-height:1.6;color:{_MUTED};">
+              If you didn&rsquo;t ask for this, ignore this mail. Nothing has
+              changed, and the link stops working on its own.
+            </p>
+          </td>
+        </tr>
+      </table>
+      <p style="max-width:560px;margin:16px auto 0 auto;font-family:{_MONO};
+                font-size:11px;line-height:1.6;color:{_MUTED};text-align:center;">
+        Sent because a password reset was requested for this address.
+      </p>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
+"""
+
+
+def send_password_reset(
+    to_email: str,
+    *,
+    greeting: str,
+    reset_url: str,
+    expires_minutes: int,
+) -> None:
+    """Send the reset link. Raises, like ``send_email`` — the caller decides.
+
+    ``auth_service`` swallows the failure, because a request that answers 500
+    tells whoever is on the login screen that the address exists. That is the
+    caller's decision to make, not this module's.
+    """
+    send_email(
+        to_email,
+        "Reset your password",
+        _reset_text(greeting=greeting, reset_url=reset_url, expires_minutes=expires_minutes),
+        html=_reset_html(greeting=greeting, reset_url=reset_url, expires_minutes=expires_minutes),
+    )

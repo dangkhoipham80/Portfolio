@@ -38,6 +38,14 @@ primary_region = "iad"
   ENVIRONMENT = "production"
   DEBUG = "False"
 
+  # Where the links in outbound mail point. Not a secret — it is the public site
+  # — and it belongs here rather than in `fly secrets` for that reason.
+  #
+  # Set explicitly because the fallback is BACKEND_CORS_ORIGINS[0], and that list
+  # carries preview origins. A reordering there would quietly start mailing
+  # password-reset links to a preview deployment.
+  FRONTEND_URL = "https://khoipham.vercel.app"
+
 [http_service]
   internal_port = 8080
   force_https = true

@@ -155,6 +155,31 @@ are keyed on slug, so re-running updates in place rather than duplicating.
 1-5 integer. `Project.status` is `completed` / `in_progress` / `on_hold` /
 `dropped`. A career entry with a null `ended_on` is the current one.
 
+## Console access
+
+`/login` is the one way in; there is no public sign-up, and the single admin
+account comes from `init_auth_tables.py` above. `/forgot-password` mails a
+one-hour, single-use link to `/reset-password?token=...`, and spending it
+revokes every token the account holds — which is what makes a reset the remedy
+for a stolen session rather than just a new password beside a live old one.
+
+Two properties are deliberate and easy to undo by accident:
+
+- **The request answers the same 200 for an address that has an account and one
+  that does not**, and the confirmation screen says "if there is an account for
+  …" rather than "we have emailed you". Either half alone leaks which addresses
+  are registered — the API's four early returns in `request_password_reset` and
+  the wording in `components/forgot-password-form.tsx` have to agree.
+- **A missing, malformed, expired and already-spent link all land on one
+  screen.** Telling them apart would say whether a given token ever existed.
+
+Mail needs `SMTP_USER` / `SMTP_PASSWORD`; with them blank nothing is sent, the
+token is still minted, and the API logs a warning rather than 500ing — a failure
+there would itself be the enumeration signal. `FRONTEND_URL` is what the link in
+the mail points at. Leave it unset and it falls back to the first
+`BACKEND_CORS_ORIGINS` entry, which is right locally and wrong as soon as that
+list carries a preview origin.
+
 ## Design
 
 Tokens live in `apps/web/app/globals.css` — colour, a three-step radius scale,

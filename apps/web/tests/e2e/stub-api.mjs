@@ -202,6 +202,59 @@ const server = createServer(async (request, response) => {
     return send(response, 200, tokenPair(email.includes("stub:viewer") ? "viewer" : "admin"));
   }
 
+  if (request.method === "POST" && pathname === "/api/v1/auth/password-reset-request") {
+    const body = await readBody(request);
+    received.push({
+      body: { email: body.email },
+      forwardedFor: request.headers["x-forwarded-for"] ?? null,
+    });
+
+    const email = String(body.email ?? "");
+
+    if (email.includes("stub:429")) {
+      // 3600s = an hour, matching the API's 5/hour cap on this route.
+      return send(response, 429, { detail: "Too many requests" }, { "retry-after": "3600" });
+    }
+    if (email.includes("stub:503")) {
+      return send(response, 503, { detail: "Service unavailable" });
+    }
+    if (email.includes("stub:hangup")) {
+      return hangUp(response);
+    }
+
+    // Everything else is a 200, including addresses that do not exist — which
+    // is the API's actual behaviour and the property the screen is built
+    // around. There is deliberately no "unknown address" branch to add.
+    return send(response, 200, { message: "Password reset email sent" });
+  }
+
+  if (request.method === "POST" && pathname === "/api/v1/auth/password-reset-confirm") {
+    const body = await readBody(request);
+    const token = String(body.token ?? "");
+    const password = String(body.new_password ?? "");
+
+    // The API's own guard, and the only 422 with a *list* detail — which is how
+    // lib/console-api.ts tells a rejected password from a rejected token.
+    if (password.length < 12) {
+      return send(response, 422, {
+        detail: [{ loc: ["body", "new_password"], msg: "String should have at least 12 characters" }],
+      });
+    }
+
+    // A token the API will not accept: expired, already spent, or never real.
+    // The API answers all three identically, so the stub does too. `detail` is
+    // a string here, which is the API's ValidationError shape.
+    if (!readToken(token) || token.includes("stub-dead")) {
+      return send(response, 422, { detail: "Invalid or expired reset token" });
+    }
+
+    if (password.includes("stub:503")) {
+      return send(response, 503, { detail: "Service unavailable" });
+    }
+
+    return send(response, 200, { message: "Password reset successfully" });
+  }
+
   if (request.method === "POST" && pathname === "/api/v1/auth/refresh") {
     const body = await readBody(request);
     const payload = readToken(body.refresh_token);

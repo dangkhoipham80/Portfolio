@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
 import { Container } from "@/components/ui/container";
 import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
+import { ScreenTitle } from "@/components/ui/screen-title";
 import { hasLiveSession } from "@/lib/admin-guard";
 import { cn } from "@/lib/cn";
 import { ADMIN_PATH, safeNextPath } from "@/lib/session";
@@ -61,9 +62,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           {/* Not as="h2": this label sits *above* the page h1, so making it a
               heading would give the page an h2 before its h1. */}
           <Eyebrow>Restricted</Eyebrow>
-          <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Console access
-          </h1>
+          <ScreenTitle>Console access</ScreenTitle>
           <p className="mt-4 text-muted-foreground">
             This area manages the site&rsquo;s content. There is no public
             sign-up — the one account is created from the command line.
