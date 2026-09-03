@@ -42,7 +42,9 @@ function ProjectTitle({ project }: { project: Project }) {
           href={`/projects/${project.slug}`}
           // The ::after stretches this anchor over the row while the link text
           // stays the title, so the accessible name is the project, not "row".
-          className="after:absolute after:inset-0 hover:text-primary"
+          // `link-draw` underlines from the left while the row is hovered —
+          // the title stays ink, the line is the only thing that takes colour.
+          className="link-draw after:absolute after:inset-0"
         >
           {project.title}
         </Link>
@@ -88,31 +90,20 @@ function ProjectLinks({ project, className }: { project: Project; className?: st
 }
 
 /**
- * A featured project, in one of two layouts picked by whether the record
- * actually has a cover.
- *
- * ## Why the layout follows the data
- *
- * With a cover, this is a spread: the image beside the argument for it,
+ * A featured project as a spread: the cover beside the argument for it,
  * alternating sides so the section reads as a sequence rather than a grid of
  * tiles. The grid treats every project as the same size; featured work is not
  * the same size, and the spread is the layout saying so.
  *
- * Without one, the spread is the wrong promise. Every project on this site
- * currently has `image_url: null`, so the media column rendered a generated
- * gradient — and four of them stacked meant roughly 40% of the page's area was
- * an empty grey panel with a ghosted letter in it. A placeholder that large
- * does not read as "a cover is coming", it reads as a broken image, and no
- * amount of motion elsewhere rescues a page built mostly of them.
+ * ## The cover is always real
  *
- * So a project without a cover gets a record layout instead: the same content,
- * arranged as mono fields beside prose, using the full width and about a third
- * of the height. It is dense on purpose and it is not a degraded state — it is
- * what a row of a table of work should look like.
- *
- * Uploading a cover in the console switches that row to the spread with no
- * further change here, which is the point: the page is built for the images
- * that are coming without pretending they have already arrived.
+ * This used to fall back to a dense record layout when the project had no
+ * `image_url`, because the alternative was a generated gradient with a ghost
+ * initial in it and four of those stacked read as four broken images. The
+ * cover is now the project's own stack drawn as a request path (see
+ * `StackCover` in ui/project-media.tsx) — content the record does hold — so
+ * the spread is the right promise again whether or not a screenshot has been
+ * uploaded. When one is, it replaces the drawing with no other change here.
  */
 export function CaseRow({
   project,
@@ -126,37 +117,6 @@ export function CaseRow({
 }) {
   const period = formatPeriod(project.started_on, project.ended_on);
 
-  if (!project.image_url) {
-    return (
-      // A rule per row, so a run of these reads as a ledger of work rather than
-      // as paragraphs drifting in a column. The rule is also what lets the
-      // spacing between rows come down without them running together.
-      <article className="group relative grid gap-x-10 gap-y-3 border-t border-border/60 pt-10 lg:grid-cols-[13rem_1fr] lg:pt-12">
-        {/*
-          The field column: what this row *is*, in the site's mono voice. The
-          links live here too — down in the body they added a line of height to
-          every row and left this column two lines tall against a five-line
-          neighbour. Below `lg` the whole column stacks above the title, where
-          it reads as the eyebrow it already looks like.
-        */}
-        <div className="lg:pt-1">
-          <Eyebrow>/{project.slug}</Eyebrow>
-          {period ? <Eyebrow className="mt-1.5">{period}</Eyebrow> : null}
-          <ProjectLinks project={project} className="mt-3 flex-wrap gap-x-5 gap-y-0" />
-        </div>
-
-        <div>
-          <ProjectTitle project={project} />
-          {/* 3xl rather than 2xl: with the media panel gone this column is the
-              full width of the layout, and a 2xl measure left a third of the
-              row empty. */}
-          <p className="mt-3 max-w-3xl text-muted-foreground">{project.description}</p>
-          <TechChips technologies={project.technologies} className="mt-4" />
-        </div>
-      </article>
-    );
-  }
-
   return (
     <article className="group relative grid items-center gap-8 pt-14 first:pt-0 lg:grid-cols-2 lg:gap-14 lg:pt-20">
       {/* Shared-element morph: this panel and the detail page's header carry
@@ -167,6 +127,7 @@ export function CaseRow({
           slug={project.slug}
           title={project.title}
           imageUrl={project.image_url}
+          technologies={project.technologies}
           cover
           priority={priority}
           className={cn(
@@ -202,7 +163,7 @@ export function ProjectIndexRow({ project }: { project: Project }) {
         <h3 className="inline font-display text-lg font-semibold text-foreground">
           <Link
             href={`/projects/${project.slug}`}
-            className="after:absolute after:inset-0 group-hover:text-primary"
+            className="link-draw after:absolute after:inset-0"
           >
             {project.title}
           </Link>

@@ -58,10 +58,11 @@ export default async function HomePage() {
         scale in one ink, and the topology sits beside the thesis as supporting
         evidence rather than competing with the name for the top row.
 
-        The `hero-name-accent` spans below currently render no differently from
-        the rest of the name — see the note on that class in globals.css. They
-        are left in place because the diacritics are still the right thing to
-        single out; what they need is a treatment that is not colour.
+        The `hero-name-accent` spans below render no differently from the rest
+        of the name. They are left in place because the diacritics are still
+        the right thing to single out; the amber that once coloured them was
+        the specific thing called ugly, and the site's hue now lives in light
+        rather than on text.
       */}
       <section className="relative flex min-h-[calc(100svh-4.25rem)] items-center py-20 sm:py-24">
         <Container width="layout">
@@ -92,7 +93,7 @@ export default async function HomePage() {
                 timeline uses: the one fact a recruiter scans for, styled as a
                 health check rather than a banner.
               */}
-              <p className="hero-item mt-8 flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-primary [animation-delay:280ms]">
+              <p className="hero-item mt-8 flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-foreground [animation-delay:280ms]">
                 {/* Lit, with a halo: this is a live status, which is exactly
                     what the hue is reserved for. */}
                 <span
@@ -205,7 +206,7 @@ export default async function HomePage() {
                     <h3 className="font-display text-xl font-semibold tracking-tight text-foreground">
                       <Link
                         href={`/blog/${post.slug}`}
-                        className="after:absolute after:inset-0 group-hover:text-primary"
+                        className="link-draw after:absolute after:inset-0"
                       >
                         {post.title}
                       </Link>

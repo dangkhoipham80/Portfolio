@@ -144,9 +144,12 @@ export function HeroTopology({
           the timing that makes one an outbound request and the other a
           response lives in the keyframes. See `.packet-out` in globals.css.
         */}
+        {/* Cool going out, warm coming back — the rule every wire on the site
+            keeps, so a reader who has seen one cover already knows which is
+            the request. */}
         <g className="packet-path">
-          <circle r="3.5" className="packet packet-out" fill="hsl(var(--live))" />
-          <circle r="3" className="packet packet-back" fill="hsl(var(--live))" />
+          <circle r="3.5" className="packet packet-out" fill="hsl(var(--sig-cool))" />
+          <circle r="3" className="packet packet-back" fill="hsl(var(--sig-warm))" />
         </g>
 
         {NODES.map((node, i) => (

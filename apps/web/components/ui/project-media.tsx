@@ -1,5 +1,6 @@
 import Image from "next/image";
 
+import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { isOptimisableImage } from "@/lib/blob";
 import { cn } from "@/lib/cn";
 
@@ -8,8 +9,8 @@ import { cn } from "@/lib/cn";
  *
  * ## Three renderings, picked by what the record actually holds
  *
- * 1. **No image** — a designed generative cover (slug-derived gradient, ghost
- *    initial, slug), but only where a `cover` was asked for.
+ * 1. **No image** — the project's stack, drawn as the chain of services it is
+ *    (see `StackCover` below), but only where a `cover` was asked for.
  * 2. **An uploaded image** — `next/image`, so it is resized, served as AVIF or
  *    WebP, and lazy below the fold. This is the path the console's upload
  *    button produces and the one that should be normal.
@@ -23,24 +24,200 @@ import { cn } from "@/lib/cn";
  * fails to load simply does not paint, the gradient shows through, and there is
  * no broken-image icon, no layout shift, and no `onError` handler — so no
  * client component either.
- *
- * The gradient angle is derived from the slug so each project reads as its own
- * tile, but the colours stay on the site's palette — this is meant to look
- * deliberate, not like five random swatches.
  */
 
-function angleFromSlug(slug: string): number {
-  let hash = 0;
+/** A stable number in [0, 1) from a slug, so a cover looks the same on every render. */
+function unitFromSlug(slug: string, salt: number): number {
+  let hash = salt;
   for (let i = 0; i < slug.length; i += 1) {
-    hash = (hash * 31 + slug.charCodeAt(i)) % 360;
+    hash = (hash * 31 + slug.charCodeAt(i)) % 1000003;
   }
-  return hash;
+  return (hash % 1000) / 1000;
+}
+
+/* --------------------------------------------------------------------------
+ * The stack, as a request path.
+ *
+ * Every project on this site currently has `image_url: null`, and a
+ * placeholder gradient with a ghosted initial in it was the honest but
+ * underwhelming answer: it said "no picture" in five different colours. This
+ * says something true instead. A project's stack *is* a chain of services a
+ * request passes through, so the cover draws it as one — in exactly the
+ * vocabulary the hero uses for this site's own request path, so the covers
+ * and the hero read as the same drawing at two scales.
+ *
+ * Up to four services, folded into a serpentine for the same reason the hero
+ * is: long open wires between the nodes, so the packet that runs them is
+ * visible for most of its journey. The wires draw in as the row scrolls into
+ * view and the packet is pushed along by the reader's own scrolling; under the
+ * pointer the wires go live. All CSS — the SVG is server-rendered and static.
+ * ----------------------------------------------------------------------- */
+
+const COVER_W = 360;
+const COVER_H = 180;
+const NODE_H = 30;
+const ROW_Y = [30, 120] as const;
+const EDGE_INSET = 8;
+/** Mono at 11px runs about 6.6px per character; the padding is the hero's. */
+const CHAR_W = 6.6;
+const NODE_PAD = 24;
+const MAX_LABEL = 16;
+const COVER_NODES = 4;
+
+type CoverNode = { label: string; x: number; y: number; w: number };
+
+function fitLabel(label: string): string {
+  return label.length > MAX_LABEL ? `${label.slice(0, MAX_LABEL - 1)}…` : label;
+}
+
+/**
+ * Lay the first four technologies out as two rows, right-to-left on the second
+ * so the chain folds. Each column shares a centre line so the vertical wire is
+ * vertical whatever the two labels' widths are.
+ */
+function layoutStack(technologies: string[]): {
+  nodes: CoverNode[];
+  /** Each wire with its length, which the draw and flow animations need in real units. */
+  edges: { d: string; len: number }[];
+  packetPath: string | null;
+} {
+  const labels = technologies.slice(0, COVER_NODES).map(fitLabel);
+  const widths = labels.map((l) => Math.max(64, Math.round(l.length * CHAR_W + NODE_PAD)));
+
+  const leftCentre = EDGE_INSET + Math.max(widths[0] ?? 0, widths[3] ?? 0) / 2;
+  const rightCentre = COVER_W - EDGE_INSET - Math.max(widths[1] ?? 0, widths[2] ?? 0) / 2;
+  const centres = [leftCentre, rightCentre, rightCentre, leftCentre];
+
+  const nodes: CoverNode[] = labels.map((label, i) => ({
+    label,
+    w: widths[i],
+    x: centres[i] - widths[i] / 2,
+    y: ROW_Y[i < 2 ? 0 : 1],
+  }));
+
+  const mid = (n: CoverNode) => n.y + NODE_H / 2;
+  const edges: { d: string; len: number }[] = [];
+  const path: string[] = [];
+
+  if (nodes.length >= 2) {
+    const from = nodes[0].x + nodes[0].w;
+    edges.push({ d: `M${from},${mid(nodes[0])} L${nodes[1].x},${mid(nodes[1])}`, len: nodes[1].x - from });
+    path.push(`M${from},${mid(nodes[0])}`, `L${rightCentre},${mid(nodes[1])}`);
+  }
+  if (nodes.length >= 3) {
+    const from = nodes[1].y + NODE_H;
+    edges.push({ d: `M${rightCentre},${from} L${rightCentre},${nodes[2].y}`, len: nodes[2].y - from });
+    path.push(`L${rightCentre},${mid(nodes[2])}`);
+  }
+  if (nodes.length >= 4) {
+    const to = nodes[3].x + nodes[3].w;
+    edges.push({ d: `M${nodes[2].x},${mid(nodes[2])} L${to},${mid(nodes[3])}`, len: nodes[2].x - to });
+    path.push(`L${to},${mid(nodes[3])}`);
+  }
+
+  return { nodes, edges, packetPath: path.length > 1 ? path.join(" ") : null };
+}
+
+function StackCover({
+  slug,
+  technologies,
+  className,
+}: {
+  slug: string;
+  technologies: string[];
+  className?: string;
+}) {
+  const { nodes, edges, packetPath } = layoutStack(technologies);
+  const remainder = technologies.length - nodes.length;
+
+  // Where the light falls on this panel: one of the upper corners, biased so
+  // neighbouring covers are not lit identically. Inline because the values
+  // are per record and Tailwind's scanner would never see them.
+  const lightX = `${Math.round(10 + unitFromSlug(slug, 7) * 40)}%`;
+  const lightY = `${Math.round(unitFromSlug(slug, 13) * 30)}%`;
+
+  return (
+    <div
+      className={cn(
+        "cover-lit relative flex flex-col overflow-hidden rounded-[var(--radius-card)] border border-border/60",
+        className,
+      )}
+      style={{ "--light-x": lightX, "--light-y": lightY } as React.CSSProperties}
+      role="presentation"
+    >
+      <svg
+        viewBox={`0 0 ${COVER_W} ${COVER_H}`}
+        aria-hidden="true"
+        className="h-full w-full flex-1 p-4 sm:p-5"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        {edges.map((edge) => (
+          <path
+            key={edge.d}
+            d={edge.d}
+            fill="none"
+            stroke="hsl(var(--border))"
+            strokeWidth="1.5"
+            className="cover-edge"
+            // Real length rather than `pathLength="1"`: the hover flow's dash
+            // pattern is in user units, and a `3 9` dash on a path normalised
+            // to 1 is a solid line. See `.cover-edge` in globals.css.
+            style={{ "--len": edge.len } as React.CSSProperties}
+          />
+        ))}
+
+        {/* Drawn before the nodes, so it passes behind each service. */}
+        {packetPath ? (
+          <circle
+            r="3.5"
+            fill="hsl(var(--sig-cool))"
+            className="cover-packet"
+            style={{ offsetPath: `path("${packetPath}")` }}
+          />
+        ) : null}
+
+        {nodes.map((node) => (
+          <g key={node.label}>
+            <rect
+              x={node.x}
+              y={node.y}
+              width={node.w}
+              height={NODE_H}
+              rx="8"
+              fill="hsl(var(--background))"
+              stroke="hsl(var(--border))"
+              strokeWidth="1.5"
+            />
+            <text
+              x={node.x + node.w / 2}
+              y={node.y + NODE_H / 2}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill="hsl(var(--foreground))"
+              className="font-mono text-[11px]"
+            >
+              {node.label}
+            </text>
+          </g>
+        ))}
+      </svg>
+
+      <p
+        aria-hidden="true"
+        className={cn(eyebrowClasses, "flex justify-between border-t border-border/40 px-4 py-2.5")}
+      >
+        <span>/{slug}</span>
+        {remainder > 0 ? <span>+{remainder} more</span> : null}
+      </p>
+    </div>
+  );
 }
 
 export function ProjectMedia({
   slug,
   title,
   imageUrl,
+  technologies = [],
   cover = false,
   priority = false,
   className,
@@ -48,6 +225,8 @@ export function ProjectMedia({
   slug: string;
   title: string;
   imageUrl: string | null;
+  /** What the generated cover draws when there is no image. */
+  technologies?: string[];
   /**
    * Set on the first case row only. That panel is usually the page's LCP once
    * real covers exist, and everything below it should stay lazy — marking them
@@ -55,11 +234,10 @@ export function ProjectMedia({
    */
   priority?: boolean;
   /**
-   * Render a designed generative cover when the record has no image. Off by
-   * default: in a dense grid an identical box per card reads as a grid of
-   * failed downloads. A case row is different — the layout promises a spread,
-   * so the panel must exist, and the cover below is composed (ghost initial,
-   * slug, slug-derived gradient) rather than an empty swatch.
+   * Draw the stack as a cover when the record has no image. Off by default:
+   * in a dense grid an identical panel per card reads as a grid of failed
+   * downloads. A case row is different — the layout promises a spread, so the
+   * panel must exist, and what it shows is real content rather than a swatch.
    */
   cover?: boolean;
   className?: string;
@@ -67,37 +245,11 @@ export function ProjectMedia({
   // No image on the record means draw nothing — unless a cover was asked for.
   if (!imageUrl && !cover) return null;
 
-  const angle = angleFromSlug(slug);
-
   if (!imageUrl) {
-    return (
-      <div
-        className={cn(
-          "relative flex aspect-video items-end overflow-hidden rounded-[var(--radius-card)] border border-border/60",
-          className,
-        )}
-        style={{
-          backgroundImage: `linear-gradient(${angle}deg, hsl(var(--primary) / 0.16), hsl(var(--primary) / 0.03) 60%)`,
-        }}
-        role="presentation"
-      >
-        {/* The project's initial as a ghosted plate mark — cover art the data
-            cannot fail to provide. */}
-        <span
-          aria-hidden="true"
-          className="absolute -right-5 top-1/2 -translate-y-1/2 select-none font-display text-[9rem] font-extrabold leading-none text-foreground/[0.06] sm:text-[12rem]"
-        >
-          {title.slice(0, 1)}
-        </span>
-        <span
-          aria-hidden="true"
-          className="p-4 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground"
-        >
-          /{slug}
-        </span>
-      </div>
-    );
+    return <StackCover slug={slug} technologies={technologies} className={className} />;
   }
+
+  const angle = Math.round(unitFromSlug(slug, 1) * 360);
 
   const tile =
     "relative flex items-end overflow-hidden rounded-[var(--radius-control)] border border-border";
@@ -178,7 +330,7 @@ export function ProjectMedia({
   // when it loads and is invisible when it does not.
   const backgroundImage = [
     `url(${JSON.stringify(imageUrl)})`,
-    `linear-gradient(${angle}deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.04))`,
+    `linear-gradient(${angle}deg, hsl(var(--sig-cool) / 0.22), hsl(var(--sig-warm) / 0.08))`,
   ].join(", ");
 
   return (

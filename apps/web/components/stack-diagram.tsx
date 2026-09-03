@@ -11,12 +11,16 @@ import type { Skill, SkillLevel } from "@/lib/types";
  */
 
 /*
- * Depth as light: the deeper the proficiency, the more signal the chip holds.
+ * Depth as temperature. The site's two lights are a request going out (cool)
+ * and a response coming back (warm), and the stack borrows the scale: the
+ * deeper the proficiency, the warmer the chip. Expert is lit warm, advanced
+ * lit cool, intermediate is an unlit surface and beginner is an outline. The
+ * text stays ink at every step — colour is on the fill, never the word.
  * Spelled out per level because Tailwind scans source for complete classes.
  */
 const LEVEL_CHIP: Record<SkillLevel, string> = {
-  expert: "border-primary/50 bg-primary/15 text-primary font-medium",
-  advanced: "border-primary/30 bg-primary/10 text-primary",
+  expert: "border-sig-warm/60 bg-sig-warm/15 text-foreground font-medium",
+  advanced: "border-sig-cool/50 bg-sig-cool/12 text-foreground",
   intermediate: "border-transparent bg-muted text-foreground",
   beginner: "border-border bg-transparent text-muted-foreground",
 };

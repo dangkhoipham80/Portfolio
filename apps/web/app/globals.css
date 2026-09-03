@@ -1,28 +1,31 @@
 @import "tailwindcss";
 
 /*
- * "The System, Seen" — dark-first instrument palette, now monochrome.
+ * "The System, Seen" — dark-first instrument palette, lit by two lights.
  *
- * ## Why there is no accent colour
+ * ## Where the colour is
  *
- * This file used to carry one warm signal-amber accent in both modes, and
- * before that a green/purple split. The amber went further than an accent
- * should: it was the colour of the hero's Vietnamese diacritics, the status
- * line, the "All posts" link and forty `text-primary` usages — colour sitting
- * on *text* throughout. Reviewed on the deployed site, that read as ugly, and
- * "near-black ground plus one bright accent" is also the single most
- * recognisable AI-default look, which is not what a portfolio should announce.
+ * Three directions have been tried here. A warm amber on near-black with a
+ * graph-paper grid: the amber sat on text throughout and was called ugly, and
+ * "near-black plus one bright accent" is the most recognisable AI-default look
+ * there is. Then pure monochrome, which was called boring — correctly, because
+ * a page with no hue at all reads as unfinished rather than as restrained.
  *
- * So: no accent hue at all. Hierarchy comes from type size, weight and
- * spacing, and from the surface steps background → card → raised. The only
- * colour on a page is the colour inside the project screenshots — the work
- * supplies it, the chrome does not.
+ * This is the third. Colour comes from *light*, not from paint: two lights on
+ * an indigo ground, and the rule for which is which is the site's own subject.
+ * Requests are cool and responses are warm — ultramarine goes out along the
+ * wire, coral comes back — and the page itself warms as it is read, cool at
+ * boot and warm by the time it reaches the contact form. Green survives for
+ * exactly one job, "this thing is up", and is never spent on decoration.
  *
- * The standing rule that replaced the old one: **colour never touches text.**
- * `--primary` and `--signal` survive as names because every component already
- * reads them, but they now resolve to ink and near-white rather than a hue.
- * Values are bare HSL channels so the `hsl(var(--x))` indirection below still
- * works. See docs/redesign.md for the original plan.
+ * Text is still ink. `--primary` is the one text-safe hue and it appears on
+ * text only where the text is *interactive* — a link under the pointer, the
+ * one filled button — never on a heading, an eyebrow or a paragraph. That is
+ * the line the amber crossed. Fills, wires, packets and light fields are where
+ * the hue lives; a heading set in it is the first thing to remove.
+ *
+ * Values are bare HSL channels so the `hsl(var(--x) / alpha)` indirection
+ * below works. See docs/redesign.md for the history.
  */
 
 @theme {
@@ -41,25 +44,26 @@
   --color-destructive-text: hsl(var(--destructive-text));
   --color-ring: hsl(var(--ring));
   /*
-   * The vivid amber, constant across modes, for non-text marks only: spine
-   * nodes, packets, the hero diacritics. --primary is the *text-safe* accent
-   * and darkens in light mode; --signal never does, because a 3px dot has no
-   * contrast requirement and dimming it kills the identity.
+   * The mark colour: spine nodes, the nav's current-page dot, list bullets.
+   * A 4px dot has no contrast requirement, so this can be the vivid form of
+   * the cool light in both modes where --primary has to darken for text.
    */
   --color-signal: hsl(var(--signal));
 
   /*
-   * The one hue on the site, and it is not decoration — it marks what is
-   * *live*. Packets moving along a wire, a node that is up, the availability
-   * status. Static furniture stays ink; if a thing is lit, it is because
-   * something is happening there.
-   *
-   * Green rather than a brand colour picked from nowhere: this page's subject
-   * is services talking to each other, and green-is-healthy is the existing
-   * vocabulary of every dashboard that does that. The console already uses
-   * this exact hue for `c-dot-live`, so the two surfaces agree.
-   *
-   * It never sets a text colour. That rule has not moved.
+   * The two lights. Cool is a request leaving, warm is a response arriving;
+   * the hero's packets, the covers' packets and the spine all keep to that.
+   * Neither is ever a text colour — they are fills, strokes and light fields.
+   */
+  --color-sig-cool: hsl(var(--sig-cool));
+  --color-sig-warm: hsl(var(--sig-warm));
+
+  /*
+   * Green, for one job: something is *up*. The API node when the read that
+   * built this page was answered, the availability status, a published row in
+   * the console. It is deliberately not part of the light system above so
+   * that "lit" and "healthy" never get confused — the console already uses
+   * this exact hue for `c-dot-live`, so both surfaces agree.
    */
   --color-live: hsl(var(--live));
 
@@ -118,22 +122,22 @@
    * than as a colour choice nobody made on purpose.
    */
   :root {
-    --background: 220 16% 97%;
-    --foreground: 222 20% 11%;
+    --background: 228 40% 98%;
+    --foreground: 232 24% 10%;
     --card: 0 0% 100%;
-    --raised: 220 20% 99%;
+    --raised: 228 30% 99%;
     /*
-     * Monochrome. --primary is ink, not a hue: it fills the one loud control
-     * on a screen and marks the current link, and it is legible as text at
-     * ~14% lightness on this paper without being a colour.
+     * The text-safe form of the cool light: deep ultramarine, 7.2:1 on this
+     * paper and 7.2:1 under white text, so it fills the one loud control and
+     * colours a link under the pointer without either failing AA.
      */
-    --primary: 222 20% 14%;
-    --primary-foreground: 220 16% 98%;
-    --border: 220 13% 87%;
-    --muted: 220 14% 93%;
-    --muted-foreground: 222 10% 38%;
-    --accent: 220 14% 92%;
-    --accent-foreground: 222 20% 11%;
+    --primary: 228 80% 48%;
+    --primary-foreground: 0 0% 100%;
+    --border: 228 16% 87%;
+    --muted: 228 20% 94%;
+    --muted-foreground: 230 10% 38%;
+    --accent: 228 20% 92%;
+    --accent-foreground: 232 24% 10%;
     --destructive: 0 84.2% 60.2%;
     /*
      * A second red, for error *text*. --destructive is tuned to be seen as a
@@ -141,43 +145,48 @@
      * palette carries two reds.
      */
     --destructive-text: 0 72% 38%;
-    --ring: 222 20% 30%;
-    /*
-     * Marks that are *not* live — spine nodes, section junctions. Ink, so the
-     * lit ones below stand out by being the only thing with a hue.
-     */
-    --signal: 222 20% 22%;
+    --ring: 228 80% 48%;
+    /* Marks: the vivid cool, since a dot has no contrast requirement. */
+    --signal: 228 90% 56%;
+    --sig-cool: 228 90% 56%;
+    --sig-warm: 14 88% 54%;
     /* Darker on paper than on ink: mid-green on white measures badly. */
     --live: 158 72% 32%;
-    /* The soft light behind the hero, so the page is not a flat sheet. */
-    --depth: 158 40% 55%;
+    /* How strongly the light fields show. Paper takes less than ink does. */
+    --light-strength: 0.16;
   }
 
   /*
-   * Dark mode is the primary mode: blue-black ink, never pure black, so the
-   * amber has something warm-against-cool to glow on. Surfaces step
+   * Dark mode is the primary mode: indigo ink, never pure black, so the two
+   * lights have a ground with a hue of its own to fall on. Surfaces step
    * background → card → raised instead of leaning on borders.
    */
   .dark {
-    --background: 222 24% 6%;
-    --foreground: 222 18% 92%;
-    --card: 222 20% 9%;
-    --raised: 222 18% 13%;
-    /* Near-white, so the one loud control is a bright plate with ink on it. */
-    --primary: 222 12% 93%;
-    --primary-foreground: 222 24% 8%;
-    --border: 222 14% 18%;
-    --muted: 222 18% 12%;
-    --muted-foreground: 222 10% 68%;
-    --accent: 222 18% 14%;
-    --accent-foreground: 222 18% 92%;
+    --background: 232 28% 6%;
+    --foreground: 228 20% 93%;
+    --card: 232 22% 9%;
+    --raised: 232 18% 13%;
+    /*
+     * Periwinkle rather than the deep blue: 6.7:1 on the ink as text, and the
+     * filled button carries ink text on it for the same ratio. White on a blue
+     * this bright would measure 2.8:1, which is why the foreground flips.
+     */
+    --primary: 228 100% 74%;
+    --primary-foreground: 232 28% 7%;
+    --border: 232 14% 19%;
+    --muted: 232 18% 12%;
+    --muted-foreground: 230 10% 68%;
+    --accent: 232 18% 14%;
+    --accent-foreground: 228 20% 93%;
     --destructive: 0 62.8% 45%;
     /* Light rather than dark, for the same reason the light mode's is dark. */
     --destructive-text: 0 85% 75%;
-    --ring: 222 12% 72%;
-    --signal: 222 12% 90%;
+    --ring: 228 100% 74%;
+    --signal: 228 100% 70%;
+    --sig-cool: 228 100% 66%;
+    --sig-warm: 14 100% 64%;
     --live: 152 68% 55%;
-    --depth: 152 60% 50%;
+    --light-strength: 0.26;
   }
 
   html {
@@ -205,34 +214,123 @@
   }
 
   /*
-   * One light source, behind the hero.
+   * The page's light, and the site's signature: it warms as you read.
    *
-   * Not the graph paper coming back: that was a repeating pattern across the
-   * whole page, competing with the content. This is a single soft radial that
-   * decays within the first viewport, and its only job is to stop the top of
-   * the page reading as a flat sheet of one colour. A dark interface with no
-   * light in it looks unfinished no matter how good the type is, and that is
-   * most of what "pure black" was complaining about.
+   * Two light fields on one fixed layer. The cool one sits high and to the
+   * right, behind the hero's request path; the warm one low and to the left,
+   * where the contact form ends up. Scrolling crossfades between them —
+   * `scroll(root)` drives the opacity of each, so the top of the page is lit
+   * by the request and the bottom by the response, and a reader landing
+   * halfway down from a link gets the mix that position deserves. Both also
+   * drift, slowly, so the ground is never quite still; the drift is the only
+   * ambient motion on the page and it runs on `translate` alone.
    *
-   * Fixed, not scrolled, so it behaves like a light in the room rather than a
-   * shape on the page — it never becomes an object you scroll past.
+   * Radial gradients rather than blurred elements: a 70vmax `filter: blur()`
+   * repaints on every frame it moves, and the gradient's own falloff already
+   * has no edge to hide.
+   *
+   * Fixed, not scrolled, so it behaves like light in the room rather than a
+   * shape on the page. It is not the old graph paper: nothing here repeats and
+   * nothing here competes with a line of text.
    */
   .page-light {
     position: fixed;
     inset: 0;
     z-index: -1;
+    overflow: hidden;
     pointer-events: none;
-    background:
-      radial-gradient(
-        60rem 40rem at 72% -5%,
-        hsl(var(--depth) / 0.1),
-        transparent 65%
-      ),
-      radial-gradient(
-        40rem 30rem at 8% 8%,
-        hsl(var(--depth) / 0.05),
-        transparent 60%
-      );
+  }
+
+  .page-light::before,
+  .page-light::after {
+    content: "";
+    position: absolute;
+    width: 90vmax;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    will-change: translate, opacity;
+  }
+
+  .page-light::before {
+    top: -46vmax;
+    right: -28vmax;
+    background: radial-gradient(
+      closest-side,
+      hsl(var(--sig-cool) / var(--light-strength)),
+      hsl(var(--sig-cool) / calc(var(--light-strength) * 0.35)) 40%,
+      transparent 72%
+    );
+    /* The static mix, for browsers without scroll timelines. */
+    opacity: 0.8;
+  }
+
+  .page-light::after {
+    bottom: -52vmax;
+    left: -32vmax;
+    background: radial-gradient(
+      closest-side,
+      hsl(var(--sig-warm) / var(--light-strength)),
+      hsl(var(--sig-warm) / calc(var(--light-strength) * 0.35)) 40%,
+      transparent 72%
+    );
+    opacity: 0.45;
+  }
+
+  @keyframes light-drift-cool {
+    to {
+      translate: -6vmax 5vmax;
+    }
+  }
+
+  @keyframes light-drift-warm {
+    to {
+      translate: 7vmax -5vmax;
+    }
+  }
+
+  /* Cool fades as the reader descends; warm rises to meet them. */
+  @keyframes light-cool-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0.18;
+    }
+  }
+
+  @keyframes light-warm-in {
+    from {
+      opacity: 0.12;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .page-light::before {
+      animation: light-drift-cool 34s ease-in-out infinite alternate;
+    }
+
+    .page-light::after {
+      animation: light-drift-warm 41s ease-in-out infinite alternate;
+    }
+
+    @supports (animation-timeline: scroll()) {
+      .page-light::before {
+        animation:
+          light-drift-cool 34s ease-in-out infinite alternate,
+          light-cool-out linear both;
+        animation-timeline: auto, scroll(root block);
+      }
+
+      .page-light::after {
+        animation:
+          light-drift-warm 41s ease-in-out infinite alternate,
+          light-warm-in linear both;
+        animation-timeline: auto, scroll(root block);
+      }
+    }
   }
 
   /*
@@ -288,9 +386,8 @@
   .wire-flow {
     stroke-dasharray: 3 9;
     animation: wire-flow 1.6s linear infinite;
-    /* Lit, because this is the thing on the diagram that is actually moving. */
-    stroke: hsl(var(--live));
-    filter: drop-shadow(0 0 3px hsl(var(--live) / 0.7));
+    /* A request in flight is cool light, here as everywhere on the site. */
+    stroke: hsl(var(--sig-cool));
   }
 
   /*
@@ -370,13 +467,96 @@
       /* Held until the last node's entrance has landed — a packet arriving at
          a database that has not booted yet breaks the boot narrative. */
       animation-delay: 900ms;
-      filter: drop-shadow(0 0 4px hsl(var(--live) / 0.8));
     }
 
     .packet-path .packet-back {
       animation: packet-back 3.6s linear infinite;
       animation-delay: 900ms;
-      filter: drop-shadow(0 0 4px hsl(var(--live) / 0.6));
+    }
+  }
+
+  /*
+   * A cover's request path, pushed along by the reader.
+   *
+   * The project covers draw each project's stack as a chain of services, and
+   * a packet runs the chain — but on a scroll timeline rather than a clock.
+   * Four covers each looping their own packet would be four things moving at
+   * once for no reason; tied to `view()`, the packet is wherever the reader
+   * has scrolled the row to, arrives as the row reaches the middle of the
+   * viewport, and runs backwards if they scroll back up. One rule, no
+   * orchestration, nothing moving on a page nobody is scrolling.
+   *
+   * The base state parks the packet at the end of the path and hides it, so a
+   * browser without scroll timelines sees a drawn graph and no stray dot.
+   */
+  .cover-packet {
+    offset-rotate: 0deg;
+    offset-distance: 100%;
+    opacity: 0;
+  }
+
+  @keyframes cover-packet-run {
+    0% {
+      offset-distance: 0%;
+      opacity: 0;
+    }
+    8%,
+    92% {
+      opacity: 1;
+    }
+    100% {
+      offset-distance: 100%;
+      opacity: 0;
+    }
+  }
+
+  /*
+   * A cover edge carries its own length in `--len` (they are straight lines,
+   * so the component can compute it) rather than `pathLength="1"`, because the
+   * hover state below needs real units: a `3 9` dash on a path normalised to
+   * length 1 is one dash three paths long, which is a solid line.
+   */
+  .cover-edge {
+    stroke-dasharray: var(--len);
+  }
+
+  @keyframes cover-edge-draw {
+    from {
+      stroke-dashoffset: var(--len);
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .cover-packet {
+        animation: cover-packet-run linear both;
+        animation-timeline: view();
+        /* The whole run happens while the cover crosses the middle band of the
+           viewport, so it is always seen and never hurried. */
+        animation-range: entry 40% exit 60%;
+      }
+
+      /* The rails draw in as the cover arrives, before the packet sets off. */
+      .cover-edge {
+        animation: cover-edge-draw linear both;
+        animation-timeline: view();
+        animation-range: entry 10% entry 60%;
+      }
+    }
+
+    /*
+     * Under the pointer the wires go live: the same dashed flow as the hero.
+     * `animation-timeline` is named explicitly because the shorthand above
+     * would otherwise leave the scroll timeline attached to a clock animation.
+     */
+    .group:hover .cover-edge {
+      stroke-dasharray: 3 9;
+      stroke: hsl(var(--sig-cool));
+      animation: wire-flow 1.6s linear infinite;
+      animation-timeline: auto;
     }
   }
 
@@ -566,12 +746,32 @@
   }
 
   .topology-node:hover rect {
-    stroke: hsl(var(--primary));
-    fill: hsl(var(--primary) / 0.08);
+    stroke: hsl(var(--sig-cool));
+    fill: hsl(var(--sig-cool) / 0.1);
   }
 
   .topology-node:hover text {
     fill: hsl(var(--primary));
+  }
+
+  /*
+   * A title link that draws its own underline from the left on hover — the
+   * one hover treatment headings on this site get, so it is defined once.
+   * `background-size` rather than a border or a pseudo-element width, because
+   * it is the only one of the three that animates without touching layout.
+   */
+  .link-draw {
+    background-image: linear-gradient(hsl(var(--primary)), hsl(var(--primary)));
+    background-repeat: no-repeat;
+    background-position: 0 100%;
+    background-size: 0% 2px;
+    transition: background-size 320ms var(--ease-enter);
+  }
+
+  .group:hover .link-draw,
+  .link-draw:hover,
+  .link-draw:focus-visible {
+    background-size: 100% 2px;
   }
 
   /*
@@ -1280,7 +1480,7 @@
     background-color: hsl(var(--border));
   }
   50% {
-    background-color: hsl(var(--live));
+    background-color: hsl(var(--sig-cool));
   }
 }
 
@@ -1372,9 +1572,9 @@
      */
     background: linear-gradient(
       to bottom,
-      hsl(var(--signal) / 0.12),
-      hsl(var(--signal) / 0.45) 88%,
-      hsl(var(--live) / 0.85)
+      hsl(var(--sig-cool) / 0.15),
+      hsl(var(--sig-cool) / 0.55) 88%,
+      hsl(var(--sig-warm))
     );
     transform-origin: top;
   }
@@ -1390,29 +1590,40 @@
   }
 
   /*
-   * A junction on the spine: the dot a section docks at. The halo is what
-   * stops a 10px dot reading as dust; the outer glow is the one place the
-   * site is allowed to bloom.
+   * A junction on the spine: the dot a section docks at. The halo is a flat
+   * ring, not a blurred glow — a coloured blur under every node is the "dark
+   * mode with glowing accents" tell, and a 4px ring says "junction" just as
+   * well without it.
    */
   .spine-node {
     width: 0.625rem;
     height: 0.625rem;
     border-radius: 9999px;
     background: hsl(var(--signal));
-    box-shadow:
-      0 0 0 4px hsl(var(--signal) / 0.15),
-      0 0 14px hsl(var(--signal) / 0.5);
+    box-shadow: 0 0 0 4px hsl(var(--signal) / 0.18);
   }
 
   /*
-   * The accented glyphs of the owner's name used to be lit in signal amber
-   * with a glow behind them in dark mode. That was the site's signature and
-   * it is the specific thing that was called out as ugly, so the colour is
-   * gone and the name is set in one ink.
+   * A project cover, when there is no photograph to show.
    *
-   * The class is kept rather than deleted because the idea is worth keeping:
-   * Vietnamese diacritics are a real piece of identity that no other
-   * portfolio can borrow. It just needs a mechanism that is not hue — weight,
-   * size or a drawn mark. Until then this deliberately does nothing.
+   * The panel is lit from one corner — the position comes from the slug, so
+   * two covers side by side are lit differently — by the cool light, with
+   * the warm one answering faintly from the opposite corner. It is a light on
+   * a surface, not a gradient fill: the card colour is still the card colour
+   * everywhere the light does not reach.
    */
+  .cover-lit {
+    background-color: hsl(var(--card));
+    background-image:
+      radial-gradient(
+        70% 90% at var(--light-x) var(--light-y),
+        hsl(var(--sig-cool) / calc(var(--light-strength) * 1.4)),
+        transparent 70%
+      ),
+      radial-gradient(
+        60% 70% at calc(100% - var(--light-x)) calc(100% - var(--light-y)),
+        hsl(var(--sig-warm) / calc(var(--light-strength) * 0.7)),
+        transparent 70%
+      );
+  }
 }
