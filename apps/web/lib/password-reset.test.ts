@@ -9,8 +9,30 @@ import {
   validateResetRequest,
 } from "./password-reset";
 
-/** Three base64url segments, which is all readResetToken checks for. */
-const REAL_SHAPE = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl";
+/**
+ * A value shaped like a JWT, assembled rather than pasted.
+ *
+ * `readResetToken` only checks for three base64url segments, so the fixture
+ * only has to have three — the contents are irrelevant to every assertion
+ * below, and the third segment is the word "signature" rather than anything
+ * derived from a key.
+ *
+ * It was a literal at first, and GitGuardian flagged the pull request for a
+ * hardcoded JSON Web Token. It was right to: the string is indistinguishable
+ * from a real one at a glance, which is the whole property a scanner has to
+ * work from. There was nothing to revoke, and that is exactly the problem — a
+ * repository that answers its own secret scanner with "that one is fine" trains
+ * everyone to skim the next alert, and this one leaked a live database
+ * credential once already.
+ *
+ * Built from parts, it cannot match. Same construction as tests/e2e/password-reset.spec.ts.
+ */
+const b64url = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+
+const REAL_SHAPE = [b64url({ alg: "HS256" }), b64url({ sub: "1" }), "not-a-signature"].join(".");
+
+/** The same value with its last segment lost, as a mail client would cut it. */
+const TRUNCATED = REAL_SHAPE.split(".").slice(0, 2).join(".");
 
 function formOf(entries: Record<string, string>): FormData {
   const data = new FormData();
@@ -125,7 +147,7 @@ describe("readResetToken", () => {
     ["   ", "whitespace"],
     ["not-a-jwt", "no segments"],
     ["only.two", "two segments"],
-    ["eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0", "the signature cut off by a mail client"],
+    [TRUNCATED, "the signature cut off by a mail client"],
     ["a.b.c.d", "four segments"],
     ["a.b.c=", "a character outside base64url"],
   ])("refuses %s (%s)", (value) => {

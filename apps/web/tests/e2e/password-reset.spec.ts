@@ -187,7 +187,13 @@ test.describe("spending the link", () => {
   test("a truncated token is caught before it costs a round trip", async ({ page }) => {
     // Mail clients cut long links in half. Reporting the API's refusal for this
     // reads as "your account is the problem" rather than "the link is".
-    await page.goto("/reset-password?token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0");
+    //
+    // Cut from a real one rather than written out. A JWT-shaped literal in a
+    // committed file is what a secret scanner is for, and one that has to be
+    // dismissed by hand is how the next alert gets skimmed — GitGuardian caught
+    // the equivalent fixture in lib/password-reset.test.ts.
+    const truncated = resetToken().split(".").slice(0, 2).join(".");
+    await page.goto(`/reset-password?token=${truncated}`);
 
     await expect(page.getByRole("heading", { name: "This link has expired" })).toBeVisible();
   });
