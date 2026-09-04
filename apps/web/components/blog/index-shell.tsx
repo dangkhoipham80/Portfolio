@@ -66,7 +66,7 @@ export function BlogIndexShell({
 }) {
   return (
     <div className="py-14 sm:py-20">
-      <Container width="layout">
+      <Container width="full">
         <header className="max-w-3xl">
           <Eyebrow className="mb-3">{eyebrow}</Eyebrow>
           <h1 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
@@ -84,7 +84,7 @@ export function BlogIndexShell({
           actually stick — a stretched grid item is as tall as the row, and
           `position: sticky` inside one has nowhere to travel.
         */}
-        <div className="mt-12 grid items-start gap-x-12 gap-y-12 lg:grid-cols-[15rem_minmax(0,1fr)]">
+        <div className="mt-12 grid items-start gap-x-12 gap-y-12 lg:grid-cols-[minmax(13rem,18rem)_minmax(0,1fr)] xl:gap-x-20">
           <div className="lg:sticky lg:top-24">
             <FilterRail
               tags={tags}

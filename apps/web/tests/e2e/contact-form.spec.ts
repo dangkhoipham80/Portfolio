@@ -20,11 +20,11 @@ import { STUB_URL } from "../../playwright.config";
 const MESSAGE = "I read your notes and would like to talk.";
 
 /**
- * Open the contact section and wait for the page to stop moving.
+ * Open the contact page and wait for it to stop moving.
  *
- * Two things shift the layout just after load: the jump to `#contact`, which
- * moves the submit button about 1200px up the page, and the web fonts swapping
- * in behind it. Playwright waits for a click target to hold still, so a click
+ * The form has its own page now, so there is no jump to `#contact` to wait
+ * out — but the web fonts still swap in just after load and shift the
+ * layout under a click. Playwright waits for a click target to hold still, so a click
  * issued inside that window is retried — and the retry can land *after* the
  * form has already posted, at which point it waits for a button the
  * confirmation has replaced until the test times out.
@@ -35,7 +35,7 @@ const MESSAGE = "I read your notes and would like to talk.";
  * the time.
  */
 async function openContactForm(page: Page) {
-  await page.goto("/#contact");
+  await page.goto("/contact");
   await page.evaluate(async () => {
     await document.fonts.ready;
   });

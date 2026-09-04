@@ -87,9 +87,8 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
   ]);
 
   const headings = headingsOf(post.body);
-  // Which margins have anything to hold. See the grid below.
   const contents = hasContents(headings);
-  const aside = Boolean(post.series && seriesPosts.length > 1);
+  const series = Boolean(post.series && seriesPosts.length > 1);
 
   return (
     <>
@@ -109,21 +108,33 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
 
       <ReadRecorder slug={post.slug} title={post.title} />
 
-      <article className="py-14 sm:py-20">
-        <Container width="layout">
+      {/*
+        The whole width, like the home page. The post used to sit in the 7xl
+        box with its prose capped at 42rem, which at 1440px left a third of
+        the screen empty on the right — the owner's verdict was the same one
+        the home page got: not full. Now the rail takes the left, the article
+        takes the rest, and the rest is most of it.
+
+        The header arrives on the hero's clock — `hero-item`, staggered top to
+        bottom — so opening a post has the same boot sequence as opening the
+        site. Everything below the fold arrives on the reader's own scroll
+        instead; see `.article-prose > *` in globals.css.
+      */}
+      <article className="py-12 sm:py-16">
+        <Container width="full">
           <Link
             href="/blog"
             className={cn(
               eyebrowClasses,
-              "inline-flex min-h-11 items-center transition-colors hover:text-primary",
+              "hero-item inline-flex min-h-11 items-center transition-colors hover:text-primary",
             )}
           >
             ← All posts
           </Link>
 
-          <header className="mt-8 max-w-3xl">
+          <header className="mt-6 max-w-4xl">
             {post.series ? (
-              <Eyebrow className="mb-3">
+              <Eyebrow className="hero-item mb-3 [animation-delay:80ms]">
                 <Link
                   href={`/blog/series/${post.series.slug}`}
                   className="inline-flex min-h-11 items-center transition-colors hover:text-primary lg:min-h-0"
@@ -133,52 +144,61 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
               </Eyebrow>
             ) : null}
 
-            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+            <h1 className="hero-item font-display text-3xl font-bold tracking-tight text-foreground [animation-delay:120ms] sm:text-4xl lg:text-[3.25rem] lg:leading-[1.05]">
               {post.title}
             </h1>
 
             {post.excerpt ? (
-              <p className="mt-4 max-w-[var(--measure)] text-lg text-muted-foreground">{post.excerpt}</p>
+              <p className="hero-item mt-5 max-w-[var(--measure)] text-lg text-muted-foreground [animation-delay:220ms] sm:text-xl">
+                {post.excerpt}
+              </p>
             ) : null}
-
           </header>
 
-          <Cover post={post} />
+          <div className="hero-item [animation-delay:300ms]">
+            <Cover post={post} />
+          </div>
 
           {/*
-            The left rail always has something in it — the post's own facts, and
-            its contents when there are enough headings to navigate. That is
-            what makes a fixed column safe here: a column reserved for a
-            component that returns null is 13rem of empty gutter, which is
-            exactly what this layout had until a screenshot showed it.
-
-            The right rail is the one that comes and goes, so it is the one the
-            grid is conditional on.
+            Two columns: the rail and the article, and the article gets the
+            larger share by a wide margin. The rail is sized to its content —
+            a date, a reading time, a list of headings — and never wider than
+            the 18rem that keeps the series card readable; the article takes
+            everything else. The rail always has something in it (the post's
+            own facts at minimum), which is what makes reserving it safe; a
+            column for a component that returns null is a strip of nothing.
           */}
-          <div
-            className={cn(
-              "mt-12 grid items-start gap-x-10 gap-y-10 lg:grid-cols-[13rem_minmax(0,1fr)]",
-              aside && "xl:grid-cols-[13rem_minmax(0,42rem)_minmax(0,1fr)]",
-            )}
-          >
-            <div className="lg:sticky lg:top-24">
+          <div className="mt-12 grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(13rem,18rem)_minmax(0,1fr)] xl:gap-x-20">
+            <div className="hero-item space-y-8 [animation-delay:380ms] lg:sticky lg:top-24">
               <PostMeta post={post} />
               {contents ? (
-                <div className="mt-8 hidden lg:block">
+                <div className="hidden lg:block">
                   <TableOfContents headings={headings} />
+                </div>
+              ) : null}
+              {series && post.series ? (
+                <div className="hidden lg:block">
+                  <SeriesNav
+                    series={post.series}
+                    posts={seriesPosts}
+                    currentSlug={post.slug}
+                  />
                 </div>
               ) : null}
             </div>
 
             {/*
-              42rem, not `--measure`, and deliberately so. The measure token is
-              for prose; this column also holds code blocks, and every rem taken
-              off it puts another line of code behind a horizontal scroll. 42rem
-              is ~87 characters of body copy — past the 80 the reading-measure
-              rule asks for, and the trade that keeps a snippet readable without
-              dragging. The prose either side of the article does use the token.
+              The article's measure. 48rem at 17px is ~82 characters — past
+              the reading-measure rule's 80, on purpose: this column also
+              holds code, and every rem taken off it puts another line of a
+              snippet behind a horizontal scroll. Wider than the 42rem it was,
+              because the column it sits in is now most of the screen and a
+              measure that ignores that reads as the old layout with the box
+              removed. On a 2xl screen the type steps up with the measure, so
+              the line stays the same length in characters while the column
+              uses more of the room it has.
             */}
-            <div className="min-w-0 max-w-[42rem]">
+            <div className="hero-item min-w-0 max-w-[48rem] text-[1.0625rem] [animation-delay:440ms] 2xl:max-w-[54rem] 2xl:text-lg">
               {body.problem ? (
                 /*
                   Shown to everyone, not just the author. A post whose MDX did
@@ -213,33 +233,15 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
 
               <CommentThread postId={post.id} comments={comments} />
             </div>
-
-            {aside && post.series ? (
-              <aside className="hidden xl:block">
-                {/*
-                  `ml-auto` with a cap: the column absorbs whatever width is
-                  left over, and the card hugs the container's right edge rather
-                  than floating in the middle of it. The title above starts at
-                  the left edge, so the page is anchored at both.
-                */}
-                <div className="ml-auto max-w-[16rem] space-y-6 xl:sticky xl:top-24">
-                  <SeriesNav
-                    series={post.series}
-                    posts={seriesPosts}
-                    currentSlug={post.slug}
-                  />
-                </div>
-              </aside>
-            ) : null}
           </div>
 
           <footer className="mt-14 border-t border-border pt-6">
             <Link
               href="/blog"
               className={cn(
-              eyebrowClasses,
-              "inline-flex min-h-11 items-center transition-colors hover:text-primary",
-            )}
+                eyebrowClasses,
+                "inline-flex min-h-11 items-center transition-colors hover:text-primary",
+              )}
             >
               ← All posts
             </Link>
@@ -287,8 +289,8 @@ function Cover({ post }: { post: { cover_image: string | null; title: string } }
         src={post.cover_image}
         alt=""
         fill
-        // Full width up to the layout container's 80rem cap.
-        sizes="(min-width: 1280px) 76rem, 100vw"
+        // Full width up to the full container's 120rem cap.
+        sizes="(min-width: 1920px) 114rem, 100vw"
         priority
         className="object-cover"
       />

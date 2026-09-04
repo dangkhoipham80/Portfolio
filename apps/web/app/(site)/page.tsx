@@ -2,16 +2,17 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 
 import { CaseRow, ProjectIndexRow } from "@/components/case-row";
-import { ContactSection } from "@/components/contact-section";
+import { ContactCta } from "@/components/contact-cta";
 import { HeroWire } from "@/components/hero-wire";
 import { PointerLight } from "@/components/pointer-light";
 import { EmptyState, Section } from "@/components/section";
 import { SkillTicker } from "@/components/skill-ticker";
 import { StackDiagram } from "@/components/stack-diagram";
+import { World } from "@/components/world/world";
 import { buttonClasses } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
-import { getPosts, getSkills, readProjects } from "@/lib/api";
+import { getCareerEntries, getCertificates, getPosts, getSkills, readProjects } from "@/lib/api";
 import { isoDay } from "@/lib/format";
 import type { Skill } from "@/lib/types";
 
@@ -38,14 +39,18 @@ const WRITING_PREVIEW_COUNT = 3;
 const NAME = ["Phạm", "Đăng", "Khôi"];
 
 export default async function HomePage() {
-  // All three reads are independent, so let them overlap rather than waterfall.
+  // All the reads are independent, so let them overlap rather than waterfall.
   // The projects read keeps its outcome as well as its data: the hero's wire
   // lights the API node from it, so an empty list caused by an outage and one
   // caused by an empty database do not look the same.
-  const [projectsRead, skills, posts] = await Promise.all([
+  // The last two are only counted, for the island's signposts; they are
+  // cached reads with fallbacks like the rest, so an outage costs a number.
+  const [projectsRead, skills, posts, career, certificates] = await Promise.all([
     readProjects(),
     getSkills(),
     getPosts(),
+    getCareerEntries(),
+    getCertificates(),
   ]);
 
   const projects = projectsRead.data;
@@ -70,9 +75,22 @@ export default async function HomePage() {
         hero follows the pointer: the only thing on the page that answers to
         the reader directly.
       */}
-      <section className="relative flex min-h-[calc(100svh-4.25rem)] flex-col justify-between overflow-hidden pb-10 pt-10 sm:pt-14 lg:pb-12">
-        <PointerLight />
+      {/*
+        The first viewport is the island.
 
+        The name is still the logo and still the first thing on the page,
+        but it is a signature at the top now rather than a billboard — the
+        space it gave up goes to the world beneath it, which is where the
+        page's opening argument has moved: here is everything on this site,
+        as somewhere to go, and you are standing at the crossroads. The
+        claim and the biography follow in the next section, on the way to
+        the work, with the request path drawn under them as before.
+
+        The world needs the height: `flex-1` in a column that fills the
+        viewport minus the header, so on a laptop the island fills the
+        screen below the name and on a phone it gets a floor of 26rem.
+      */}
+      <section className="relative flex min-h-[calc(100svh-4.25rem)] flex-col overflow-hidden pt-8 sm:pt-10">
         <Container width="full" className="relative">
           <div className="hero-item flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
             <Eyebrow>Backend · Data · AI</Eyebrow>
@@ -92,22 +110,14 @@ export default async function HomePage() {
           </div>
 
           {/*
-            The name measures about 8.1em set in Be Vietnam Pro 800. It has
-            come down twice: 11.9vw filled the gutters exactly, 8.4vw left the
-            right third to the wire, and the owner's verdict on both was "too
-            big". 6vw is the size that stops being a billboard — a signature
-            at the top of the page, read in one glance rather than scanned
-            across. The step down to the section headings below matters as
-            much as the number: at 8.4vw the name was 121px and every h2 was
-            101px, which is not a hierarchy, it is two billboards.
-
-            At this size it holds one line everywhere from 360px up, so the
-            tight `lg` leading is what a single line wants. The looser default
-            is for the narrowest phones, where it does wrap: Vietnamese stacks
-            diacritics both ways — the nặng dot under "ạ" and the circumflex
-            over "ô" — so the lines need room exactly where they meet.
+            Each word rises out of a slot cut in the page as the site boots.
+            Down from 6vw to 4.5vw: the name now shares the first viewport
+            with the island, and at the old size the two fought for it.
+            One line everywhere from 360px up; the looser default leading is
+            for the narrowest phones, where it does wrap — Vietnamese stacks
+            diacritics both ways, so the lines need room where they meet.
           */}
-          <h1 className="hero-words mt-8 font-display text-[clamp(2.5rem,6vw,7.5rem)] font-extrabold leading-[1.08] tracking-[-0.04em] text-foreground sm:mt-10 lg:leading-[0.94]">
+          <h1 className="hero-words mt-5 font-display text-[clamp(2.25rem,4.5vw,5.5rem)] font-extrabold leading-[1.08] tracking-[-0.04em] text-foreground sm:mt-6 lg:leading-[0.96]">
             {NAME.map((word, i) => (
               <span key={word}>
                 <span className="mask-word" style={{ "--i": i } as CSSProperties}>
@@ -116,21 +126,30 @@ export default async function HomePage() {
               </span>
             ))}
           </h1>
+        </Container>
 
-          <div className="mt-10 grid items-end gap-8 sm:mt-12 lg:grid-cols-[1.4fr_1fr] lg:gap-14">
-            {/*
-              Two tiers, not one grey paragraph. The claim is set in the
-              display face at a reading size the name has just earned; the
-              biography under it is body copy and muted, because it is the
-              supporting fact, not the thesis.
-            */}
-            <div className="hero-item max-w-2xl [animation-delay:520ms]">
-              {/*
-                Leading opens up as the size comes down. At `lg` this is one
-                32px display line and 1.25 is what a display line wants; at
-                375px it is 24px and wraps to five, where the same ratio is
-                body copy set too tight to track back across.
-              */}
+        <World
+          className="hero-item mt-4 min-h-[26rem] flex-1 [animation-delay:360ms] sm:mt-6"
+          counts={{
+            projects: projects.length,
+            writing: posts.length,
+            career: career.length,
+            certificates: certificates.length,
+          }}
+        />
+      </section>
+
+      {/*
+        The claim, the biography, the two buttons and the wire — the old
+        hero's second half, now the section after the island. Same words,
+        same two tiers: the claim in the display face at a reading size, the
+        biography under it as body copy, because it is the supporting fact.
+      */}
+      <section className="relative overflow-hidden pb-10 pt-14 sm:pt-20 lg:pb-12">
+        <PointerLight />
+        <Container width="full" className="relative">
+          <div className="grid items-end gap-8 lg:grid-cols-[1.4fr_1fr] lg:gap-14">
+            <div className="reveal max-w-2xl">
               <p className="font-display text-2xl font-medium leading-[1.4] tracking-[-0.02em] text-foreground sm:text-3xl sm:leading-[1.3] lg:text-[2rem] lg:leading-[1.3]">
                 I build the parts you do not see: APIs, schemas, queues and the
                 services between them.
@@ -141,7 +160,7 @@ export default async function HomePage() {
               </p>
             </div>
 
-            <div className="hero-item flex flex-wrap gap-3 lg:justify-end [animation-delay:640ms]">
+            <div className="reveal flex flex-wrap gap-3 lg:justify-end">
               <Link href="/#projects" className={buttonClasses("primary")}>
                 View work
               </Link>
@@ -267,7 +286,7 @@ export default async function HomePage() {
         </Section>
       ) : null}
 
-      <ContactSection />
+      <ContactCta />
     </>
   );
 }

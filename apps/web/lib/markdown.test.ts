@@ -166,3 +166,28 @@ describe("readingMinutes", () => {
     expect(readingMinutes(withCode)).toBe(readingMinutes(prose));
   });
 });
+
+describe("links", () => {
+  it("opens a reference that leaves the site in a new tab", async () => {
+    const html = await renderMarkdown("See [the docs](https://example.com/docs).");
+
+    expect(html).toContain('href="https://example.com/docs"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+  });
+
+  it("leaves an in-page anchor and a relative path alone", async () => {
+    const html = await renderMarkdown("[Up](#top) and [a post](/blog/other).");
+
+    expect(html).not.toContain("target=");
+    expect(html).not.toContain("rel=");
+  });
+
+  it("does not let a post's own target attribute through the sanitiser as-is", async () => {
+    // Raw HTML is dropped before the sanitiser runs, so an author cannot write
+    // an anchor by hand; the only anchors that reach the DOM are Markdown ones.
+    const html = await renderMarkdown('<a href="https://example.com" target="_top">x</a>');
+
+    expect(html).not.toContain('target="_top"');
+  });
+});

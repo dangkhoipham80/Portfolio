@@ -136,6 +136,39 @@ export const shikiOptions: RehypeShikiOptions = {
 };
 
 /**
+ * Marks every link that leaves the site, so the stylesheet can say so.
+ *
+ * A post's references are the one kind of link on this site the app does not
+ * write itself, and they arrived with nothing on them: same-tab, no `rel`,
+ * indistinguishable from an anchor to the next heading. Every other outbound
+ * link on the site goes through `ExternalLink`, which opens a new tab and
+ * carries the ↗ mark — a post's references should read as the same thing.
+ *
+ * Runs *after* the sanitiser, like `labelCodeBlocks`, because the schema is
+ * what allows `target` and `rel` on an anchor in the first place; a sanitiser
+ * running later would strip them again. Only absolute `http(s)` URLs count as
+ * leaving: a relative path, a `#fragment` or a `mailto:` stays as it is.
+ */
+export function markExternalLinks() {
+  return (tree: Root) => {
+    visit(tree, "element", (node: Element) => {
+      if (node.tagName !== "a") return;
+
+      const href = node.properties?.href;
+      if (typeof href !== "string" || !/^https?:\/\//i.test(href)) return;
+
+      node.properties = {
+        ...node.properties,
+        target: "_blank",
+        // `noopener` so the new tab cannot reach back to this one; `noreferrer`
+        // for the same reason ExternalLink sends it.
+        rel: ["noopener", "noreferrer"],
+      };
+    });
+  };
+}
+
+/**
  * Give every `h2` and `h3` the id its table-of-contents entry links to.
  *
  * The ids have to be derived the same way in two places that never see each
@@ -184,6 +217,7 @@ const processor = unified()
   .use(rehypeShiki, shikiOptions)
   .use(labelCodeBlocks)
   .use(anchorHeadings)
+  .use(markExternalLinks)
   .use(rehypeStringify);
 
 /*

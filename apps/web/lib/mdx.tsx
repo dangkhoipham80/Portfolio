@@ -9,6 +9,7 @@ import { MDX_COMPONENTS } from "@/components/mdx-blocks";
 import {
   anchorHeadings,
   labelCodeBlocks,
+  markExternalLinks,
   renderMarkdown,
   shikiOptions,
 } from "./markdown";
@@ -140,6 +141,7 @@ async function renderMdx(body: string): Promise<ReactNode> {
       // contents list just scrolled nowhere.
       labelCodeBlocks,
       anchorHeadings,
+      markExternalLinks,
     ],
   });
 

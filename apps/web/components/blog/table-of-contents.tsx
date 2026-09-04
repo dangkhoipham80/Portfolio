@@ -4,7 +4,7 @@
 // in needs to observe scroll position, and there is no CSS that can do it.
 // Without JavaScript this still renders as a working list of anchor links.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/cn";
@@ -24,9 +24,21 @@ import { type Heading, hasContents } from "@/lib/headings";
  * Three headings on a post you can read in four minutes is furniture. The
  * threshold is `hasContents` in lib/markdown.ts, shared with the page — which
  * has to make the same decision to stop reserving the column this sits in.
+ *
+ * ## The marker
+ *
+ * One node travels the rail rather than each entry lighting its own border:
+ * the same spine-and-junction vocabulary as the home page, and a single
+ * element sliding between headings says "you moved" in a way that two
+ * borders swapping colour does not. Its position is measured from the
+ * entry's own offset, so a wrapped heading or an indented h3 is handled
+ * without a lookup table. Under reduced motion the transition is zeroed by
+ * the global rule and the node simply jumps.
  */
 export function TableOfContents({ headings }: { headings: Heading[] }) {
   const [active, setActive] = useState<string | null>(null);
+  const [marker, setMarker] = useState<{ top: number; height: number } | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     if (!hasContents(headings)) return;
@@ -63,25 +75,50 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
     return () => observer.disconnect();
   }, [headings]);
 
+  // The marker follows the active entry. Measured, not computed from the
+  // index: entries wrap, and an h3 is indented, so their heights differ.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || !active) return;
+
+    const entry = list.querySelector<HTMLElement>(`[data-heading="${CSS.escape(active)}"]`);
+    if (!entry) return;
+
+    setMarker({ top: entry.offsetTop, height: entry.offsetHeight });
+  }, [active]);
+
   if (!hasContents(headings)) return null;
 
   return (
-    <nav aria-label="On this page" className="lg:sticky lg:top-24">
+    <nav aria-label="On this page">
       <Eyebrow className="mb-3">On this page</Eyebrow>
-      <ul className="space-y-1 border-l border-border">
+      <ul ref={listRef} className="relative space-y-1 border-l border-border">
+        {/*
+          The travelling node. Positioned from the list's top and moved with
+          `translate`, which the compositor animates; `top` would re-lay the
+          list out on every frame of the slide.
+        */}
+        {marker ? (
+          <span
+            aria-hidden="true"
+            className="absolute left-0 top-0 w-0.5 -translate-x-1/2 rounded-full bg-signal transition-[translate,height] duration-300 ease-[var(--ease-enter)]"
+            style={{ translate: `-50% ${marker.top}px`, height: marker.height }}
+          />
+        ) : null}
+
         {headings.map((heading) => (
-          <li key={heading.id}>
+          <li key={heading.id} data-heading={heading.id}>
             <a
               href={`#${heading.id}`}
               // aria-current so the marker is not colour and weight alone —
               // which section you are in is state, and it has to be readable.
               aria-current={active === heading.id ? "location" : undefined}
               className={cn(
-                "-ml-px block border-l-2 py-1.5 pl-3 text-sm transition-colors",
-                heading.level === 3 && "pl-6",
+                "block py-1.5 pl-4 text-sm transition-[color,translate] duration-300 ease-[var(--ease-enter)] hover:translate-x-0.5",
+                heading.level === 3 && "pl-7",
                 active === heading.id
-                  ? "border-l-foreground text-foreground"
-                  : "border-l-transparent text-muted-foreground hover:border-l-border hover:text-foreground",
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               {heading.text}
