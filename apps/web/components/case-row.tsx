@@ -144,8 +144,24 @@ export function CaseRow({
       <Container width="full">
         <div className="reveal-row grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-end lg:gap-16">
           <div>
-            <Eyebrow>
-              /{project.slug}
+            {/*
+              Two halves, and only one of them is a marker.
+
+              The path is a field name and keeps the treatment: uppercase, and
+              the 0.18em tracking that uppercase needs to stay legible. The
+              period is a value. Set the same way it made this one label a
+              40-character all-caps run — past the length where word shapes
+              stop helping, which is the reason the style is reserved for
+              short labels — and it carried caps tracking on lowercase text,
+              which is tracking applied to the one case that does not want it.
+
+              So the transform and the tracking move onto the path alone
+              rather than sitting on the whole line with the date opting out:
+              same rendering, but the element that declares the style is the
+              only element the style is true of.
+            */}
+            <Eyebrow className="normal-case tracking-normal">
+              <span className="uppercase tracking-[0.18em]">/{project.slug}</span>
               {period ? ` · ${period}` : null}
             </Eyebrow>
             <div className="mt-4">

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
 import { Container } from "@/components/ui/container";
-import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
+import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { hasLiveSession } from "@/lib/admin-guard";
 import { cn } from "@/lib/cn";
 import { ADMIN_PATH } from "@/lib/session";
@@ -38,9 +38,8 @@ export default async function ForgotPasswordPage() {
     <main id="main" className="flex flex-1 items-center py-16 sm:py-24">
       <Container width="layout">
         <div className="max-w-md">
-          {/* Not as="h2": this label sits *above* the page h1, so making it a
-              heading would give the page an h2 before its h1. */}
-          <Eyebrow>Locked out</Eyebrow>
+          {/* No eyebrow: "Locked out" only restated "Reset your password".
+              See the note in login/page.tsx. */}
 
           {/*
             The heading and the prose come from the form, not from here.

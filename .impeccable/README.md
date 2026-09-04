@@ -38,3 +38,55 @@ already there; the rule cannot see the eyebrow as part of the heading.
 
 If the eyebrow convention ever goes (see the `kicker-above-heading` discussion),
 this ignore should go with it and the rule should be re-run.
+
+## `radial-spotlight-glow`
+
+> `radial-gradient spotlight glow "contact" (#f15322 a0.22 → transparent)`
+> `radial-gradient spotlight glow "cover-lit" (#2a52f4 a0.34 → transparent)`
+
+Kept, on the owner's call. These are not a haze dropped behind a hero for
+decoration — they are the palette. `app/globals.css` builds the whole scheme on
+two lights rather than on paint: requests go out cool and responses come back
+warm, and the page warms as it is read, cool at the top and warm by the time it
+reaches the contact form. The coral field under `/contact` and the blue under a
+project cover are the two ends of that.
+
+The rule is right about the shape and wrong about this instance. If the light
+concept is ever dropped, these go with it.
+
+## `all-caps-body` — fixed, not waived
+
+The meta line above a project title read `/portfolio-api · FEBRUARY 2025 —
+PRESENT`: 40 characters of tracked uppercase. The path is a field name and keeps
+the marker style; the period is a value and now sets `normal-case`. That leaves
+a ~14-character uppercase run, which is what the style is for.
+
+## `content-hidden-at-rest`
+
+> `30% of page text stays at opacity 0 after reveal handlers ran`
+
+Kept, and the one real failure it pointed at is fixed. The rule's stated concern
+is content that "shipped but never becomes visible". That was checked:
+
+- **On scroll** — drove the whole page to the bottom at 1440 and 390 and counted
+  elements still under opacity 1: zero. Nothing is stranded, including at the
+  end of the document where a `view()` timeline can run out of range.
+- **Reduced motion** — 0% hidden at rest.
+- **Print** — was 12% hidden, because a `view()` timeline resolves against a
+  scroll position and paper has none. That was a real defect and is fixed by the
+  `@media print` guard in `globals.css`; now 0% on every route checked.
+
+What remains is a scroll-driven entrance on content that is below the fold and
+becomes visible when reached. That is the page's motion design, it is guarded
+three ways, and it is not the failure the rule describes.
+
+## `kicker-above-heading` / `hero-eyebrow-chip` — partly fixed
+
+Three eyebrows that only restated their own heading are gone: "Restricted" above
+"Console access", "Locked out" above "Reset your password", and "404 — route not
+found" above "Nothing is listening on this path" (now just the status code).
+
+The rest stay. They are not generated kickers — they carry a path and a count
+(`/capabilities · 10`, `/writing · 3`), which is data the heading does not have,
+in the site's systems vocabulary. Left unsuppressed so the rule keeps reporting
+if a contentless one is ever added back.
