@@ -18,7 +18,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     getSeriesList(),
   ]);
 
-  const staticPages = ["/", "/blog", "/career-journey", "/certificates"].map((path) => ({
+  const staticPages = ["/", "/blog", "/career-journey", "/certificates", "/contact"].map((path) => ({
     url: absoluteUrl(path),
     changeFrequency: "monthly" as const,
     priority: path === "/" ? 1 : 0.8,

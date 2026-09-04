@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 import { BLOB_HOSTNAME } from "./lib/blob";
 
 const nextConfig: NextConfig = {
+  // One copy of three in the bundle. Without this the fiber renderer and the
+  // scene can resolve different builds of it and the island renders nothing.
+  transpilePackages: ["three"],
   images: {
     /*
      * One host: this project's Blob store. See lib/blob.ts for why it is not

@@ -103,7 +103,7 @@ test.describe("pages built with no API behind them", () => {
   });
 
   test("the contact form is still usable when the content API is gone", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/contact");
 
     // The section's whole argument is that the mailto works when nothing else
     // does, so it must survive the outage that makes it necessary.

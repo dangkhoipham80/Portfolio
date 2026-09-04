@@ -25,6 +25,9 @@ export const LINKS = [
   { href: "/#projects", label: "Projects" },
   { href: "/blog", label: "Blog" },
   { href: "/career-journey", label: "Career" },
+  // Last, where a "get in touch" belongs: the destination you reach once the
+  // rest has done its work.
+  { href: "/contact", label: "Contact" },
 ];
 
 /** The path part of a nav href, so `/#projects` is compared as `/`. */
