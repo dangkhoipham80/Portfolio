@@ -144,7 +144,7 @@ export function Section({
             </Heading>
           )}
           {description ? (
-            <p className={cn("reveal mt-4 max-w-2xl text-lg text-muted-foreground", full && "mt-6 sm:text-xl")}>
+            <p className={cn("reveal mt-4 max-w-[var(--measure)] text-lg text-muted-foreground", full && "mt-6 sm:text-xl")}>
               {description}
             </p>
           ) : null}

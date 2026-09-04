@@ -73,7 +73,7 @@ export function PostRow({ post }: { post: Post }) {
           </h2>
 
           {/* Capped well inside the row: the blurb is prose and wants a measure. */}
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{blurb}</p>
+          <p className="mt-2 max-w-[var(--measure)] text-sm text-muted-foreground">{blurb}</p>
 
           {post.tags.length > 0 ? (
             /*

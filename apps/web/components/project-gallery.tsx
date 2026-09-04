@@ -22,7 +22,7 @@ import type { GalleryImage } from "@/lib/types";
  * description — "the console's edit form, grouped into bands" — is equally
  * useful read aloud and read underneath, and maintaining two strings produces
  * one good one and one stale one. Where they must not be duplicated is to a
- * screen reader, which would otherwise hear it twice: the `<img>` carries the
+ * screen reader, which would otherwise hear it twice: the img carries the
  * text and the `<figcaption>` is hidden from the accessibility tree.
  *
  * An image with no description gets `alt=""` and no caption. That is the
@@ -54,7 +54,7 @@ export function ProjectGallery({
                 anything, for the reason lib/blob.ts documents: a gallery URL is
                 free text, and next/image on an unlisted host does not degrade —
                 it throws at render and takes the whole project page with it.
-                An image pasted from somewhere else gets a plain <img>, which is
+                An image pasted from somewhere else gets a plain img element, which is
                 exactly what the console's previews use and is correct here too.
 
                 Given an allowed host, intrinsic dimensions are used when the
@@ -96,7 +96,7 @@ export function ProjectGallery({
 
               {image.alt ? (
                 <figcaption
-                  // Hidden from the accessibility tree because the <img> above
+                  // Hidden from the accessibility tree because the img above
                   // already carries this exact sentence as its alt text.
                   aria-hidden="true"
                   className="mt-2 text-sm text-muted-foreground"

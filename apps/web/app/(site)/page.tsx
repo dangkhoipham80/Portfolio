@@ -125,7 +125,13 @@ export default async function HomePage() {
               supporting fact, not the thesis.
             */}
             <div className="hero-item max-w-2xl [animation-delay:520ms]">
-              <p className="font-display text-2xl font-medium leading-[1.25] tracking-[-0.02em] text-foreground sm:text-3xl lg:text-[2rem]">
+              {/*
+                Leading opens up as the size comes down. At `lg` this is one
+                32px display line and 1.25 is what a display line wants; at
+                375px it is 24px and wraps to five, where the same ratio is
+                body copy set too tight to track back across.
+              */}
+              <p className="font-display text-2xl font-medium leading-[1.4] tracking-[-0.02em] text-foreground sm:text-3xl sm:leading-[1.3] lg:text-[2rem] lg:leading-[1.3]">
                 I build the parts you do not see: APIs, schemas, queues and the
                 services between them.
               </p>
@@ -242,7 +248,7 @@ export default async function HomePage() {
                       </Link>
                     </h3>
                     {post.excerpt ? (
-                      <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
+                      <p className="mt-1.5 max-w-[var(--measure)] text-sm text-muted-foreground">
                         {post.excerpt}
                       </p>
                     ) : null}

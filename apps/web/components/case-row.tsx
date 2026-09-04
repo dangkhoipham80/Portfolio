@@ -227,7 +227,7 @@ export function ProjectIndexRow({ project }: { project: Project }) {
             {project.title}
           </Link>
         </h3>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{project.description}</p>
+        <p className="mt-1 max-w-[var(--measure)] text-sm text-muted-foreground">{project.description}</p>
       </div>
       <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
         {project.technologies.slice(0, 3).join(" · ")}

@@ -176,7 +176,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
             <p className="text-lg text-foreground sm:text-xl">{project.description}</p>
 
             {project.long_description ? (
-              <p className="mt-6 whitespace-pre-line text-muted-foreground">
+              <p className="mt-6 max-w-[var(--measure)] whitespace-pre-line text-muted-foreground">
                 {project.long_description}
               </p>
             ) : null}

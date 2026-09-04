@@ -193,7 +193,7 @@ export function ImageField({
 
         {url && !broken ? (
           /*
-           * A plain <img>, not next/image: this is an admin preview of a URL
+           * A plain img element, not next/image: this is an admin preview of a URL
            * that may be anything the admin typed, and routing it through the
            * optimiser would mean whitelisting arbitrary hosts in
            * next.config.ts. The public site is where optimisation matters.

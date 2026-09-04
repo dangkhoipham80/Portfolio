@@ -73,7 +73,7 @@ export function BlogIndexShell({
             {title}
           </h1>
           {description ? (
-            <p className="mt-4 text-lg text-muted-foreground">{description}</p>
+            <p className="mt-4 max-w-[var(--measure)] text-lg text-muted-foreground">{description}</p>
           ) : null}
         </header>
 
