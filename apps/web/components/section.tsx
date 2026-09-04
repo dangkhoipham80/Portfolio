@@ -126,7 +126,16 @@ export function Section({
 
           {eyebrow ? <Eyebrow className="reveal mb-3">{eyebrow}</Eyebrow> : null}
           {full ? (
-            <Heading className="reveal-words font-display text-[clamp(2.75rem,7vw,7.5rem)] font-extrabold leading-[0.95] tracking-[-0.04em] text-foreground">
+            /*
+              A section heading is not the page's title, and at 7vw it was
+              set as though it were: 101px against the hero's 121px, four
+              times over, so "Where in the stack I work" ran the whole 1344px
+              content width and every section opened at the same volume the
+              name did. 4vw keeps the display scale a full-bleed section needs
+              while leaving a clear step below the h1 — one line at 1440,
+              still comfortably ahead of the 30px titles it labels.
+            */
+            <Heading className="reveal-words font-display text-[clamp(2rem,4vw,4.5rem)] font-extrabold leading-[1] tracking-[-0.035em] text-foreground">
               <RisingWords text={title} />
             </Heading>
           ) : (

@@ -92,16 +92,22 @@ export default async function HomePage() {
           </div>
 
           {/*
-            The name measures about 8.1em set in Be Vietnam Pro 800. At 11.9vw
-            it filled the gutters exactly and the owner's verdict was "too
-            big" — a name that is the whole screen is a billboard, not a
-            signature. 8.4vw is a line that owns the top of the page and
-            leaves the right third to the air the wire below needs. Below
-            `lg` it wraps, and Vietnamese stacks diacritics both ways — the
-            nặng dot under "ạ" and the circumflex over "ô" — so the leading
-            opens up exactly where the lines meet.
+            The name measures about 8.1em set in Be Vietnam Pro 800. It has
+            come down twice: 11.9vw filled the gutters exactly, 8.4vw left the
+            right third to the wire, and the owner's verdict on both was "too
+            big". 6vw is the size that stops being a billboard — a signature
+            at the top of the page, read in one glance rather than scanned
+            across. The step down to the section headings below matters as
+            much as the number: at 8.4vw the name was 121px and every h2 was
+            101px, which is not a hierarchy, it is two billboards.
+
+            At this size it holds one line everywhere from 360px up, so the
+            tight `lg` leading is what a single line wants. The looser default
+            is for the narrowest phones, where it does wrap: Vietnamese stacks
+            diacritics both ways — the nặng dot under "ạ" and the circumflex
+            over "ô" — so the lines need room exactly where they meet.
           */}
-          <h1 className="hero-words mt-8 font-display text-[clamp(3.25rem,8.4vw,11rem)] font-extrabold leading-[1.08] tracking-[-0.04em] text-foreground sm:mt-10 lg:leading-[0.94]">
+          <h1 className="hero-words mt-8 font-display text-[clamp(2.5rem,6vw,7.5rem)] font-extrabold leading-[1.08] tracking-[-0.04em] text-foreground sm:mt-10 lg:leading-[0.94]">
             {NAME.map((word, i) => (
               <span key={word}>
                 <span className="mask-word" style={{ "--i": i } as CSSProperties}>
