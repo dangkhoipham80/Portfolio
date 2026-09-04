@@ -11,6 +11,7 @@ import { unified } from "unified";
 import { visit } from "unist-util-visit";
 
 import { slugifyHeading } from "./headings";
+import { renderSequenceDiagrams } from "./sequence-diagram/plugin";
 
 /**
  * Turns a post's Markdown into HTML, on the server.
@@ -214,6 +215,13 @@ const processor = unified()
   // dropped at this step, before the sanitiser is even asked about it.
   .use(remarkRehype)
   .use(rehypeSanitize, sanitiseSchema)
+  /*
+   * Between the sanitiser and the highlighter, and it has to be exactly there —
+   * the schema has no SVG in it, so a sanitiser running afterwards would delete
+   * the diagram, and Shiki running first would have turned the fence into a
+   * tree of coloured spans. See lib/sequence-diagram/plugin.ts.
+   */
+  .use(renderSequenceDiagrams)
   .use(rehypeShiki, shikiOptions)
   .use(labelCodeBlocks)
   .use(anchorHeadings)
