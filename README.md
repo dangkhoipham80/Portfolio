@@ -198,22 +198,33 @@ Dark mode's `--primary-foreground` was also flipped from near-white to near-blac
 because the mid-lightness purple primary under white text measured 3.29:1 — a
 pairing only the filled buttons use, which is why it went unnoticed.
 
-### Why the hero is SVG and not three.js
+### The home page is an island
 
-The signature element is an animated service topology built from the real stack
-in these projects — FastAPI, Postgres, Redis, Kafka. It is inline SVG rendered
-on the server, with one CSS keyframe animating the edge strokes.
+The home page is a small open world: a low-poly island drawn with three.js
+through `@react-three/fiber`, with one landmark per section of the site — the
+lighthouse is the work, the cairn the stack, the big tree the writing, the
+mountain the career, the pavilion the credentials, the cabin the way to get
+in touch, and the owner stands at the crossroads. The visitor walks it in
+third or first person (WASD, click-to-walk, a joystick on touch), talks to
+the people on it, follows the fox to whatever they have not found yet, and
+arriving at a place opens that section as a panel over the scene.
 
-three.js was considered and rejected for this slot. It costs ~150KB gzipped
-before anything is drawn, forces a client component and a canvas into the
-highest-priority region of the page, and a rotating abstract shape would say
-nothing about backend engineering. The topology costs no JavaScript, cannot
-affect LCP, and stops dead under `prefers-reduced-motion` through the global
-rule rather than needing its own opt-out.
+The content is not in the scene. Every panel is a server component built
+from the same reads the rest of the site uses, handed to the world twice: as
+panels to open on arrival, and as the *atlas* — the same sections in walking
+order, which is what the server renders, what a browser without WebGL gets,
+what a hash link like `/#projects` scrolls to without the scene, and what
+"read it as a list" opens for anyone who would rather not walk. The people
+on the island say what the data says: the keeper names the newest project
+because there is one, and says the lighthouse is dark when the API is asleep.
 
-If a WebGL layer is wanted later, the constraint to keep is placement: below the
-fold, dynamically imported, gated on `prefers-reduced-motion` and on a coarse
-pointer check so phones do not pay for it.
+The constraints that were set when this slot was still SVG still hold: the
+renderer is dynamically imported and never reaches a page that does not draw
+the island; nothing idles under `prefers-reduced-motion` and the camera cuts
+rather than swoops; the canvas stops drawing off screen; and the page's
+content exists in the HTML before any of it loads. See
+`apps/web/components/world/` — `places.ts` and `content.ts` are the data,
+`world.tsx` is the orchestration, `scene.tsx` the renderer.
 
 ## Known issues being worked through
 

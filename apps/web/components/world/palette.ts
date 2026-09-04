@@ -43,6 +43,11 @@ const TOKENS = [
   "ground-light",
   "glow-cool",
   "glow-warm",
+  "skin",
+  "hair",
+  "coat",
+  "coat-2",
+  "coat-3",
 ] as const;
 
 export type Token = (typeof TOKENS)[number];

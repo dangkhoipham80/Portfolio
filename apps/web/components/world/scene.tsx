@@ -7,28 +7,30 @@
  */
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
-import { type Fog, MathUtils, MeshStandardMaterial, Vector3 } from "three";
+import { useEffect, useMemo } from "react";
+import { MeshStandardMaterial, Vector3 } from "three";
 
+import { npcById, type NpcId, type WorldFacts } from "./content";
 import { WorldContext } from "./context";
 import { Birds, Clouds, Fireflies, Fox } from "./life";
+import { People } from "./npcs";
 import type { Palette, Token } from "./palette";
-import { PLACES, placeById, type PlaceId } from "./places";
-import { BigTree, Cabin, Crossroads, Forest, Ground, Lighthouse, Mountain, Path, Pavilion, Pond } from "./scenery";
+import { isPlaceId, LANDMARKS, placeById, type PlaceId } from "./places";
+import { Player } from "./player";
+import { Rig } from "./rig";
+import { Crossroads, Forest, Ground, Landmarks, Path, Pond } from "./scenery";
+import type { Runtime, Store } from "./state";
+import { groundHeight } from "./terrain";
 
 export type SceneProps = {
   palette: Palette;
   motion: boolean;
   /** Whether to draw frames at all: false when scrolled away or tab hidden. */
   active: boolean;
-  hovered: PlaceId | null;
-  setHovered: (id: PlaceId | null) => void;
-  select: (id: PlaceId) => void;
-  /** The place being flown to, if any. `onArrive` fires when the flight lands. */
-  flight: PlaceId | null;
-  onArrive: () => void;
-  /** The signpost elements, by place, for the scene to position each frame. */
-  labels: RefObject<Map<PlaceId, HTMLElement>>;
+  store: Store;
+  getRuntime: () => Runtime;
+  facts: WorldFacts;
+  travel: (id: PlaceId) => void;
 };
 
 /** One material per token. Glow tokens emit; everything else is matte. */
@@ -49,124 +51,65 @@ function buildMaterials(palette: Palette): Record<Token, MeshStandardMaterial> {
 }
 
 /**
- * The camera: an isometric-ish view from the front, idling on a slow swing,
- * leaning with the pointer, and flying down to a place when one is chosen.
- *
- * Orbit maths rather than a controls library: nothing is draggable, so
- * there is nothing to control — the camera only ever does these three
- * things, and OrbitControls would ship a hundred kilobytes to disable
- * most of itself.
+ * Writes each anchored element's screen position every frame. DOM, not
+ * React: the elements are owned by the HUD and moved here by
+ * `style.transform`, so the signposts and name tags follow the camera
+ * without a render. The minimap's player dot is the one anchor that is a
+ * map position rather than a projection.
  */
-function Rig({
-  palette,
-  motion,
-  hovered,
-  flight,
-  onArrive,
-}: Pick<SceneProps, "palette" | "motion" | "hovered" | "flight" | "onArrive">) {
-  const { camera, size } = useThree();
-  const target = useRef(new Vector3(0, -1.2, 0));
-  const state = useRef({ theta: -0.32, phi: 0.66, dist: 32 });
-  const flightStart = useRef<number | null>(null);
-  const arrived = useRef(false);
-  const fog = useRef<Fog>(null);
-
-  useEffect(() => {
-    flightStart.current = null;
-    arrived.current = false;
-  }, [flight]);
-
-  useFrame(({ clock, pointer }, delta) => {
-    const t = clock.getElapsedTime();
-    const aspect = size.width / Math.max(1, size.height);
-    // A phone's portrait viewport needs the camera further back to fit the
-    // island's width; a wide screen can come in close.
-    const fit = MathUtils.clamp(1.2 / aspect, 1, 1.6);
-
-    let theta = -0.32;
-    let phi = 0.66;
-    let dist = 32 * fit;
-    // Aimed a little below the ground so the island sits above the centre
-    // of the frame, clear of the strip of links along the bottom.
-    const want = new Vector3(0, -1.2, 0);
-
-    if (motion) {
-      theta += Math.sin(t * 0.12) * 0.07;
-      theta += pointer.x * 0.08;
-      phi -= pointer.y * 0.05;
-    }
-
-    if (hovered && !flight) {
-      const [x, z] = placeById(hovered).at;
-      want.set(x * 0.22, -1.2, z * 0.22);
-    }
-
-    if (flight) {
-      if (flightStart.current === null) flightStart.current = t;
-      const duration = motion ? 0.75 : 0.001;
-      const p = MathUtils.clamp((t - flightStart.current) / duration, 0, 1);
-      const eased = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-      const [x, z] = placeById(flight).at;
-      want.set(x, 1.4, z);
-      dist = MathUtils.lerp(dist, 9, eased);
-      phi = MathUtils.lerp(phi, 0.5, eased);
-      theta = MathUtils.lerp(theta, Math.atan2(x, z) * 0.35, eased);
-      if (p >= 1 && !arrived.current) {
-        arrived.current = true;
-        onArrive();
-      }
-    }
-
-    // Everything eases: the pointer lean, the hover glance and the return
-    // from either all use the same damping, so nothing snaps.
-    const k = motion ? 1 - Math.exp(-delta * (flight ? 9 : 4)) : 1;
-    const s = state.current;
-    s.theta = MathUtils.lerp(s.theta, theta, k);
-    s.phi = MathUtils.lerp(s.phi, phi, k);
-    s.dist = MathUtils.lerp(s.dist, dist, k);
-    target.current.lerp(want, k);
-
-    camera.position.set(
-      target.current.x + Math.sin(s.theta) * Math.cos(s.phi) * s.dist,
-      target.current.y + Math.sin(s.phi) * s.dist,
-      target.current.z + Math.cos(s.theta) * Math.cos(s.phi) * s.dist,
-    );
-    camera.lookAt(target.current);
-
-    // The fog band moves with the camera so the island's edge always fades
-    // at the same apparent distance whatever the viewport's shape.
-    if (fog.current) {
-      fog.current.near = s.dist + 6;
-      fog.current.far = s.dist + 30;
-    }
-  });
-
-  // The fog is the sky colour, so the island's edge dissolves into the page.
-  return <fog ref={fog} attach="fog" args={[palette.sky, 30, 56]} />;
-}
-
-/**
- * Writes each signpost's screen position every frame. DOM, not React: the
- * elements are owned by world.tsx and moved here by `style.transform`, so
- * the labels follow the camera without a render.
- */
-function Signposts({ labels }: Pick<SceneProps, "labels">) {
+function Anchors({ store, getRuntime }: Pick<SceneProps, "store" | "getRuntime">) {
   const { camera, size } = useThree();
   const v = useMemo(() => new Vector3(), []);
 
   useFrame(() => {
-    const map = labels.current;
-    if (!map) return;
-    for (const place of PLACES) {
-      const el = map.get(place.id);
-      if (!el) continue;
-      v.set(place.at[0], place.labelHeight, place.at[1]).project(camera);
+    const state = store.get();
+    const runtime = getRuntime();
+    const p = runtime.player;
+    for (const [key, el] of runtime.anchors) {
+      if (key === "minimap:player") {
+        const deg = (Math.atan2(Math.cos(p.yaw), Math.sin(p.yaw)) * 180) / Math.PI;
+        el.setAttribute(
+          "transform",
+          `translate(${(p.pos.x * 4.2).toFixed(1)} ${(p.pos.z * 4.2).toFixed(1)}) rotate(${deg.toFixed(0)})`,
+        );
+        continue;
+      }
+      const [kind, id] = key.split(":");
+      let fade = 1;
+      if (kind === "place" && isPlaceId(id)) {
+        const place = placeById(id);
+        v.set(place.at[0], place.labelHeight, place.at[1]);
+        // Up close the signpost would sit over the top of the screen; it is
+        // the prompt's job from here, so it steps back.
+        if (state.mode === "explore") {
+          const d = Math.hypot(p.pos.x - place.at[0], p.pos.z - place.at[1]);
+          fade = Math.min(1, Math.max(0, (d - place.footprint - 1.5) / 2));
+        }
+      } else if (kind === "npc") {
+        const npc = npcById(id as NpcId);
+        v.set(npc.at[0], groundHeight(npc.at[0], npc.at[1]) + 1.72, npc.at[1]);
+        const d = Math.hypot(p.pos.x - npc.at[0], p.pos.z - npc.at[1]);
+        fade = state.mode === "explore" ? Math.min(1, Math.max(0, (11 - d) / 4)) : 0;
+      } else {
+        continue;
+      }
+      // Into view space first: a point behind the camera projects to a
+      // perfectly plausible spot on screen, mirrored, and only the sign of
+      // its depth gives it away.
+      v.applyMatrix4(camera.matrixWorldInverse);
+      const inFront = v.z < 0;
+      v.applyMatrix4(camera.projectionMatrix);
       const x = ((v.x + 1) / 2) * size.width;
       const y = ((1 - v.y) / 2) * size.height;
-      const visible = v.z < 1;
-      el.style.transform = `translate(-50%, -100%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
-      el.style.opacity = visible ? "1" : "0";
-      el.style.pointerEvents = visible ? "auto" : "none";
+      // Nothing floats over the nameplate in the top-left corner, or over
+      // the top edge anywhere.
+      const limit = x < 360 ? 175 : 100;
+      if (y < limit) fade *= Math.max(0, (y - (limit - 70)) / 70);
+      const visible = inFront && fade > 0.01;
+      const element = el as HTMLElement;
+      element.style.transform = `translate(-50%, -100%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      element.style.opacity = visible ? fade.toFixed(2) : "0";
+      element.style.pointerEvents = visible ? "auto" : "none";
     }
   });
 
@@ -179,15 +122,13 @@ function Island() {
       <Ground />
       <Pond />
       <Crossroads />
-      {PLACES.map((place, i) => (
+      {LANDMARKS.map((place, i) => (
         <Path key={place.id} place={place} index={i} />
       ))}
       <Forest />
-      <Lighthouse at={placeById("projects").at} />
-      <BigTree at={placeById("writing").at} />
-      <Mountain at={placeById("career").at} />
-      <Pavilion at={placeById("certificates").at} />
-      <Cabin at={placeById("contact").at} />
+      <Landmarks />
+      <People />
+      <Player />
       <Fox />
       <Birds />
       <Clouds />
@@ -197,7 +138,7 @@ function Island() {
 }
 
 export default function Scene(props: SceneProps) {
-  const { palette, motion, active, hovered, setHovered, select, flight, onArrive, labels } = props;
+  const { palette, motion, active, store, getRuntime, facts, travel } = props;
 
   const mats = useMemo(() => buildMaterials(palette), [palette]);
   useEffect(() => {
@@ -207,8 +148,8 @@ export default function Scene(props: SceneProps) {
   }, [mats]);
 
   const context = useMemo(
-    () => ({ palette, mats, motion, hovered, setHovered, select }),
-    [palette, mats, motion, hovered, setHovered, select],
+    () => ({ palette, mats, motion, store, getRuntime, facts, travel }),
+    [palette, mats, motion, store, getRuntime, facts, travel],
   );
 
   return (
@@ -220,9 +161,9 @@ export default function Scene(props: SceneProps) {
       dpr={[1, 1.5]}
       frameloop={active ? "always" : "never"}
       gl={{ antialias: true, alpha: true, powerPreference: "low-power" }}
-      camera={{ fov: 36, near: 0.5, far: 140, position: [0, 18, 26] }}
+      camera={{ fov: 36, near: 0.3, far: 140, position: [0, 18, 26] }}
       onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
-      onPointerMissed={() => setHovered(null)}
+      onPointerMissed={() => store.set({ hovered: null })}
       style={{ position: "absolute", inset: 0 }}
     >
       <WorldContext.Provider value={context}>
@@ -244,8 +185,8 @@ export default function Scene(props: SceneProps) {
           shadow-bias={-0.0008}
         />
         <Island />
-        <Rig palette={palette} motion={motion} hovered={hovered} flight={flight} onArrive={onArrive} />
-        <Signposts labels={labels} />
+        <Rig />
+        <Anchors store={store} getRuntime={getRuntime} />
       </WorldContext.Provider>
     </Canvas>
   );

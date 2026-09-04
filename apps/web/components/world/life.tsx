@@ -1,7 +1,7 @@
 "use client";
 
 /*
- * Everything on the island that moves: the fox, the birds, the fireflies,
+ * Everything on the island that moves by itself: the fox, the birds, the fireflies,
  * the clouds, the chimney smoke, the fire, the lighthouse beam and the pond.
  *
  * All of it runs in `useFrame` against the clock and none of it keeps React
@@ -31,6 +31,8 @@ import {
 } from "three";
 
 import { seeded, useWorld } from "./context";
+import { doorOf, placeById } from "./places";
+import { groundHeight } from "./terrain";
 
 const GEO = {
   box: new BoxGeometry(1, 1, 1),
@@ -44,39 +46,99 @@ const GEO = {
 /* ------------------------------------------------------------------------ */
 
 /**
- * The fox trots a loop through the meadow between the cabin and the
- * lighthouse. Built facing +x; the heading each frame is the tangent of
- * its loop. The one warm-coloured creature on the island — the response
- * light, out for a walk.
+ * The fox: the island's companion.
+ *
+ * Left alone it trots a loop through the meadow between the cabin and the
+ * lighthouse. Given a quest it leads: it runs a few paces ahead of the
+ * player along the line to the destination, waits when the player falls
+ * behind, and moves on when they catch up. Built facing +x; the heading each
+ * frame is the direction it is going. The one warm-coloured creature on the
+ * island apart from the player — the response light, out for a walk.
  */
 export function Fox() {
-  const { mats, motion } = useWorld();
+  const { mats, motion, store, getRuntime } = useWorld();
   const group = useRef<Group>(null);
   const legs = useRef<(Mesh | null)[]>([]);
   const tail = useRef<Mesh>(null);
+  // The loop's own clock, advanced only while on the loop, so the fox picks
+  // the loop up where it left it rather than jumping to where it would be.
+  const loopT = useRef(0.8);
+  const heading = useRef(0);
+  const pace = useRef(0);
 
   const LOOP = { cx: 1.6, cz: 2.6, a: 2.6, b: 1.5, speed: 0.32 };
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     const g = group.current;
     if (!g) return;
-    const t = motion ? clock.getElapsedTime() * LOOP.speed : 0.8;
-    const x = LOOP.cx + Math.cos(t) * LOOP.a;
-    const z = LOOP.cz + Math.sin(t) * LOOP.b;
-    const dx = -Math.sin(t) * LOOP.a;
-    const dz = Math.cos(t) * LOOP.b;
-    g.position.set(x, motion ? 0.02 + Math.abs(Math.sin(t * 9)) * 0.05 : 0.02, z);
-    g.rotation.y = Math.atan2(-dz, dx);
+    const dt = Math.min(delta, 0.05);
+    const state = store.get();
+    const runtime = getRuntime();
+    const quest = state.mode === "explore" && state.quest ? placeById(state.quest) : null;
+    const time = clock.getElapsedTime();
+    let moving = 0;
 
-    const swing = motion ? Math.sin(clock.getElapsedTime() * 9) * 0.55 : 0;
+    if (quest) {
+      const [dx, dz] = doorOf(quest);
+      const p = runtime.player.pos;
+      const toDoor = { x: dx - p.x, z: dz - p.z };
+      const dist = Math.hypot(toDoor.x, toDoor.z);
+      // A few paces ahead of the player, never past the door.
+      const lead = Math.min(3.0, dist);
+      const ahead =
+        dist > 0.01
+          ? { x: p.x + (toDoor.x / dist) * lead, z: p.z + (toDoor.z / dist) * lead }
+          : { x: dx, z: dz };
+      const behind = Math.hypot(g.position.x - p.x, g.position.z - p.z);
+      const gap = Math.hypot(ahead.x - g.position.x, ahead.z - g.position.z);
+      if (behind < 6 && gap > 0.35) {
+        const step = Math.min(gap, 3.4 * dt);
+        g.position.x += ((ahead.x - g.position.x) / gap) * step;
+        g.position.z += ((ahead.z - g.position.z) / gap) * step;
+        heading.current = Math.atan2(-(ahead.z - g.position.z), ahead.x - g.position.x);
+        moving = 1;
+      } else {
+        // Waiting: turn to look back at the player.
+        heading.current = Math.atan2(-(p.z - g.position.z), p.x - g.position.x);
+      }
+    } else {
+      const t = loopT.current;
+      const lx = LOOP.cx + Math.cos(t) * LOOP.a;
+      const lz = LOOP.cz + Math.sin(t) * LOOP.b;
+      const gap = Math.hypot(lx - g.position.x, lz - g.position.z);
+      if (gap > 0.3) {
+        // Back to the loop from wherever the quest left it.
+        const step = Math.min(gap, 2.6 * dt);
+        g.position.x += ((lx - g.position.x) / gap) * step;
+        g.position.z += ((lz - g.position.z) / gap) * step;
+        heading.current = Math.atan2(-(lz - g.position.z), lx - g.position.x);
+        moving = 1;
+      } else if (motion) {
+        loopT.current += dt * LOOP.speed;
+        g.position.set(lx, 0, lz);
+        heading.current = Math.atan2(-Math.cos(t) * LOOP.b, -Math.sin(t) * LOOP.a);
+        moving = 1;
+      } else {
+        g.position.set(lx, 0, lz);
+      }
+    }
+
+    g.position.y = groundHeight(g.position.x, g.position.z) + 0.02;
+    g.rotation.y = heading.current;
+    runtime.fox.x = g.position.x;
+    runtime.fox.z = g.position.z;
+
+    if (moving) pace.current += dt * 9;
+    const swing = moving ? Math.sin(pace.current) * 0.55 : 0;
+    if (moving && motion) g.position.y += Math.abs(Math.sin(pace.current)) * 0.05;
     legs.current.forEach((leg, i) => {
       if (leg) leg.rotation.z = i % 2 === 0 ? swing : -swing;
     });
-    if (tail.current) tail.current.rotation.z = 0.5 + (motion ? Math.sin(clock.getElapsedTime() * 4) * 0.2 : 0);
+    if (tail.current) tail.current.rotation.z = 0.5 + (motion ? Math.sin(time * 4) * 0.2 : 0);
   });
 
   return (
-    <group ref={group} scale={0.9}>
+    <group ref={group} position={[LOOP.cx + Math.cos(0.8) * LOOP.a, 0, LOOP.cz + Math.sin(0.8) * LOOP.b]} scale={0.9}>
       <mesh geometry={GEO.box} material={mats.fox} position-y={0.36} scale={[0.72, 0.3, 0.3]} castShadow />
       <mesh geometry={GEO.box} material={mats.fox} position={[0.44, 0.5, 0]} scale={[0.3, 0.26, 0.28]} castShadow />
       <mesh geometry={GEO.box} material={mats.snow} position={[0.6, 0.45, 0]} scale={[0.12, 0.12, 0.16]} />
@@ -261,7 +323,8 @@ export function Clouds() {
     const rand = seeded(5);
     return Array.from({ length: 3 }, () => ({
       x: -12 + rand() * 24,
-      y: 6 + rand() * 2,
+      // High enough to clear a camera standing behind the player.
+      y: 8.5 + rand() * 2,
       z: -8 + rand() * 12,
       s: 0.8 + rand() * 0.6,
       speed: 0.25 + rand() * 0.2,
