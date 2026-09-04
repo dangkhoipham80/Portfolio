@@ -205,6 +205,16 @@
     --world-glow-cool: 228 90% 60%;
     --world-glow-warm: 16 90% 60%;
     --world-sun-strength: 2.2;
+    /*
+     * The people on the island. The player wears the warm coat — the one
+     * response-coloured figure, like the fox — and the others wear the
+     * island's own neutrals, so the eye finds you first.
+     */
+    --world-skin: 30 40% 80%;
+    --world-hair: 24 30% 20%;
+    --world-coat: 16 80% 56%;
+    --world-coat-2: 228 50% 52%;
+    --world-coat-3: 228 12% 50%;
     /* How strongly the light fields show. Paper takes less than ink does.
        Raised from 0.16: at that strength the lights were a rumour, and a
        page lit by a rumour reads as flat grey. */
@@ -273,6 +283,11 @@
     --world-glow-cool: 228 100% 72%;
     --world-glow-warm: 16 95% 62%;
     --world-sun-strength: 0.7;
+    --world-skin: 30 30% 66%;
+    --world-hair: 24 20% 14%;
+    --world-coat: 16 82% 58%;
+    --world-coat-2: 228 70% 66%;
+    --world-coat-3: 228 12% 46%;
     --light-strength: 0.4;
   }
 
@@ -1549,17 +1564,11 @@
  */
 @media print {
   .reveal,
-  .reveal-row > *,
   .article-prose > *,
   .reveal-words .mask-word > span,
-  .hero-words .mask-word > span,
   .hero-item,
   .stagger > *,
-  .spread-media,
-  .stack-band,
-  .stack-layer::before,
-  .section-rule::before,
-  .wire-run {
+  .section-rule::before {
     animation: none !important;
   }
 }
@@ -1629,80 +1638,10 @@
        * Members of a row share a scroll position, so they would otherwise
        * arrive together. Nudging the range per column walks them in from the
        * left — the same reading direction as the text above them.
-       */
-      .reveal-row > * {
-        animation: reveal-in linear both;
-        animation-timeline: view();
-        animation-range: entry 5% cover 26%;
-      }
-
-      .reveal-row > *:nth-child(2n) {
-        animation-range: entry 9% cover 30%;
-      }
-
-      .reveal-row > *:nth-child(3n) {
-        animation-range: entry 13% cover 34%;
-      }
-    }
+       */    }
   }
 }
 
-/* ==========================================================================
- * The stack, scanned.
- *
- * The capabilities table was the most static block on the page: a card of
- * chips that did nothing from the moment it rendered. It is also the one
- * section whose content genuinely is a stack, ordered top to bottom the way a
- * request descends through one — so the motion it gets is a scan running down
- * that order, one layer lighting as it reaches the middle of the viewport.
- *
- * The reader drives it. Each layer is on its own `view()` timeline, so the
- * light is a function of where that row is on screen rather than of a timer:
- * scrolling back up runs the scan back up, and landing halfway down the page
- * from a link starts it in the right place. There is no orchestration code,
- * no observer and no library — one keyframe and a range.
- *
- * Same two guards as everything else here. `@supports` because a browser
- * without scroll-driven animation must get the resting state, and the resting
- * state is a plain ink tick at the left of each layer — which is a reasonable
- * thing for a layer to have, not a broken version of something. And
- * `prefers-reduced-motion` because the global block forces
- * `animation-duration` to 0.01ms, which a scroll-driven animation reads as
- * "already finished" and would pin every layer lit at once.
- * ========================================================================== */
-
-@keyframes layer-scan {
-  0%,
-  100% {
-    background-color: hsl(var(--border));
-  }
-  50% {
-    background-color: hsl(var(--sig-cool));
-  }
-}
-
-@layer base {
-  .stack-layer::before {
-    content: "";
-    position: absolute;
-    inset-block: 0;
-    left: 0;
-    width: 2px;
-    background-color: hsl(var(--border));
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    @supports (animation-timeline: view()) {
-      .stack-layer::before {
-        animation: layer-scan linear both;
-        animation-timeline: view();
-        /* Peaks as the layer crosses the middle of the viewport, so the lit
-           row is always the one the reader is actually looking at. */
-        animation-range: cover 30% cover 70%;
-      }
-    }
-  }
-}
 
 /* ==========================================================================
  * The spine.
@@ -1877,6 +1816,55 @@
   }
 
   /*
+   * A name tag over a person on the island: who they are, in one line,
+   * and what they are for in a second. Positioned like the signposts, and
+   * faded by distance in the same loop, so a name is readable when you are
+   * close enough to say it and gone when you are not.
+   */
+  /*
+   * A sheet over the island — a panel, the journal, a line of dialogue —
+   * arrives with the same rise as the boot sequence, but without holding
+   * the `from` state before it starts: `hero-item` uses `both` so a staged
+   * element stays hidden through its delay, and these have no delay and
+   * content someone is waiting to read. If the animation is late, the
+   * content is there anyway.
+   */
+  .world-sheet {
+    animation: hero-enter 240ms var(--ease-enter);
+  }
+
+  .world-tag {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+    padding: 0.25rem 0.5rem 0.5rem;
+    text-align: center;
+    white-space: nowrap;
+    pointer-events: none;
+    transition: opacity 200ms var(--ease-enter);
+    will-change: transform;
+  }
+
+  .world-tag-name {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: hsl(var(--foreground));
+    padding: 0.3rem 0.65rem;
+    border-radius: var(--radius-pill);
+    background: hsl(var(--background) / 0.75);
+    border: 1px solid hsl(var(--border) / 0.7);
+    backdrop-filter: blur(8px);
+  }
+
+  .world-tag-role {
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /*
    * A project cover, when there is no photograph to show.
    *
    * The panel is lit from one corner — the position comes from the slug, so
@@ -1909,11 +1897,13 @@
  * ugly, hardly animated, and "left and right are not full". This block is
  * the answer to the second and third. Layout-wise the page now runs to the
  * viewport — `Container width="full"` keeps a gutter for text, and the
- * things that are not text (covers, the request wire, the ticker, the
- * capability bands) touch the edges. Motion-wise every section gets one
- * orchestrated idea rather than a fade: words rise out of a mask, the wire
- * draws and carries traffic across the whole screen, covers slide in from
- * the edge they sit on, bands light as the reader crosses them.
+ * things that are not text touch the edges. Motion-wise every section gets
+ * one orchestrated idea rather than a fade: words rise out of a mask, rules
+ * draw as they arrive, chips stagger in on the reader's scroll.
+ *
+ * The home page has since become the island (components/world), and the
+ * wire, the ticker and the capability bands went with the sections they
+ * animated; what is left here serves the other pages and the atlas.
  *
  * Same guards as everything above. Base rules are the resting state, so a
  * browser without scroll timelines and a reader who asked for reduced motion
@@ -1925,77 +1915,6 @@
 @keyframes word-rise {
   from {
     translate: 0 calc(100% + 0.4em);
-  }
-}
-
-/*
- * A streak runs the wire: it starts entirely off the left end (its own width
- * before the band) and ends entirely off the right, so the whole tail is
- * seen leaving. The moving legs ease — a signal accelerates out of a node
- * and settles into the next — and the two legs share one cycle so the
- * response never sets off before the request has landed.
- */
-@keyframes wire-streak-out {
-  0% {
-    translate: -100% -50%;
-    opacity: 1;
-    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
-  }
-  42% {
-    translate: 100cqw -50%;
-    opacity: 1;
-  }
-  42.1%,
-  100% {
-    translate: 100cqw -50%;
-    opacity: 0;
-  }
-}
-
-@keyframes wire-streak-back {
-  0%,
-  49.9% {
-    translate: 100cqw -50%;
-    opacity: 0;
-  }
-  50% {
-    translate: 100cqw -50%;
-    opacity: 1;
-    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
-  }
-  92% {
-    translate: -100% -50%;
-    opacity: 1;
-  }
-  92.1%,
-  100% {
-    translate: -100% -50%;
-    opacity: 0;
-  }
-}
-
-@keyframes ticker-run {
-  to {
-    translate: -50% 0;
-  }
-}
-
-/* A strip of screens arriving from the edge of the screen it runs off. */
-@keyframes spread-in {
-  from {
-    translate: var(--from) 0;
-    opacity: 0.3;
-  }
-}
-
-/* A capability band lighting as the reader crosses it. */
-@keyframes band-scan {
-  0%,
-  100% {
-    background-color: transparent;
-  }
-  50% {
-    background-color: hsl(var(--sig-cool) / 0.08);
   }
 }
 
@@ -2019,81 +1938,6 @@
     display: inline-block;
   }
 
-  /* On a clock, for the hero: one word after another, from the left. */
-  .hero-words .mask-word > span {
-    animation: word-rise 900ms var(--ease-enter) both;
-    animation-delay: calc(120ms + var(--i, 0) * 110ms);
-  }
-
-  /* Wires are drawn from the left, in request order, on the same clock. */
-  .wire-run {
-    transform-origin: left;
-    animation: rule-draw 700ms var(--ease-enter) both;
-    animation-delay: var(--d, 0ms);
-  }
-
-  /*
-   * The band is a size container so the packets can travel its full width
-   * in `cqw` — one keyframe, whatever the viewport. The packets sit under
-   * the nodes (z-index at the call site) so a request visibly disappears into
-   * a service and comes out the other side, which is the whole point of
-   * drawing it.
-   */
-  .wire-band {
-    container-type: inline-size;
-  }
-
-  .wire-streak {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    width: 18cqw;
-    height: 2px;
-    border-radius: 9999px;
-    translate: -100% -50%;
-    /* Pure motion: parked off the band and invisible unless it is running. */
-    opacity: 0;
-  }
-
-  /* The head is at the leading end; the tail fades behind it. */
-  .wire-streak-out {
-    background: linear-gradient(90deg, transparent, hsl(var(--sig-cool)));
-  }
-
-  .wire-streak-back {
-    background: linear-gradient(270deg, transparent, hsl(var(--sig-warm)));
-  }
-
-  /*
-   * The ticker. Two copies of the list on one track, translated by half its
-   * width, so the loop is seamless. Under reduced motion the track stops,
-   * wraps, and the second copy is removed — a still list of technologies is
-   * a fine thing to show, a list that stops mid-scroll is not.
-   */
-  .ticker-track {
-    display: flex;
-    width: max-content;
-  }
-
-  /* The strip arrives from the edge it runs off: the right. */
-  .spread-media {
-    --from: 6%;
-  }
-
-  .pointer-light {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 600ms var(--ease-enter);
-    background: radial-gradient(
-      36vmax circle at var(--px, 50%) var(--py, 40%),
-      hsl(var(--sig-cool) / calc(var(--light-strength) * 0.8)),
-      hsl(var(--sig-cool) / calc(var(--light-strength) * 0.25)) 40%,
-      transparent 66%
-    );
-  }
-
   /* A warm room for the contact block: the response light, at the bottom. */
   .section-warm {
     background-image: radial-gradient(
@@ -2104,25 +1948,6 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .wire-streak-out {
-      animation: wire-streak-out 6s linear infinite;
-      /* Held until the last node has landed. */
-      animation-delay: 1400ms;
-    }
-
-    .wire-streak-back {
-      animation: wire-streak-back 6s linear infinite;
-      animation-delay: 1400ms;
-    }
-
-    .ticker-track {
-      animation: ticker-run 56s linear infinite;
-    }
-
-    .ticker:hover .ticker-track {
-      animation-play-state: paused;
-    }
-
     @supports (animation-timeline: view()) {
       /* On the reader's scroll, for section titles: the same rise. */
       .reveal-words .mask-word > span {
@@ -2131,42 +1956,12 @@
         animation-range: entry calc(var(--i, 0) * 6%) cover calc(30% + var(--i, 0) * 6%);
       }
 
-      .spread-media {
-        animation: spread-in linear both;
-        animation-timeline: view();
-        animation-range: entry 0% entry 85%;
-      }
-
       /* Chips arrive one after another, left to right, on the row's scroll. */
       .stagger > * {
         animation: reveal-in linear both;
         animation-timeline: view();
         animation-range: entry calc(var(--i, 0) * 2.5%) cover calc(24% + var(--i, 0) * 2.5%);
       }
-
-      .stack-band {
-        animation: band-scan linear both;
-        animation-timeline: view();
-        animation-range: cover 20% cover 80%;
-      }
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .ticker-track {
-      animation: none;
-      width: auto;
-      flex-wrap: wrap;
-    }
-
-    .ticker-copy[aria-hidden="true"] {
-      display: none;
-    }
-  }
-
-  @media (hover: none) {
-    .pointer-light {
-      display: none;
     }
   }
 }

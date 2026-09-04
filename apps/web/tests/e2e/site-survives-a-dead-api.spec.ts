@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
  * The promise this site is built on: the API can be down and the site still
@@ -19,9 +19,13 @@ const PAGES = [
   {
     path: "/",
     heading: "Phạm Đăng Khôi",
-    // The writing section is deliberately absent rather than empty here — see
-    // the test below. Projects and capabilities still explain themselves, so
-    // the page continues to say that it is empty on purpose rather than broken.
+    // The home page is the island; its content is the atlas — the list
+    // view a reader can open in place of the scene, and the one a browser
+    // without WebGL gets outright. The writing section is deliberately
+    // absent rather than empty there — see the test below. Projects and
+    // capabilities still explain themselves, so the page continues to say
+    // that it is empty on purpose rather than broken.
+    atlas: true,
     empty: [
       "No entries returned — the write-up queue is still draining.",
       "No capabilities published yet.",
@@ -30,11 +34,13 @@ const PAGES = [
   {
     path: "/career-journey",
     heading: "Where I have worked and studied",
+    atlas: false,
     empty: ["No career entries published yet."],
   },
   {
     path: "/certificates",
     heading: "Courses and certifications",
+    atlas: false,
     empty: ["No certificates published yet."],
   },
   {
@@ -42,16 +48,29 @@ const PAGES = [
     // per request rather than at build time — this failure happens live.
     path: "/blog",
     heading: "Notes from building this",
+    atlas: false,
     empty: ["No posts published yet."],
   },
 ];
 
+/**
+ * Open the island's list view. Headless Chromium has WebGL, so the scene
+ * renders and its content sits behind the panels until a place is reached;
+ * the atlas is the same content laid out for reading, one click away.
+ */
+async function openAtlas(page: Page) {
+  await page.getByRole("button", { name: "Read it as a list" }).click();
+  await expect(page.getByRole("heading", { name: "The island, as a list." })).toBeVisible();
+}
+
 test.describe("pages built with no API behind them", () => {
-  for (const { path, heading, empty } of PAGES) {
+  for (const { path, heading, atlas, empty } of PAGES) {
     test(`${path} answers 200 and says why it is empty`, async ({ page }) => {
       const response = await page.goto(path);
 
       expect(response?.status(), `${path} must not 5xx because the API is gone`).toBe(200);
+
+      if (atlas) await openAtlas(page);
 
       for (const copy of empty) {
         await expect(page.getByText(copy)).toBeVisible();
@@ -76,6 +95,7 @@ test.describe("pages built with no API behind them", () => {
 
   test("the home page counts nothing rather than showing a broken count", async ({ page }) => {
     await page.goto("/");
+    await openAtlas(page);
 
     // The eyebrows interpolate `projects.length`. A fallback that was not an
     // array would render "/selected-work · undefined" here, if it rendered at
@@ -84,10 +104,39 @@ test.describe("pages built with no API behind them", () => {
     await expect(page.getByText("/capabilities · 0")).toBeVisible();
   });
 
+  test("the island still stands with nothing on it", async ({ page }) => {
+    await page.goto("/");
+
+    // The scene is drawn from the same reads. With every one of them
+    // returning its fallback, the island is still the way in: the title
+    // card, the seven places, and the keeper who says the lighthouse is dark.
+    await expect(page.getByRole("button", { name: "Start exploring" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Places" })).toBeVisible();
+    await page.getByRole("button", { name: "Start exploring" }).click();
+    const greeting = page.getByRole("dialog", { name: "Khôi" });
+    await expect(greeting).toBeVisible();
+    // One line at a time; the third is the one that knows about the outage.
+    await greeting.getByRole("button", { name: "Continue" }).click();
+    await greeting.getByRole("button", { name: "Continue" }).click();
+    await expect(greeting.getByText("The lighthouse is the work. It is dark tonight")).toBeVisible();
+  });
+
+  test("a hash link opens the place it names, in the world", async ({ page }) => {
+    // `/#projects` is what the header's Projects link is on every other
+    // page. With the scene it has to arrive somewhere, not scroll nowhere.
+    await page.goto("/#projects");
+    const panel = page.getByRole("dialog", { name: "Selected work" });
+    await expect(panel).toBeVisible();
+    await expect(panel.getByText("No entries returned — the write-up queue is still draining.")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  });
+
   test("the home page drops the writing section rather than advertising an empty one", async ({
     page,
   }) => {
     await page.goto("/");
+    await openAtlas(page);
 
     // With no posts this section used to render "Nothing published yet" into
     // 545px of blank page — a section whose only content was the admission

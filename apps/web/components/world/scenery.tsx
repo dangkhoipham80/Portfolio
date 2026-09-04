@@ -1,12 +1,16 @@
 "use client";
 
 /*
- * The island's furniture: ground, paths, trees, rocks and the five landmarks.
- * Nothing in this file moves — see life.tsx for what does. Client-only for
- * the same reason as the rest of the world: it is WebGL.
+ * The island's furniture: ground, paths, trees, rocks and the landmarks.
+ * Nothing in this file moves — see life.tsx for what does, and player.tsx
+ * and npcs.tsx for who. Client-only for the same reason as the rest of the
+ * world: it is WebGL.
+ *
+ * The layout — where every mound, tree and rock stands — is in terrain.ts,
+ * computed once from seeded PRNGs, because the player has to walk around
+ * the same trees this file draws.
  */
 
-import { useMemo } from "react";
 import {
   CircleGeometry,
   ConeGeometry,
@@ -21,7 +25,9 @@ import {
 
 import { seeded, useWorld } from "./context";
 import { Beam, Flames, Ripple, Smoke } from "./life";
-import { PLACES, type Place, type PlaceId } from "./places";
+import { LANDMARKS, placeById, type Place, type PlaceId } from "./places";
+import { useWorldState } from "./state";
+import { FOREST, groundHeight, ISLAND_RADIUS, MOUNDS, POND } from "./terrain";
 
 /*
  * Geometry is module-level and shared. A geometry is vertex data on the GPU;
@@ -44,40 +50,33 @@ const GEO = {
   disc: new CircleGeometry(1, 48),
 };
 
-const ISLAND_RADIUS = 11.5;
-
 /* ------------------------------------------------------------------------ */
 
 export function Ground() {
-  const { mats } = useWorld();
-
-  // Low mounds, away from the paths, so the island is not a plate.
-  const mounds = useMemo(() => {
-    const rand = seeded(7);
-    const out: { x: number; z: number; r: number; alt: boolean }[] = [];
-    for (let i = 0; i < 9; i++) {
-      const angle = rand() * Math.PI * 2;
-      const radius = 4 + rand() * 6;
-      out.push({
-        x: Math.cos(angle) * radius,
-        z: Math.sin(angle) * radius,
-        r: 1.6 + rand() * 1.8,
-        alt: rand() > 0.5,
-      });
-    }
-    return out;
-  }, []);
+  const { mats, getRuntime } = useWorld();
 
   return (
     <group>
-      <mesh rotation-x={-Math.PI / 2} receiveShadow material={mats.ground}>
+      <mesh
+        rotation-x={-Math.PI / 2}
+        receiveShadow
+        material={mats.ground}
+        // A tap on the ground is "walk there". `delta` is how far the pointer
+        // moved between down and up: past a few pixels it was a drag to
+        // look, and the look already happened.
+        onClick={(event) => {
+          if (event.delta > 6) return;
+          event.stopPropagation();
+          getRuntime().player.target = { x: event.point.x, z: event.point.z };
+        }}
+      >
         <circleGeometry args={[ISLAND_RADIUS, 72]} />
       </mesh>
       {/* The cliff face: the island is a thing floating in the page, not a rug. */}
       <mesh position-y={-1.6} material={mats.cliff}>
         <cylinderGeometry args={[ISLAND_RADIUS, ISLAND_RADIUS * 0.82, 3.2, 72, 1, true]} />
       </mesh>
-      {mounds.map((m, i) => (
+      {MOUNDS.map((m, i) => (
         <mesh
           key={i}
           geometry={GEO.mound}
@@ -85,6 +84,11 @@ export function Ground() {
           position={[m.x, -m.r * 0.72, m.z]}
           scale={[m.r, m.r * 0.9, m.r]}
           receiveShadow
+          onClick={(event) => {
+            if (event.delta > 6) return;
+            event.stopPropagation();
+            getRuntime().player.target = { x: event.point.x, z: event.point.z };
+          }}
         />
       ))}
     </group>
@@ -102,7 +106,7 @@ export function Ground() {
 export function Path({ place, index }: { place: Place; index: number }) {
   const { mats } = useWorld();
 
-  const stones = useMemo(() => {
+  const stones = (() => {
     const rand = seeded(100 + index);
     const [x, z] = place.at;
     const end = new Vector3(x, 0, z);
@@ -114,17 +118,19 @@ export function Path({ place, index }: { place: Place; index: number }) {
 
     const count = Math.max(6, Math.round(length / 0.85));
     const out: { p: Vector3; rot: number; s: number }[] = [];
+    // Stop at the landmark's footprint, where the door is.
+    const stop = 1 - (place.footprint + 0.3) / length;
     for (let i = 0; i <= count; i++) {
       const t = i / count;
-      // Leave the first and last stretch clear: the signpost and the landmark.
-      if (t < 0.16 || t > 0.86) continue;
+      // Leave the first stretch clear: the signpost.
+      if (t < 0.16 || t > stop) continue;
       const p = curve.getPoint(t);
       p.x += (rand() - 0.5) * 0.24;
       p.z += (rand() - 0.5) * 0.24;
       out.push({ p, rot: rand() * Math.PI, s: 0.8 + rand() * 0.4 });
     }
     return out;
-  }, [place, index]);
+  })();
 
   return (
     <group>
@@ -133,7 +139,7 @@ export function Path({ place, index }: { place: Place; index: number }) {
           key={i}
           geometry={GEO.stone}
           material={mats.path}
-          position={[stone.p.x, 0.04, stone.p.z]}
+          position={[stone.p.x, 0.04 + groundHeight(stone.p.x, stone.p.z), stone.p.z]}
           rotation-y={stone.rot}
           scale={[stone.s, 1, stone.s]}
           receiveShadow
@@ -170,61 +176,25 @@ function RoundTree({ scale = 1, variant = 0 }: { scale?: number; variant?: numbe
   );
 }
 
-/**
- * Trees and rocks, scattered by a seeded PRNG so they never move between
- * renders, and kept clear of the crossroads, the landmarks and the pond.
- */
 export function Forest() {
   const { mats } = useWorld();
 
-  const items = useMemo(() => {
-    const rand = seeded(42);
-    const keepClear: { x: number; z: number; r: number }[] = [
-      { x: 0, z: 0, r: 2.6 },
-      // The meadow the fox runs in.
-      { x: 1.6, z: 2.6, r: 3.2 },
-      { x: POND.x, z: POND.z, r: POND.r + 0.8 },
-      ...PLACES.map((p) => ({ x: p.at[0], z: p.at[1], r: p.id === "career" ? 3.6 : 2.4 })),
-    ];
-    const out: { kind: "pine" | "round" | "rock"; x: number; z: number; s: number; v: number; rot: number }[] = [];
-    let tries = 0;
-    while (out.length < 46 && tries < 600) {
-      tries++;
-      const angle = rand() * Math.PI * 2;
-      const radius = 2.4 + Math.sqrt(rand()) * (ISLAND_RADIUS - 3.2);
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-      if (keepClear.some((c) => Math.hypot(c.x - x, c.z - z) < c.r)) continue;
-      if (out.some((o) => Math.hypot(o.x - x, o.z - z) < 1.1)) continue;
-      const roll = rand();
-      out.push({
-        kind: roll < 0.55 ? "pine" : roll < 0.82 ? "round" : "rock",
-        x,
-        z,
-        s: 0.7 + rand() * 0.7,
-        v: Math.floor(rand() * 3),
-        rot: rand() * Math.PI * 2,
-      });
-    }
-    return out;
-  }, []);
-
   return (
     <group>
-      {items.map((item, i) =>
+      {FOREST.map((item, i) =>
         item.kind === "rock" ? (
           <mesh
             key={i}
             geometry={GEO.rock}
             material={mats.stone}
-            position={[item.x, 0.18 * item.s, item.z]}
+            position={[item.x, 0.18 * item.s + groundHeight(item.x, item.z), item.z]}
             rotation={[item.rot, item.rot * 0.7, 0]}
             scale={item.s * 0.8}
             castShadow
             receiveShadow
           />
         ) : (
-          <group key={i} position={[item.x, 0, item.z]} rotation-y={item.rot}>
+          <group key={i} position={[item.x, groundHeight(item.x, item.z), item.z]} rotation-y={item.rot}>
             {item.kind === "pine" ? (
               <Pine scale={item.s} variant={item.v} />
             ) : (
@@ -238,8 +208,6 @@ export function Forest() {
 }
 
 /* ------------------------------------------------------------------------ */
-
-export const POND = { x: -2.4, z: -6.2, r: 1.7 };
 
 export function Pond() {
   const { mats } = useWorld();
@@ -269,24 +237,63 @@ export function Pond() {
 /* ------------------------------------------------------------------------ */
 
 /**
- * The signpost at the crossroads: one arm per place, each pointing at it.
- * The reader stands here; this is what "many paths" looks like in the
- * scene, before the labels say so.
+ * A landmark's interactive wrapper: hover lifts it a touch, click walks to
+ * it. `stopPropagation` so the ground under it does not also get the click
+ * and send the player somewhere inside the wall.
+ */
+export function Landmark({ id, children }: { id: PlaceId; children: React.ReactNode }) {
+  const { store, travel } = useWorld();
+  const lifted = useWorldState(store, (s) => s.hovered === id && s.mode === "title");
+  return (
+    <group
+      onPointerOver={(event) => {
+        event.stopPropagation();
+        store.set({ hovered: id });
+      }}
+      onPointerOut={() => store.set((s) => (s.hovered === id ? { hovered: null } : {}))}
+      onClick={(event) => {
+        if (event.delta > 6) return;
+        event.stopPropagation();
+        travel(id);
+      }}
+      scale={lifted ? 1.05 : 1}
+    >
+      {children}
+    </group>
+  );
+}
+
+/** Whether a place is the one under the pointer or the one the player is at. */
+function useLit(id: PlaceId): boolean {
+  const { store } = useWorld();
+  return useWorldState(
+    store,
+    (s) => s.hovered === id || (s.nearby?.kind === "place" && s.nearby.id === id) || s.panel === id,
+  );
+}
+
+/**
+ * The signpost at the crossroads: one arm per landmark, each pointing at it.
+ * The reader starts here; this is what "many paths" looks like in the
+ * scene, before the labels say so. It is also the About place: reading the
+ * signpost is how you find out whose island this is.
  */
 export function Crossroads() {
   const { mats } = useWorld();
   return (
     <group>
-      <mesh geometry={GEO.post} material={mats.wood} position-y={1.1} scale={[1.3, 2.2, 1.3]} castShadow />
-      {PLACES.map((place, i) => {
-        const [x, z] = place.at;
-        const angle = Math.atan2(-z, x);
-        return (
-          <group key={place.id} position-y={2.05 - i * 0.26} rotation-y={angle}>
-            <mesh geometry={GEO.box} material={mats.wood} position-x={0.42} scale={[0.86, 0.16, 0.05]} castShadow />
-          </group>
-        );
-      })}
+      <Landmark id="about">
+        <mesh geometry={GEO.post} material={mats.wood} position-y={1.1} scale={[1.3, 2.2, 1.3]} castShadow />
+        {LANDMARKS.map((place, i) => {
+          const [x, z] = place.at;
+          const angle = Math.atan2(-z, x);
+          return (
+            <group key={place.id} position-y={2.15 - i * 0.24} rotation-y={angle}>
+              <mesh geometry={GEO.box} material={mats.wood} position-x={0.42} scale={[0.86, 0.15, 0.05]} castShadow />
+            </group>
+          );
+        })}
+      </Landmark>
       {/* A ring of stones where the paths meet. */}
       {Array.from({ length: 12 }, (_, i) => {
         const a = (i / 12) * Math.PI * 2;
@@ -306,37 +313,10 @@ export function Crossroads() {
   );
 }
 
-/* ------------------------------------------------------------------------ */
-
-/**
- * A landmark's interactive wrapper: hover lifts it a touch, click chooses it.
- * `stopPropagation` so the ground under it does not also get the pointer.
- */
-export function Landmark({ id, children }: { id: PlaceId; children: React.ReactNode }) {
-  const { hovered, setHovered, select } = useWorld();
-  const lifted = hovered === id;
-  return (
-    <group
-      onPointerOver={(event) => {
-        event.stopPropagation();
-        setHovered(id);
-      }}
-      onPointerOut={() => setHovered(null)}
-      onClick={(event) => {
-        event.stopPropagation();
-        select(id);
-      }}
-      scale={lifted ? 1.05 : 1}
-    >
-      {children}
-    </group>
-  );
-}
-
 /** The lighthouse, on its own hill: selected work, lit by the cool light. */
 export function Lighthouse({ at }: { at: [number, number] }) {
-  const { mats, palette, hovered } = useWorld();
-  const lit = hovered === "projects";
+  const { mats, palette } = useWorld();
+  const lit = useLit("projects");
   return (
     <group position={[at[0], 0, at[1]]}>
       <mesh geometry={GEO.mound} material={mats["ground-2"]} position-y={-1.9} scale={[2.9, 2.6, 2.9]} receiveShadow />
@@ -348,6 +328,8 @@ export function Lighthouse({ at }: { at: [number, number] }) {
           <mesh geometry={GEO.cylinder} material={mats.wood} position-y={3.2} scale={[0.5, 0.42, 0.5]} castShadow />
           <mesh geometry={GEO.ball} material={mats["glow-cool"]} position-y={3.6} scale={0.3} />
           <mesh geometry={GEO.cone} material={mats.roof} position-y={4.1} scale={[0.66, 0.6, 0.66]} castShadow />
+          {/* The door, on the side the path climbs. */}
+          <mesh geometry={GEO.box} material={mats.wood} position={[-0.5, 0.42, 0.3]} rotation-y={1.0} scale={[0.34, 0.8, 0.06]} />
           <Beam position={[0, 3.6, 0]} />
           <pointLight
             position-y={3.6}
@@ -358,14 +340,28 @@ export function Lighthouse({ at }: { at: [number, number] }) {
           />
         </group>
       </Landmark>
+      {/* Steps up the hill, so the door can be reached on foot. */}
+      {Array.from({ length: 5 }, (_, i) => {
+        const t = 0.35 + i * 0.13;
+        return (
+          <mesh
+            key={i}
+            geometry={GEO.stone}
+            material={mats.path}
+            position={[-2.7 * t * 0.85, 0.04 + 0.7 * Math.max(0, (t - 0.45) * 1.6), -0.7 * t]}
+            scale={0.6}
+            receiveShadow
+          />
+        );
+      })}
     </group>
   );
 }
 
 /** The big tree with a bench and a stack of books under it: the writing. */
 export function BigTree({ at }: { at: [number, number] }) {
-  const { mats, palette, hovered } = useWorld();
-  const lit = hovered === "writing";
+  const { mats, palette } = useWorld();
+  const lit = useLit("writing");
   return (
     <group position={[at[0], 0, at[1]]}>
       <Landmark id="writing">
@@ -374,38 +370,41 @@ export function BigTree({ at }: { at: [number, number] }) {
         <mesh geometry={GEO.canopy} material={mats["leaf-2"]} position={[1.1, 2.7, 0.6]} scale={1.5} castShadow />
         <mesh geometry={GEO.canopy} material={mats["leaf-3"]} position={[-1.0, 2.9, -0.5]} scale={1.4} castShadow />
         <mesh geometry={GEO.canopy} material={mats.leaf} position={[0.2, 4.2, -0.4]} scale={1.2} castShadow />
-        {/* The bench, and what is left on it. */}
-        <group position={[1.6, 0, 1.3]} rotation-y={-0.6}>
-          <mesh geometry={GEO.box} material={mats.wood} position-y={0.42} scale={[1.3, 0.08, 0.42]} castShadow />
-          <mesh geometry={GEO.box} material={mats.wood} position={[-0.5, 0.2, 0]} scale={[0.08, 0.4, 0.38]} />
-          <mesh geometry={GEO.box} material={mats.wood} position={[0.5, 0.2, 0]} scale={[0.08, 0.4, 0.38]} />
-          <mesh geometry={GEO.box} material={mats.roof} position={[0.25, 0.52, 0]} scale={[0.3, 0.08, 0.22]} />
-          <mesh geometry={GEO.box} material={mats.water} position={[0.22, 0.6, 0.02]} scale={[0.26, 0.08, 0.2]} />
-          <mesh geometry={GEO.box} material={mats.snow} position={[0.28, 0.68, -0.02]} scale={[0.24, 0.06, 0.18]} />
-        </group>
-        {/* A paper lantern on the low branch: the warm light, for reading by. */}
-        <mesh geometry={GEO.post} material={mats.wood} position={[1.3, 2.35, 0.9]} scale={[0.6, 0.5, 0.6]} />
-        <mesh geometry={GEO.ball} material={mats["glow-warm"]} position={[1.3, 2.0, 0.9]} scale={[0.2, 0.26, 0.2]} />
-        <pointLight
-          position={[1.3, 1.9, 0.9]}
-          color={palette["glow-warm"]}
-          intensity={(palette.night ? 6 : 1.2) * (lit ? 1.8 : 1)}
-          distance={7}
-          decay={2}
-        />
       </Landmark>
+      {/* The bench, and what is left on it. A point of interest of its own. */}
+      <group position={[1.6, 0, 1.3]} rotation-y={-0.6}>
+        <mesh geometry={GEO.box} material={mats.wood} position-y={0.42} scale={[1.3, 0.08, 0.42]} castShadow />
+        <mesh geometry={GEO.box} material={mats.wood} position={[-0.5, 0.2, 0]} scale={[0.08, 0.4, 0.38]} />
+        <mesh geometry={GEO.box} material={mats.wood} position={[0.5, 0.2, 0]} scale={[0.08, 0.4, 0.38]} />
+        <mesh geometry={GEO.box} material={mats.roof} position={[0.25, 0.52, 0]} scale={[0.3, 0.08, 0.22]} />
+        <mesh geometry={GEO.box} material={mats.water} position={[0.22, 0.6, 0.02]} scale={[0.26, 0.08, 0.2]} />
+        <mesh geometry={GEO.box} material={mats.snow} position={[0.28, 0.68, -0.02]} scale={[0.24, 0.06, 0.18]} />
+      </group>
+      {/* A paper lantern on the low branch: the warm light, for reading by. */}
+      <mesh geometry={GEO.post} material={mats.wood} position={[1.3, 2.35, 0.9]} scale={[0.6, 0.5, 0.6]} />
+      <mesh geometry={GEO.ball} material={mats["glow-warm"]} position={[1.3, 2.0, 0.9]} scale={[0.2, 0.26, 0.2]} />
+      <pointLight
+        position={[1.3, 1.9, 0.9]}
+        color={palette["glow-warm"]}
+        intensity={(palette.night ? 6 : 1.2) * (lit ? 1.8 : 1)}
+        distance={7}
+        decay={2}
+      />
     </group>
   );
 }
 
 /** The mountain with a trail and flags at its milestones: the career. */
 export function Mountain({ at }: { at: [number, number] }) {
-  const { mats } = useWorld();
+  const { mats, facts } = useWorld();
+  // One flag per entry the timeline has, up to the three the trail has room
+  // for; the top one is lit, because it is the current one.
+  const flagCount = Math.min(3, Math.max(1, facts.career.count));
   const flags = [
     { a: 0.2, h: 1.4, r: 2.3 },
     { a: 1.6, h: 2.7, r: 1.55 },
     { a: 3.1, h: 3.9, r: 0.85 },
-  ];
+  ].slice(0, flagCount);
   return (
     <group position={[at[0], 0, at[1]]}>
       <Landmark id="career">
@@ -433,7 +432,7 @@ export function Mountain({ at }: { at: [number, number] }) {
             <mesh geometry={GEO.post} material={mats.wood} position-y={0.4} scale={[0.5, 0.8, 0.5]} />
             <mesh
               geometry={GEO.box}
-              material={i === 2 ? mats["glow-warm"] : mats.roof}
+              material={i === flags.length - 1 ? mats["glow-warm"] : mats.roof}
               position={[0.17, 0.66, 0]}
               scale={[0.3, 0.2, 0.03]}
             />
@@ -446,13 +445,15 @@ export function Mountain({ at }: { at: [number, number] }) {
 
 /** The pavilion with its plinths: the certificates, on display. */
 export function Pavilion({ at }: { at: [number, number] }) {
-  const { mats } = useWorld();
+  const { mats, facts } = useWorld();
   const columns = [
     [-1.1, -1.1],
     [1.1, -1.1],
     [-1.1, 1.1],
     [1.1, 1.1],
   ];
+  // Plinths for what there is to show, up to three.
+  const plinths = [-0.6, 0, 0.6].slice(0, Math.min(3, Math.max(1, facts.certificates.count)));
   return (
     <group position={[at[0], 0, at[1]]} rotation-y={0.3}>
       <Landmark id="certificates">
@@ -462,7 +463,7 @@ export function Pavilion({ at }: { at: [number, number] }) {
         ))}
         <mesh geometry={GEO.pyramid} material={mats.roof} position-y={2.3} scale={[2.0, 0.8, 2.0]} rotation-y={Math.PI / 4} castShadow />
         <mesh geometry={GEO.box} material={mats.wall} position-y={1.86} scale={[2.7, 0.12, 2.7]} castShadow />
-        {[-0.6, 0, 0.6].map((x, i) => (
+        {plinths.map((x, i) => (
           <group key={i} position={[x, 0.2, 0.2]}>
             <mesh geometry={GEO.box} material={mats.wall} position-y={0.3} scale={[0.34, 0.6, 0.34]} castShadow />
             <mesh geometry={GEO.ball} material={mats.sun} position-y={0.75} scale={0.13} />
@@ -475,8 +476,8 @@ export function Pavilion({ at }: { at: [number, number] }) {
 
 /** The cabin, the mailbox and the fire: where a message goes. */
 export function Cabin({ at }: { at: [number, number] }) {
-  const { mats, palette, hovered } = useWorld();
-  const lit = hovered === "contact";
+  const { mats, palette } = useWorld();
+  const lit = useLit("contact");
   return (
     <group position={[at[0], 0, at[1]]} rotation-y={-0.5}>
       <Landmark id="contact">
@@ -494,33 +495,106 @@ export function Cabin({ at }: { at: [number, number] }) {
           distance={8}
           decay={2}
         />
-        {/* The mailbox, by the path in. */}
-        <group position={[-1.5, 0, 1.4]}>
-          <mesh geometry={GEO.post} material={mats.wood} position-y={0.45} scale={[1, 0.9, 1]} castShadow />
-          <mesh geometry={GEO.box} material={mats.roof} position-y={1.0} scale={[0.5, 0.32, 0.32]} castShadow />
-          <mesh geometry={GEO.box} material={mats.sun} position={[0.22, 1.2, 0.1]} scale={[0.06, 0.22, 0.12]} />
-        </group>
-        {/* The fire: three logs and a light. The flames are in life.tsx. */}
-        <group position={[1.7, 0, 1.3]}>
-          <Flames position={[0, 0.1, 0]} />
-          {[0, 1, 2].map((i) => (
-            <mesh
-              key={i}
-              geometry={GEO.post}
-              material={mats.trunk}
-              position-y={0.08}
-              rotation={[0, (i / 3) * Math.PI, Math.PI / 2]}
-              scale={[1.4, 0.7, 1.4]}
-            />
-          ))}
-          {[0, 1, 2, 3, 4].map((i) => {
-            const a = (i / 5) * Math.PI * 2;
-            return (
-              <mesh key={i} geometry={GEO.rock} material={mats.stone} position={[Math.cos(a) * 0.5, 0.08, Math.sin(a) * 0.5]} scale={0.22} />
-            );
-          })}
-        </group>
       </Landmark>
+      {/* The mailbox, by the path in. */}
+      <group position={[-1.5, 0, 1.4]}>
+        <mesh geometry={GEO.post} material={mats.wood} position-y={0.45} scale={[1, 0.9, 1]} castShadow />
+        <mesh geometry={GEO.box} material={mats.roof} position-y={1.0} scale={[0.5, 0.32, 0.32]} castShadow />
+        <mesh geometry={GEO.box} material={mats.sun} position={[0.22, 1.2, 0.1]} scale={[0.06, 0.22, 0.12]} />
+      </group>
+      {/* The fire: three logs and a light. The flames are in life.tsx. */}
+      <group position={[1.7, 0, 1.3]}>
+        <Flames position={[0, 0.1, 0]} />
+        {[0, 1, 2].map((i) => (
+          <mesh
+            key={i}
+            geometry={GEO.post}
+            material={mats.trunk}
+            position-y={0.08}
+            rotation={[0, (i / 3) * Math.PI, Math.PI / 2]}
+            scale={[1.4, 0.7, 1.4]}
+          />
+        ))}
+        {[0, 1, 2, 3, 4].map((i) => {
+          const a = (i / 5) * Math.PI * 2;
+          return (
+            <mesh key={i} geometry={GEO.rock} material={mats.stone} position={[Math.cos(a) * 0.5, 0.08, Math.sin(a) * 0.5]} scale={0.22} />
+          );
+        })}
+      </group>
     </group>
+  );
+}
+
+/**
+ * The cairn: the stack, as a stack. One stone per layer of the skills
+ * diagram, widest at the bottom the way an architecture drawing is, with
+ * the site's cool light in a lantern on top. Built from the data, so a
+ * new category in the console is a new stone on the island.
+ */
+export function Cairn({ at }: { at: [number, number] }) {
+  const { mats, palette, facts } = useWorld();
+  const lit = useLit("skills");
+  const layers = Math.min(7, Math.max(3, facts.skills.categories.length));
+  const stones: { y: number; s: number; h: number; rot: number }[] = [];
+  let top = 0;
+  for (let i = 0; i < layers; i++) {
+    const t = i / Math.max(1, layers - 1);
+    const h = 0.26;
+    stones.push({ y: top + h / 2, s: 1.15 - t * 0.6, h, rot: i * 0.7 });
+    top += h;
+  }
+  return (
+    <group position={[at[0], groundHeight(at[0], at[1]), at[1]]}>
+      <Landmark id="skills">
+        {stones.map((stone, i) => (
+          <mesh
+            key={i}
+            geometry={GEO.stone}
+            material={i % 2 ? mats.stone : mats.cliff}
+            position-y={stone.y}
+            rotation-y={stone.rot}
+            scale={[stone.s * 2.2, stone.h / 0.09, stone.s * 2.2]}
+            castShadow
+            receiveShadow
+          />
+        ))}
+        <mesh geometry={GEO.post} material={mats.wood} position-y={top + 0.25} scale={[0.8, 0.5, 0.8]} />
+        <mesh geometry={GEO.ball} material={mats["glow-cool"]} position-y={top + 0.6} scale={0.16} />
+        <pointLight
+          position-y={top + 0.7}
+          color={palette["glow-cool"]}
+          intensity={(palette.night ? 5 : 1) * (lit ? 1.8 : 1)}
+          distance={6}
+          decay={2}
+        />
+      </Landmark>
+      {/* Loose stones around the base, as if some are still to be placed. */}
+      {[0.9, 2.4, 4.1].map((a, i) => (
+        <mesh
+          key={i}
+          geometry={GEO.rock}
+          material={mats.stone}
+          position={[Math.cos(a) * 1.3, 0.12, Math.sin(a) * 1.3]}
+          rotation={[a, a * 1.3, 0]}
+          scale={0.3}
+          castShadow
+        />
+      ))}
+    </group>
+  );
+}
+
+/** Every landmark, placed by the data. */
+export function Landmarks() {
+  return (
+    <>
+      <Lighthouse at={placeById("projects").at} />
+      <Cairn at={placeById("skills").at} />
+      <BigTree at={placeById("writing").at} />
+      <Mountain at={placeById("career").at} />
+      <Pavilion at={placeById("certificates").at} />
+      <Cabin at={placeById("contact").at} />
+    </>
   );
 }
