@@ -970,6 +970,116 @@
     border: 1px solid hsl(var(--border));
   }
 
+  /*
+   * A sequence diagram, drawn on the server by lib/sequence-diagram.
+   *
+   * The drawing itself carries no colours of its own — every stroke in that
+   * module is one of these tokens, which is what makes dark mode free and what
+   * keeps a diagram from reading as a screenshot from another site. What is
+   * left for CSS is the frame: the panel it sits on, and the fact that it
+   * scrolls rather than shrinks.
+   */
+  .article-prose .sequence-diagram {
+    margin-block: 2.5em;
+  }
+
+  .article-prose .sequence-diagram-frame {
+    position: relative;
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-card);
+  }
+
+  /*
+   * A diagram is drawn at the size it needs, not scaled to fit. Five
+   * participants squeezed into 375px is 6px type — a picture of a diagram
+   * rather than one you can read — so on a narrow screen it scrolls sideways.
+   */
+  .article-prose .sequence-diagram-scroller {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    border-radius: inherit;
+    padding: 1.25rem 1rem;
+  }
+
+  /* A scrollable region has to be reachable without a pointer. */
+  .article-prose .sequence-diagram-scroller:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /*
+   * The edge fade that says there is more diagram to the right — and only when
+   * there is.
+   *
+   * `--diagram-width` is what the renderer measured the drawing at, written
+   * onto the frame by lib/sequence-diagram/plugin.ts; `100%` is what the column
+   * gave it. Their difference, multiplied out and clamped, is 0 when the
+   * drawing fits and the full 3rem the moment it does not — so no width is ever
+   * read in JavaScript, and nothing has to be recalculated on resize.
+   *
+   * The first attempt was the `background-attachment: local` shadow trick,
+   * which is the usual answer and is wrong here: a background paints behind its
+   * content, and the content is an opaque-enough diagram. It was invisible in
+   * both themes, which a screenshot found and the markup did not.
+   */
+  .article-prose .sequence-diagram-frame::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    width: clamp(0px, (var(--diagram-width, 0px) + 2rem - 100%) * 999, 2.5rem);
+    border-radius: 0 var(--radius-card) var(--radius-card) 0;
+    /*
+     * Stops short of opaque. The fade is a persistent mark on a scrollable
+     * edge rather than a scroll shadow, so it is still there once you have
+     * scrolled to the end — and at full strength it would hide the last
+     * participant from a reader who had already got to it.
+     */
+    background: linear-gradient(to left, hsl(var(--card) / 0.92), hsl(var(--card) / 0));
+    pointer-events: none;
+  }
+
+  .article-prose .sequence-diagram-svg {
+    display: block;
+    height: auto;
+    /* Whatever the drawing measured itself at — never less, never scaled. */
+    max-width: none;
+    /*
+     * Centred in the column when it fits, and hard against the left edge when
+     * it does not: over-constrained `auto` margins resolve to zero, so this
+     * costs the overflow case nothing. (Centring with flexbox would not be
+     * safe here — that is the arrangement that puts the left of an overflowing
+     * child out of the scroller's reach.)
+     */
+    margin-inline: auto;
+  }
+
+  .article-prose .sequence-diagram figcaption {
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /*
+   * The diagram in words. The `<svg>` is `role="img"`, so its labels are hidden
+   * from assistive technology — read out loose they are a bag of fragments in
+   * no particular order. This list is the same content in sequence, and it is
+   * the only thing a screen reader gets, which is why it is a real list rather
+   * than a sentence.
+   */
+  .article-prose .sequence-diagram-transcript {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .article-prose table {
     width: 100%;
     border-collapse: collapse;

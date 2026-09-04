@@ -14,6 +14,7 @@ import {
   shikiOptions,
 } from "./markdown";
 import { messageFor, rejectExecutableMdx } from "./mdx-guard";
+import { renderSequenceDiagrams } from "./sequence-diagram/plugin";
 
 /**
  * Renders a post body — Markdown, or MDX restricted to the site's components.
@@ -134,6 +135,9 @@ async function renderMdx(body: string): Promise<ReactNode> {
       (await import("remark-gfm")).default,
     ],
     rehypePlugins: [
+      // Before the highlighter, for the reason lib/markdown.ts gives. There is
+      // no sanitiser on this path, so this is simply first.
+      renderSequenceDiagrams,
       [(await import("@shikijs/rehype")).default, shikiOptions],
       // Both of these were missing, which is why an MDX post had no `data-lang`
       // labels on its fences and no ids on its headings — so its table of
