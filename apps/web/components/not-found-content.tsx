@@ -14,9 +14,15 @@ import { eyebrowClasses } from "@/components/ui/eyebrow";
 export function NotFoundContent() {
   return (
     <Container width="layout" className="py-28 sm:py-36">
+      {/*
+        The status code, not a label restating the heading. "404 — route not
+        found" above "Nothing is listening on this path" said the same thing
+        twice; the number is the part a reader cannot infer from the sentence,
+        and it keeps the node that docks this page to the spine.
+      */}
       <p className={`${eyebrowClasses} flex items-center gap-3`}>
         <span aria-hidden="true" className="spine-node shrink-0" />
-        404 — route not found
+        404
       </p>
       <h1 className="mt-5 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
         Nothing is listening on this path

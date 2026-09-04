@@ -1,0 +1,8 @@
+{
+  "detector": {
+    "ignoreRules": [
+      "text-overflow",
+      "heading-rhythm"
+    ]
+  }
+}

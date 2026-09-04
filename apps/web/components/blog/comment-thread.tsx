@@ -85,7 +85,7 @@ export function CommentThread({
           ))}
         </ul>
       ) : (
-        <p className="mt-6 text-sm text-muted-foreground">
+        <p className="mt-6 max-w-[var(--measure)] text-sm text-muted-foreground">
           {/* An empty state is an invitation, not a status report. */}
           Nothing here yet. If something in this post was wrong, or useful, say so.
         </p>
@@ -94,7 +94,7 @@ export function CommentThread({
       <div className="mt-10 rounded-[var(--radius-card)] border border-border bg-card p-6">
         <Eyebrow className="mb-4">Add a comment</Eyebrow>
         <CommentForm postId={postId} />
-        <p className="mt-4 text-xs text-muted-foreground">
+        <p className="mt-4 max-w-[var(--measure)] text-xs text-muted-foreground">
           {/*
             Said before submitting, not after. Someone deciding whether to spend
             five minutes writing should know it will not appear immediately.

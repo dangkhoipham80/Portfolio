@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/login-form";
 import { Container } from "@/components/ui/container";
-import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
+import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { ScreenTitle } from "@/components/ui/screen-title";
 import { hasLiveSession } from "@/lib/admin-guard";
 import { cn } from "@/lib/cn";
@@ -59,9 +59,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           page opens with.
         */}
         <div className="max-w-md">
-          {/* Not as="h2": this label sits *above* the page h1, so making it a
-              heading would give the page an h2 before its h1. */}
-          <Eyebrow>Restricted</Eyebrow>
+          {/* No eyebrow here. "Restricted" said nothing "Console access"
+              does not already say, and a tracked-caps label that only
+              restates its heading is the shape the detector's
+              kicker-above-heading rule is named for. The eyebrows that stay
+              on this site carry a path and a count. */}
           <ScreenTitle>Console access</ScreenTitle>
           <p className="mt-4 text-muted-foreground">
             This area manages the site&rsquo;s content. There is no public

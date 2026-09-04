@@ -138,7 +138,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
             </h1>
 
             {post.excerpt ? (
-              <p className="mt-4 text-lg text-muted-foreground">{post.excerpt}</p>
+              <p className="mt-4 max-w-[var(--measure)] text-lg text-muted-foreground">{post.excerpt}</p>
             ) : null}
 
           </header>
@@ -170,6 +170,14 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
               ) : null}
             </div>
 
+            {/*
+              42rem, not `--measure`, and deliberately so. The measure token is
+              for prose; this column also holds code blocks, and every rem taken
+              off it puts another line of code behind a horizontal scroll. 42rem
+              is ~87 characters of body copy — past the 80 the reading-measure
+              rule asks for, and the trade that keeps a snippet readable without
+              dragging. The prose either side of the article does use the token.
+            */}
             <div className="min-w-0 max-w-[42rem]">
               {body.problem ? (
                 /*

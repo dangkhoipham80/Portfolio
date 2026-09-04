@@ -78,6 +78,25 @@
   --radius-pill: 9999px;
 
   /*
+   * The reading measure, in `ch` rather than rem so it scales with the text
+   * set in it.
+   *
+   * A fixed rem width cannot be one measure. `max-w-2xl` is 42rem, which is a
+   * comfortable 62 characters at 17px body copy and a 96-character line at
+   * `text-sm` — and the small blurbs under a project title and a post title
+   * were all set that way, so the shortest text on the page had the longest
+   * lines on it. In `ch` the cap re-resolves against whatever size it is used
+   * at, so one value covers both.
+   *
+   * The number is calibrated, not the usual 65. `ch` is the advance of "0",
+   * and in Be Vietnam Pro that is 0.675em while the average glyph across real
+   * prose measures 0.48em — so `65ch` is a 91-character line, not a
+   * 65-character one. 50ch is ~70 characters, measured on a full line rather
+   * than inferred from the unit's name.
+   */
+  --measure: 50ch;
+
+  /*
    * Two faces, three roles.
    *
    * Display and body are the same family at different weights: Be Vietnam Pro,
@@ -1253,6 +1272,39 @@
   from {
     opacity: 0;
     translate: 0 14px;
+  }
+}
+
+/*
+ * The third guard: paper.
+ *
+ * `@supports` covers a browser that cannot run a scroll-driven animation and
+ * `prefers-reduced-motion` covers a reader who does not want one, but neither
+ * covers the case where the animation runs correctly and there is no scroll
+ * to drive it. A `view()` timeline resolves against the scroll position, and
+ * a printed page has none — so every element still below the fold sits at its
+ * `from` keyframe, which is `opacity: 0`. Printing the home page dropped 12%
+ * of its text that way, and nothing about it is visible on screen.
+ *
+ * Cancelling the animation is enough: the base rules under every block here
+ * leave the finished state in place, so removing the animation reveals it
+ * rather than needing `opacity` forced back on. Listed by selector rather
+ * than applied to `*` because the same file animates decoration — the two
+ * page lights, the skill bars — that must not be forced opaque on paper.
+ */
+@media print {
+  .reveal,
+  .reveal-row > *,
+  .reveal-words .mask-word > span,
+  .hero-words .mask-word > span,
+  .hero-item,
+  .stagger > *,
+  .spread-media,
+  .stack-band,
+  .stack-layer::before,
+  .section-rule::before,
+  .wire-run {
+    animation: none !important;
   }
 }
 

@@ -153,7 +153,7 @@ function LedgerRow({ post }: { post: Post }) {
             </Link>
           </h3>
 
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{blurb}</p>
+          <p className="mt-2 max-w-[var(--measure)] text-sm text-muted-foreground">{blurb}</p>
 
           {post.tags.length > 0 ? (
             /*
