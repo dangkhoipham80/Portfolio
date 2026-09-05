@@ -45,7 +45,9 @@ from app.schemas.portfolio import (
 # columns. They are resolved by hand and must never reach `setattr` — a
 # `series_slug` attribute on a Post row would be silently accepted by Python and
 # silently dropped by SQLAlchemy.
-POST_REFERENCE_FIELDS = frozenset({"tag_slugs", "series_slug", "revision_note"})
+POST_REFERENCE_FIELDS = frozenset(
+    {"tag_slugs", "series_slug", "translation_of_slug", "revision_note"}
+)
 
 
 def _escape_like(term: str) -> str:
@@ -335,11 +337,43 @@ class PortfolioService:
             raise ValidationError(f"No series exists with the slug {slug}.")
         return record
 
-    def _apply_post_references(self, record: Post, payload) -> None:
-        """Attach the tags and the series named by a post payload.
+    def _resolve_translation_of(
+        self, slug: Optional[str], record: Optional[Post] = None
+    ) -> Optional[Post]:
+        """Turn a slug into the post ``record`` is a translation of.
 
-        Both are resolved before anything is written, so a payload naming a tag
-        that does not exist leaves the post exactly as it was rather than
+        Two things are normalised here rather than trusted from the payload:
+
+        * **Pointing at a translation points at its original instead.** A set of
+          language versions is a star with the original at the centre, never a
+          chain — otherwise "the other versions of this post" is a graph walk,
+          and B translated-from A plus A translated-from B is a cycle that hangs
+          whatever tries to follow it.
+        * **Pointing at itself is refused.** After the step above it is also the
+          only way a cycle could still be built, since a one-deep star with a
+          self-link at the centre is a loop of length one.
+        """
+        if not slug:
+            return None
+
+        target = self.db.query(Post).filter(Post.slug == slug).first()
+        if target is None:
+            raise ValidationError(f"No post exists with the slug {slug}.")
+
+        # The centre of the star, which is `target` itself unless `target` is a
+        # translation of something else.
+        original = target.original or target
+
+        if record is not None and record.id is not None and original.id == record.id:
+            raise ValidationError(ErrorMessages.TRANSLATION_IS_SELF)
+
+        return original
+
+    def _apply_post_references(self, record: Post, payload) -> None:
+        """Attach the tags, series and original named by a post payload.
+
+        All three are resolved before anything is written, so a payload naming a
+        tag that does not exist leaves the post exactly as it was rather than
         half-applied.
         """
         tags = self._resolve_tags(getattr(payload, "tag_slugs", None))
@@ -351,6 +385,12 @@ class PortfolioService:
         # series", and those have to stay distinguishable on an update.
         if "series_slug" in payload.model_fields_set:
             record.series = self._resolve_series(payload.series_slug)
+
+        # Same rule, same reason: unset leaves the link alone, null breaks it.
+        if "translation_of_slug" in payload.model_fields_set:
+            record.original = self._resolve_translation_of(
+                payload.translation_of_slug, record
+            )
 
     def get_posts(
         self,
@@ -416,17 +456,47 @@ class PortfolioService:
             query = query.filter(Post.published.is_(True))
         return query.first()
 
+    def get_post_translations(
+        self, post: Post, include_unpublished: bool = False
+    ) -> List[Post]:
+        """The other language versions of a post, this one excluded.
+
+        Reached through the original in both directions, which is what the
+        one-deep rule in ``_resolve_translation_of`` buys: from a translation
+        the set is its original plus that original's other translations, and
+        from an original it is simply its translations. No walk, no depth, no
+        cycle to guard against.
+
+        Filtered by what the caller may see. A draft translation is a post
+        nobody has published, and listing it on the live original would put an
+        unfinished page one click from a reader — while an admin previewing the
+        original does want to see it.
+        """
+        original = post.original or post
+        group = [original, *original.translated_into]
+
+        return sorted(
+            (
+                other
+                for other in group
+                if other.id != post.id and (include_unpublished or other.published)
+            ),
+            key=lambda other: other.language,
+        )
+
     def create_post(self, post: PostCreate) -> Post:
         # References resolve first, so a bad tag slug 422s before a row exists.
         # The other order leaves an untagged post behind on every failed create.
         tags = self._resolve_tags(post.tag_slugs)
         series = self._resolve_series(post.series_slug)
+        original = self._resolve_translation_of(post.translation_of_slug)
 
         def attach(record: Post) -> None:
             self._stamp_publication(record)
             if tags is not None:
                 record.tags = tags
             record.series = series
+            record.original = original
 
         return self._create_with_slug(
             Post, post, prepare=attach, skip=POST_REFERENCE_FIELDS

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { DEFAULT_LANGUAGE } from "./languages";
 import type {
   CareerEntry,
   Certificate,
@@ -241,6 +242,13 @@ function withPostLists(post: Post): Post {
     format: post.format ?? "markdown",
     series: post.series ?? null,
     series_order: post.series_order ?? 0,
+    // Same reasoning as `format`, for the same window: an API deployed before
+    // the language columns existed sends none of these, and a `language` of
+    // undefined reaches the `lang` attribute as the string "undefined".
+    language: post.language ?? DEFAULT_LANGUAGE,
+    author_name: post.author_name ?? null,
+    translation_of: post.translation_of ?? null,
+    translations: post.translations ?? [],
     tags: raw.map((tag, index) =>
       typeof tag === "string"
         ? // Negative ids so a synthesised ref can never collide with a real

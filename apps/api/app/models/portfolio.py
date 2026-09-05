@@ -17,6 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
+from app.core.constants import DEFAULT_LANGUAGE
 from app.core.database import Base
 
 from .base import BaseModel
@@ -240,6 +241,43 @@ class Post(BaseModel):
     # the wrong date into the feed and the sitemap. Null until it is published.
     published_at = Column(DateTime(timezone=True))
 
+    # What language the post is written in, as a BCP 47 primary subtag — the
+    # values in SUPPORTED_LANGUAGES, validated by the schema rather than by the
+    # column. A VARCHAR and not an Enum on purpose: adding a language to a
+    # Postgres enum is a migration against production, and this is a list that
+    # is expected to grow.
+    #
+    # Not nullable, because "unknown language" is not a state a post can
+    # usefully be in: the web app puts this in the `lang` attribute, and a
+    # missing one means a screen reader pronounces Vietnamese as English.
+    language = Column(
+        String(8), nullable=False, default=DEFAULT_LANGUAGE, server_default=DEFAULT_LANGUAGE
+    )
+    # Who wrote it. Nullable, and the web app falls back to the site owner —
+    # which is who wrote all of them so far. It exists so a guest post can say
+    # so, and so a translation can credit the translator.
+    author_name = Column(String(120))
+
+    # The post this one is a translation of, if it is one.
+    #
+    # A translation is its own row: its own slug, its own body, its own draft
+    # state, its own revisions. That is what makes the two versions independent
+    # — an English translation can sit unpublished for a month while the
+    # Vietnamese original is live — and it means everything already built for a
+    # post works on a translation with no special case.
+    #
+    # One level deep, enforced by the service: pointing a post at a translation
+    # re-points it at that translation's original, so a set of versions is a
+    # star and never a chain. Without that, "the other versions of this post"
+    # becomes a graph walk, and two translations of each other become a cycle.
+    #
+    # SET NULL rather than CASCADE: deleting the original must not delete the
+    # translations. They are the same writing in another language, not parts of
+    # the original.
+    translation_of_id = Column(
+        Integer, ForeignKey("posts.id", ondelete="SET NULL"), index=True
+    )
+
     series_id = Column(Integer, ForeignKey("series.id", ondelete="SET NULL"), index=True)
     # Position within the series, lowest first. Meaningless without a series and
     # ignored when there is none.
@@ -259,6 +297,18 @@ class Post(BaseModel):
         order_by="Tag.name",
     )
     series = relationship("Series", back_populates="posts", lazy="joined")
+
+    # Named `original` and `translated_into` rather than `translation_of` and
+    # `translations`, which is deliberate and not a style choice: the response
+    # schema has fields called `translation_of` and `translations`, and
+    # `from_attributes` would fill them straight off these relationships —
+    # publishing the title and slug of an unpublished draft translation to
+    # anyone who asked. Different names mean the only way those fields get a
+    # value is the route filling them in, with the caller's visibility applied.
+    original = relationship(
+        "Post", remote_side="Post.id", back_populates="translated_into"
+    )
+    translated_into = relationship("Post", back_populates="original")
     # The ORM owns these deletes rather than the database, so a post removed
     # through the service takes its comments, ratings and history with it
     # whatever the connection's foreign-key enforcement happens to be — SQLite

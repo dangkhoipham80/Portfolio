@@ -6,6 +6,7 @@ import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
 import { isOptimisableImage } from "@/lib/blob";
 import { cn } from "@/lib/cn";
 import { isoDay } from "@/lib/format";
+import { DEFAULT_LANGUAGE, langAttribute, languageFor } from "@/lib/languages";
 import { readingMinutes, summarise } from "@/lib/markdown";
 import type { Post } from "@/lib/types";
 
@@ -125,6 +126,26 @@ function LedgerRow({ post }: { post: Post }) {
             <Eyebrow className="tracking-normal">Draft</Eyebrow>
           )}
           <span className={cn(eyebrowClasses, "tracking-normal")}>{minutes} min</span>
+
+          {post.language !== DEFAULT_LANGUAGE ? (
+            /*
+              The exception is marked; the rule is not.
+
+              Almost every post here is Vietnamese, and stamping "Tieng Viet" on
+              forty rows to make two of them say "English" is forty labels
+              carrying no information — the reader learns to skip the line, on
+              exactly the rows where it matters. What someone scanning this
+              index wants to know is which posts are in the other language, and
+              that is what this says. Flip the condition if the balance ever
+              changes and neither language is the default one.
+            */
+            <span
+              lang={langAttribute(post.language)}
+              className={cn(eyebrowClasses, "tracking-normal text-foreground")}
+            >
+              {languageFor(post.language).label}
+            </span>
+          ) : null}
         </div>
 
         <div className="min-w-0">
@@ -147,6 +168,10 @@ function LedgerRow({ post }: { post: Post }) {
             */}
             <Link
               href={`/blog/${post.slug}`}
+              // The title is in the post's language even though the page around
+              // it is English, and this is the one attribute that tells a screen
+              // reader to switch voice for those seven words.
+              lang={langAttribute(post.language)}
               className="transition-colors after:absolute after:inset-0 group-hover:text-primary"
             >
               {post.title}

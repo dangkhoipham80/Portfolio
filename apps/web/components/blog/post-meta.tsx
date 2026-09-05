@@ -3,7 +3,9 @@ import Link from "next/link";
 import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/cn";
 import { formatFullDate, isoDay } from "@/lib/format";
+import { langAttribute, languageFor } from "@/lib/languages";
 import { readingMinutes } from "@/lib/markdown";
+import { SITE_AUTHOR } from "@/lib/site";
 import type { Post } from "@/lib/types";
 
 /**
@@ -41,6 +43,30 @@ export function PostMeta({ post }: { post: Post }) {
       <div>
         <Eyebrow className="mb-1">Reading</Eyebrow>
         <p className="text-sm text-foreground">{readingMinutes(post.body)} min</p>
+      </div>
+
+      <div>
+        <Eyebrow className="mb-1">Written by</Eyebrow>
+        {/*
+          The site owner unless the post says otherwise. A fallback rather than
+          a value copied onto every row: the name is already in one place, and
+          storing it per post is how a rename leaves half the blog signed with
+          the old spelling.
+        */}
+        <p className="text-sm text-foreground">{post.author_name ?? SITE_AUTHOR}</p>
+      </div>
+
+      <div>
+        <Eyebrow className="mb-1">Language</Eyebrow>
+        {/*
+          Named in itself and marked as itself, which are the same fact stated
+          for two audiences: "Tiếng Việt" is what a reader recognises, and the
+          `lang` on the element is what stops a screen reader pronouncing it as
+          English words.
+        */}
+        <p lang={langAttribute(post.language)} className="text-sm text-foreground">
+          {languageFor(post.language).label}
+        </p>
       </div>
 
       {post.tags.length > 0 ? (

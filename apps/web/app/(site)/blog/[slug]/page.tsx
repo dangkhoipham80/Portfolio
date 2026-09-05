@@ -10,15 +10,17 @@ import { ReadRecorder } from "@/components/blog/read-recorder";
 import { RelatedPosts } from "@/components/blog/related-posts";
 import { SeriesNav, SeriesSteps } from "@/components/blog/series-nav";
 import { TableOfContents } from "@/components/blog/table-of-contents";
+import { TranslationSwitcher } from "@/components/blog/translation-switcher";
 import { Container } from "@/components/ui/container";
 import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
 import { Notice } from "@/components/ui/notice";
 import { getPost, getPostComments, getPosts, getSeriesPosts } from "@/lib/api";
 import { isOptimisableImage } from "@/lib/blob";
 import { cn } from "@/lib/cn";
+import { langAttribute } from "@/lib/languages";
 import { hasContents, headingsOf, summarise } from "@/lib/markdown";
 import { renderPostBody } from "@/lib/mdx";
-import { absoluteUrl } from "@/lib/site";
+import { absoluteUrl, SITE_AUTHOR } from "@/lib/site";
 
 /**
  * Pre-render the published posts at build time. Anything published after the
@@ -43,15 +45,37 @@ export async function generateMetadata({
   return {
     title: post.title,
     description,
-    alternates: { canonical: absoluteUrl(`/blog/${post.slug}`) },
+    alternates: {
+      canonical: absoluteUrl(`/blog/${post.slug}`),
+      /*
+        `hreflang`, built from the versions the API says this caller may see.
+
+        Each version includes itself in the map as well as its siblings, which
+        is what the specification asks for — a set of alternates that does not
+        list the page carrying it is a one-way reference, and search engines
+        treat the group as unconfirmed. So the entry for this post's own
+        language points at this post.
+      */
+      languages: {
+        [langAttribute(post.language)]: absoluteUrl(`/blog/${post.slug}`),
+        ...Object.fromEntries(
+          post.translations.map((other) => [
+            langAttribute(other.language),
+            absoluteUrl(`/blog/${other.slug}`),
+          ]),
+        ),
+      },
+    },
     openGraph: {
       type: "article",
       title: post.title,
       description,
+      locale: langAttribute(post.language),
       url: absoluteUrl(`/blog/${post.slug}`),
       // The instant, not the day: Open Graph wants ISO 8601 and consumers use
       // it for ordering, where a date alone puts everything at midnight.
       publishedTime: post.published_at ?? undefined,
+      authors: [post.author_name ?? SITE_AUTHOR],
       tags: post.tags.map((tag) => tag.name),
       images: post.cover_image ? [post.cover_image] : undefined,
     },
@@ -132,7 +156,18 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
             ← All posts
           </Link>
 
-          <header className="mt-6 max-w-4xl">
+          {/*
+            `lang` here and on the body below, rather than on the `<article>` or
+            the document.
+
+            It has to be narrow. The shell, the nav, "← All posts", "Related"
+            and "Was this useful?" are English whatever the post is written in,
+            and a `lang="vi"` covering all of them would have a screen reader
+            read the site's own chrome with Vietnamese phonology — which is the
+            same bug as not marking the post at all, pointed the other way. What
+            is marked is what is true: the title, the standfirst, and the body.
+          */}
+          <header lang={langAttribute(post.language)} className="mt-6 max-w-4xl">
             {post.series ? (
               <Eyebrow className="hero-item mb-3 [animation-delay:80ms]">
                 <Link
@@ -154,6 +189,18 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
               </p>
             ) : null}
           </header>
+
+          {/*
+            Under the title, where a reader who opened the wrong language finds
+            it before reading a paragraph of it — rather than in a rail, which
+            on a phone is above the title and on a desktop is a column they have
+            no reason to have looked at yet. On the header's own clock, one beat
+            after the standfirst.
+          */}
+          <TranslationSwitcher
+            post={post}
+            className="hero-item mt-6 [animation-delay:260ms]"
+          />
 
           <div className="hero-item [animation-delay:300ms]">
             <Cover post={post} />
@@ -219,7 +266,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
                 content, and every rule in that stylesheet is a direct-child
                 selector. See lib/mdx.tsx.
               */}
-              {body.content}
+              <div lang={langAttribute(post.language)}>{body.content}</div>
 
               {post.series && seriesPosts.length > 0 ? (
                 <SeriesSteps posts={seriesPosts} currentSlug={post.slug} />
