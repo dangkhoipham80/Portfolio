@@ -207,29 +207,44 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
           </div>
 
           {/*
-            Two columns: the rail and the article, and the article gets the
-            larger share by a wide margin. The rail is sized to its content —
-            a date, a reading time, a list of headings — and never wider than
-            the 18rem that keeps the series card readable; the article takes
-            everything else. The rail always has something in it (the post's
-            own facts at minimum), which is what makes reserving it safe; a
-            column for a component that returns null is a strip of nothing.
+            Two columns at `lg`, three at `xl`, and at `xl` both margins are
+            occupied rather than one.
+
+            The two-column version still stopped short: the article's measure is
+            capped for readability, so at 1440px the column it sits in ran 241px
+            wider than the article inside it and that strip was empty — measured,
+            not estimated. Widening the measure again is not the answer; 48rem at
+            17px is already ~82 characters, past the rule and deliberately so
+            because this column holds code.
+
+            So the third column takes the strip and holds the article's
+            furniture: the series nav, the related posts and the rating. All
+            three were stacked under the prose before, so nothing was invented
+            to fill the space — it was moved to where the space is. The rating
+            is always rendered, so the column is never reserved for an empty
+            rail, which is the same rule the left one already passed.
+
+            The gap narrows from 20 to 10 at `xl` for the same reason: with
+            three columns there are two of them, and 80px twice is 160px taken
+            off the rail that needs 240 to hold a five-star control.
+
+            One DOM node each, not a desktop copy and a mobile copy. Below `xl`
+            the rail is simply the next thing in the flow, and below `lg` the
+            whole grid is one column and it all stacks. The explicit row and
+            column starts are what let the same element sit beside the article
+            at `xl` and under it at `lg` without duplicating it.
           */}
-          <div className="mt-12 grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(13rem,18rem)_minmax(0,1fr)] xl:gap-x-20">
-            <div className="hero-item space-y-8 [animation-delay:380ms] lg:sticky lg:top-24">
+          <div className="mt-12 grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(13rem,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(13rem,15rem)_minmax(0,48rem)_minmax(15rem,1fr)] xl:gap-x-10 2xl:grid-cols-[minmax(13rem,15rem)_minmax(0,54rem)_minmax(15rem,1fr)]">
+            {/*
+              Spans every row so the sticky rail keeps its grip past the end of
+              the article. A grid item sticks within its own grid area, so a
+              rail confined to row 1 would come unstuck at the comments.
+            */}
+            <div className="hero-item space-y-8 [animation-delay:380ms] lg:sticky lg:top-24 lg:row-span-3 xl:row-span-2">
               <PostMeta post={post} />
               {contents ? (
                 <div className="hidden lg:block">
                   <TableOfContents headings={headings} />
-                </div>
-              ) : null}
-              {series && post.series ? (
-                <div className="hidden lg:block">
-                  <SeriesNav
-                    series={post.series}
-                    posts={seriesPosts}
-                    currentSlug={post.slug}
-                  />
                 </div>
               ) : null}
             </div>
@@ -245,7 +260,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
               the line stays the same length in characters while the column
               uses more of the room it has.
             */}
-            <div className="hero-item min-w-0 max-w-[48rem] text-[1.0625rem] [animation-delay:440ms] 2xl:max-w-[54rem] 2xl:text-lg">
+            <div className="hero-item min-w-0 max-w-[48rem] text-[1.0625rem] [animation-delay:440ms] lg:col-start-2 lg:row-start-1 2xl:max-w-[54rem] 2xl:text-lg">
               {body.problem ? (
                 /*
                   Shown to everyone, not just the author. A post whose MDX did
@@ -271,13 +286,30 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
               {post.series && seriesPosts.length > 0 ? (
                 <SeriesSteps posts={seriesPosts} currentSlug={post.slug} />
               ) : null}
+            </div>
 
-              <div className="mt-12">
-                <Rating postId={post.id} />
-              </div>
+            <aside className="hero-item min-w-0 space-y-8 [animation-delay:500ms] lg:col-start-2 lg:row-start-2 lg:max-w-[48rem] xl:sticky xl:top-24 xl:col-start-3 xl:row-span-2 xl:row-start-1 xl:max-w-none">
+              {series && post.series ? (
+                /*
+                  Only in the rail. Below `xl` the same information is already
+                  at the foot of the article as `SeriesSteps`, which is the
+                  version written for someone who has finished reading.
+                */
+                <div className="hidden xl:block">
+                  <SeriesNav
+                    series={post.series}
+                    posts={seriesPosts}
+                    currentSlug={post.slug}
+                  />
+                </div>
+              ) : null}
+
+              <Rating postId={post.id} />
 
               <RelatedPosts post={post} posts={allPosts} />
+            </aside>
 
+            <div className="min-w-0 max-w-[48rem] lg:col-start-2 lg:row-start-3 xl:row-start-2 2xl:max-w-[54rem]">
               <CommentThread postId={post.id} comments={comments} />
             </div>
           </div>

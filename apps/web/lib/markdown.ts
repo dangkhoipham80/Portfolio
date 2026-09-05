@@ -8,7 +8,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
-import { visit } from "unist-util-visit";
+import { SKIP, visit } from "unist-util-visit";
 
 import { slugifyHeading } from "./headings";
 import { renderSequenceDiagrams } from "./sequence-diagram/plugin";
@@ -40,13 +40,38 @@ import { renderSequenceDiagrams } from "./sequence-diagram/plugin";
 const LANGUAGE_CLASS = /^language-([a-z0-9+#.-]{1,16})$/i;
 
 /**
- * Copies a fence's language onto its `<pre>` as `data-lang`, so the stylesheet
- * can label the block without a client component.
+ * How wide a block is, in characters — the longest line it contains.
+ *
+ * Tabs count as two columns because that is what a `<pre>` with the default
+ * `tab-size` renders them as at the start of a line, which is where they occur.
+ */
+function widestLine(node: Element): number {
+  let text = "";
+  visit(node, "text", (child: { value: string }) => {
+    text += child.value;
+  });
+
+  return text
+    .split("\n")
+    .reduce((widest, line) => Math.max(widest, line.replace(/\t/g, "  ").length), 0);
+}
+
+/**
+ * Copies a fence's language onto its `<pre>` as `data-lang`, and its width in
+ * characters onto the same element as `--cols`.
+ *
+ * `data-lang` lets the stylesheet label the block without a client component.
+ * `--cols` is the input to the rule that stops wide blocks scrolling sideways:
+ * CSS can measure the column a block sits in but has no idea how many
+ * characters are in it, so the one fact it is missing is written here, where
+ * the text is in hand. See `.article-prose pre` in globals.css.
  *
  * Runs *after* the sanitiser rather than before it. The default schema does not
  * allow `data-lang`, so a sanitiser running last would strip the attribute
  * again; and putting this last means the value is derived from a className the
- * sanitiser has already vetted, then matched against the pattern above.
+ * sanitiser has already vetted, then matched against the pattern above. The
+ * `--cols` value is a number this module counted, so nothing from the post body
+ * reaches the style attribute either.
  */
 export function labelCodeBlocks() {
   return (tree: Root) => {
@@ -57,6 +82,18 @@ export function labelCodeBlocks() {
         (child): child is Element => child.type === "element" && child.tagName === "code",
       );
       if (!code) return;
+
+      const columns = widestLine(code);
+      if (columns > 0) {
+        // Appended rather than assigned: Shiki has already written the theme's
+        // colour variables here, and replacing them turns every block in both
+        // themes into unstyled text.
+        const existing = node.properties?.style;
+        node.properties = {
+          ...node.properties,
+          style: `${typeof existing === "string" && existing ? `${existing};` : ""}--cols:${columns}`,
+        };
+      }
 
       // Shiki writes the class under the raw `class` key as a single string;
       // remark-rehype writes `className` as an array. Accept all of it —
@@ -170,6 +207,45 @@ export function markExternalLinks() {
 }
 
 /**
+ * Put every table in a box that scrolls, so the page does not.
+ *
+ * A table's minimum width is the sum of its columns' longest unbreakable words,
+ * and on a phone a four-column table of API paths exceeds the viewport. Nothing
+ * clipped it, so the *document* scrolled sideways instead — every heading and
+ * paragraph on the page dragging along with a table halfway down it. Measured
+ * at 375px: 561px of scroll width for a 360px viewport.
+ *
+ * The wrapper is a labelled region with `tabindex="0"` rather than a bare
+ * `overflow-x` div, because a box that scrolls has to be reachable by keyboard
+ * or its right-hand columns are only available to a mouse. The alternative
+ * going around — `table { display: block }` — needs no wrapper and costs the
+ * element its table semantics, which is a worse trade than one div.
+ */
+export function scrollableTables() {
+  return (tree: Root) => {
+    visit(tree, "element", (node: Element, index, parent) => {
+      if (node.tagName !== "table" || !parent || index === undefined) return;
+
+      parent.children[index] = {
+        type: "element",
+        tagName: "div",
+        properties: {
+          "data-table-scroll": "",
+          tabIndex: 0,
+          role: "region",
+          "aria-label": "Table",
+        },
+        children: [node],
+      };
+
+      // The table now lives one level down; descending into it from here would
+      // find it again and wrap the wrapper.
+      return SKIP;
+    });
+  };
+}
+
+/**
  * Give every `h2` and `h3` the id its table-of-contents entry links to.
  *
  * The ids have to be derived the same way in two places that never see each
@@ -224,6 +300,7 @@ const processor = unified()
   .use(renderSequenceDiagrams)
   .use(rehypeShiki, shikiOptions)
   .use(labelCodeBlocks)
+  .use(scrollableTables)
   .use(anchorHeadings)
   .use(markExternalLinks)
   .use(rehypeStringify);

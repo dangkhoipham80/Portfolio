@@ -762,6 +762,12 @@
    */
   .article-prose {
     color: hsl(var(--foreground));
+    /*
+     * A query container, so a code block can size itself against the column it
+     * was given rather than against the viewport. `100cqi` below is this
+     * element's inline size — the article column, whatever the grid made it.
+     */
+    container-type: inline-size;
   }
 
   .article-prose > * + * {
@@ -937,6 +943,40 @@
     line-height: 1.7;
   }
 
+  /*
+   * The last wide blocks fit instead of scrolling.
+   *
+   * Widening the measure to 48rem took all but one of this site's code blocks
+   * out of horizontal scroll on its own. The one left is a hundred-column ASCII
+   * diagram, and a sideways scrollbar through the middle of it hides half of a
+   * drawing whose whole point is that you can see it at once — the one
+   * interaction nobody performs on purpose.
+   *
+   * So the block shrinks to fit rather than the reader dragging it. `--cols` is
+   * the block's width in characters, written onto the element by
+   * `labelCodeBlocks` in lib/markdown.ts; `0.6` is the advance width of IBM
+   * Plex Mono in ems, which is exact for a monospaced face and measured rather
+   * than guessed. The rest is the padding and the two border pixels.
+   *
+   * `clamp` does the deciding, so this costs nothing on a block that already
+   * fits: 0.8125rem is the ceiling and almost everything sits on it. Nothing
+   * goes below 10px — past that the block is unreadable and a scrollbar is the
+   * lesser evil.
+   *
+   * Desktop only. Below `lg` the column is a phone's width and every block
+   * would hit the floor, trading a scrollbar most posts do not need for type
+   * too small to read.
+   */
+  @media (min-width: 64rem) {
+    .article-prose pre {
+      font-size: clamp(
+        0.625rem,
+        calc((100cqi - 2.5rem - 2px) / (var(--cols, 40) * 0.6)),
+        0.8125rem
+      );
+    }
+  }
+
   /* Room for the label, and only where there is a label to make room for. */
   .article-prose pre[data-lang] {
     padding-top: 2.25rem;
@@ -1095,8 +1135,28 @@
     border: 0;
   }
 
+  /*
+   * The box a table scrolls inside, written by `scrollableTables` in
+   * lib/markdown.ts. Focusable, so the columns past the right edge are not
+   * mouse-only; the ring is the site's own focus treatment rather than the
+   * browser's, which on a full-width div is a rectangle around the article.
+   */
+  .article-prose [data-table-scroll] {
+    overflow-x: auto;
+  }
+
+  .article-prose [data-table-scroll]:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: var(--radius-card);
+  }
+
   .article-prose table {
-    width: 100%;
+    /* `max-content`, not 100%: inside a scrolling box a percentage width
+       resolves against the box and puts the table back where it started —
+       squeezed, and now with a scrollbar that never has anything to scroll. */
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
     font-size: 0.875rem;
   }

@@ -11,6 +11,7 @@ import {
   labelCodeBlocks,
   markExternalLinks,
   renderMarkdown,
+  scrollableTables,
   shikiOptions,
 } from "./markdown";
 import { messageFor, rejectExecutableMdx } from "./mdx-guard";
@@ -144,6 +145,7 @@ async function renderMdx(body: string): Promise<ReactNode> {
       // contents linked to anchors that did not exist. Nothing failed; the
       // contents list just scrolled nowhere.
       labelCodeBlocks,
+      scrollableTables,
       anchorHeadings,
       markExternalLinks,
     ],
