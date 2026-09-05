@@ -13,18 +13,13 @@ consequences that are not obvious from the column:
 * A set of versions is a star and never a chain, which the service enforces by
   re-pointing a link that names a translation at that translation's original.
 
-Runs against whatever ``DATABASE_URL`` points at and inserts rows; the fixtures
-imported from ``test_blog_api`` clean up what they made.
+Runs against whatever ``DATABASE_URL`` points at and inserts rows; ``track_post``
+in conftest.py removes them, through the ORM so the cascades run.
 """
 
 from fastapi.testclient import TestClient
 
 from app.main import app
-
-# The cleanup fixture the rest of the blog suite uses. Imported rather than
-# redefined so a post made here is torn down by the same code — in particular
-# through the ORM, so the cascades on comments, ratings and revisions run.
-from tests.test_blog_api import track_post  # noqa: F401
 
 client = TestClient(app)
 

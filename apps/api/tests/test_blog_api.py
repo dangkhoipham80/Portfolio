@@ -32,28 +32,6 @@ def _auth(token):
 
 
 @pytest.fixture
-def track_post(db):
-    """Remove post rows a test created, including ones made through the API."""
-    made = []
-
-    def _track(post_id: int) -> int:
-        made.append(post_id)
-        return post_id
-
-    yield _track
-
-    for post_id in made:
-        record = db.query(Post).filter(Post.id == post_id).first()
-        # Through the ORM rather than a bulk delete, so the cascades on
-        # comments, ratings and revisions actually run. A `.delete()` on the
-        # query emits one DELETE and leaves the children behind, which then
-        # fail the foreign key on the next run.
-        if record:
-            db.delete(record)
-    db.commit()
-
-
-@pytest.fixture
 def make_tag(db):
     """Tags a test needs, cleaned up afterwards.
 
