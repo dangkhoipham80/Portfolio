@@ -556,6 +556,9 @@ class PortfolioService:
         tags = self.db.query(Tag).order_by(Tag.name).all()
         return [(tag, counts.get(tag.id, 0)) for tag in tags]
 
+    def get_tag(self, tag_id: int) -> Optional[Tag]:
+        return self.db.query(Tag).filter(Tag.id == tag_id).first()
+
     def get_tag_by_slug(self, slug: str) -> Optional[Tag]:
         return self.db.query(Tag).filter(Tag.slug == slug).first()
 

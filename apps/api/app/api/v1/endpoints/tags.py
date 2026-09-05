@@ -65,6 +65,29 @@ def get_tag_by_slug(
     return _present(tag, counts.get(tag.id, 0))
 
 
+@router.get("/{tag_id}", response_model=Tag)
+def get_tag(tag_id: int, db: Session = Depends(get_db), viewer=Depends(get_optional_admin)):
+    """One tag by id — what the console's edit screen loads.
+
+    This route was missing, and its absence did not read as one. FastAPI still
+    matched ``/tags/{tag_id}`` for the PUT and DELETE declared below, so a GET
+    to the same path answered 405 rather than 404 — which the console's reader
+    folds into "the API did not answer", and so the tag edit form reported an
+    outage on a perfectly healthy backend. Every other content type had this
+    route; tags and series did not.
+    """
+    service = PortfolioService(db)
+    tag = service.get_tag(tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail=ErrorMessages.TAG_NOT_FOUND)
+
+    counts = dict(
+        (row.id, n)
+        for row, n in service.get_tags(include_unpublished=viewer is not None)
+    )
+    return _present(tag, counts.get(tag.id, 0))
+
+
 @router.post("/", response_model=Tag, status_code=201, dependencies=[Depends(require_admin)])
 def create_tag(tag: TagCreate, db: Session = Depends(get_db)):
     """Create a tag. Admin only.
