@@ -68,6 +68,25 @@ def get_series_posts(
     return service.get_series_posts(record.id, include_unpublished=include)
 
 
+@router.get("/{series_id}", response_model=Series)
+def get_series(
+    series_id: int, db: Session = Depends(get_db), viewer=Depends(get_optional_admin)
+):
+    """One series by id — what the console's edit screen loads.
+
+    Missing for the same reason as the tags one, and with the same symptom: the
+    PUT and DELETE below claim the path, so a GET answered 405 and the console
+    reported an outage. Declared after ``/slug/{slug}`` so that route keeps its
+    two-segment match.
+    """
+    service = PortfolioService(db)
+    include = viewer is not None
+    record = service.get_series(series_id, include_unpublished=include)
+    if not record:
+        raise HTTPException(status_code=404, detail=ErrorMessages.SERIES_NOT_FOUND)
+    return _present(service, record, include)
+
+
 @router.post(
     "/", response_model=Series, status_code=201, dependencies=[Depends(require_admin)]
 )

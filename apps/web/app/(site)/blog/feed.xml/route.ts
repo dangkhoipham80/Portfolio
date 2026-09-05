@@ -1,6 +1,7 @@
 import { getPosts } from "@/lib/api";
+import { DEFAULT_LANGUAGE, langAttribute } from "@/lib/languages";
 import { summarise } from "@/lib/markdown";
-import { absoluteUrl } from "@/lib/site";
+import { absoluteUrl, SITE_AUTHOR } from "@/lib/site";
 
 /**
  * RSS for the blog.
@@ -44,7 +45,12 @@ export async function GET() {
       const published = rfc822(post.published_at);
 
       return [
-        "    <item>",
+        // `xml:lang` per item, because the feed is mixed. RSS 2.0 has no
+        // per-item language element — `<language>` is channel-level and says
+        // one thing about all of them — but `xml:lang` is a plain XML
+        // attribute and is valid anywhere, which is how a reader is told that
+        // this entry is not in the language the channel claims.
+        `    <item xml:lang="${langAttribute(post.language)}">`,
         `      <title>${escapeXml(post.title)}</title>`,
         `      <link>${escapeXml(url)}</link>`,
         // A guid that is not a URL still has to be stable; the permalink is
@@ -52,6 +58,10 @@ export async function GET() {
         `      <guid isPermaLink="true">${escapeXml(url)}</guid>`,
         `      <description>${escapeXml(post.excerpt ?? summarise(post.body))}</description>`,
         published ? `      <pubDate>${published}</pubDate>` : null,
+        // `dc:creator` rather than RSS's own `<author>`, which is specified as
+        // an email address — publishing one in a feed is a spam trap, and a
+        // name is what a reader actually displays.
+        `      <dc:creator>${escapeXml(post.author_name ?? SITE_AUTHOR)}</dc:creator>`,
         // The display name, not the slug: a category is read by a person in a
         // feed reader, so "Next.js" rather than "next-js".
         ...post.tags.map((tag) => `      <category>${escapeXml(tag.name)}</category>`),
@@ -69,12 +79,16 @@ export async function GET() {
 
   const xml = [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
+    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">',
     "  <channel>",
     "    <title>Phạm Đăng Khôi — Writing</title>",
     `    <link>${absoluteUrl("/blog")}</link>`,
     "    <description>Notes on what I built, what broke, and what the fix turned out to be.</description>",
-    "    <language>en</language>",
+    // The channel's language, which was hardcoded to "en" while nearly every
+    // post in it was Vietnamese. RSS allows one value here for the whole feed,
+    // so the honest answer is the language most of it is written in; the
+    // entries that differ say so on themselves with `xml:lang` above.
+    `    <language>${DEFAULT_LANGUAGE}</language>`,
     `    <atom:link href="${absoluteUrl("/blog/feed.xml")}" rel="self" type="application/rss+xml" />`,
     lastBuild ? `    <lastBuildDate>${lastBuild}</lastBuildDate>` : null,
     items,

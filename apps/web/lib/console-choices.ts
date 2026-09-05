@@ -1,7 +1,7 @@
 import "server-only";
 
 import { fetchContentList } from "./console-api";
-import type { EntitySpec } from "./content-schema";
+import type { Choices, EntitySpec, PostChoice } from "./content-schema";
 import type { SeriesRef, TagRef } from "./types";
 
 /**
@@ -25,13 +25,21 @@ import type { SeriesRef, TagRef } from "./types";
  * is neither.
  */
 
-export type Choices = { tags: TagRef[]; series: SeriesRef[] };
+/*
+ * `Choices` and `PostChoice` are declared in lib/content-schema.ts, not here.
+ * This module is `server-only` and the form that consumes them runs in the
+ * browser; keeping the shape beside the field descriptions means the client
+ * never has to reach into a server module, even for a type.
+ */
+export type { Choices, PostChoice } from "./content-schema";
 
-const NONE: Choices = { tags: [], series: [] };
+const NONE: Choices = { tags: [], series: [], posts: [] };
+
+const FROM_API = new Set(["tags", "series", "translation"]);
 
 /** Whether this entity's form has any field whose options come from the API. */
 function needsChoices(spec: EntitySpec): boolean {
-  return spec.fields.some((field) => field.kind === "tags" || field.kind === "series");
+  return spec.fields.some((field) => FROM_API.has(field.kind));
 }
 
 export async function choicesFor(spec: EntitySpec, token: string): Promise<Choices> {
@@ -39,14 +47,19 @@ export async function choicesFor(spec: EntitySpec, token: string): Promise<Choic
   // another type does not silently get an empty picker.
   if (!needsChoices(spec)) return NONE;
 
-  const [tags, series] = await Promise.all([
+  const [tags, series, posts] = await Promise.all([
     fetchContentList(token, "/tags/"),
     fetchContentList(token, "/series/"),
+    // Drafts included, which is the ordinary case rather than an edge one: a
+    // translation is usually written against an original that is already live,
+    // but the pair can equally be drafted together.
+    fetchContentList(token, "/posts/"),
   ]);
 
   return {
     tags: tags.ok ? tags.data.map(toTagRef).filter(isNamed) : [],
     series: series.ok ? series.data.map(toSeriesRef).filter(isTitled) : [],
+    posts: posts.ok ? posts.data.map(toPostChoice).filter(isPickable) : [],
   };
 }
 
@@ -78,4 +91,16 @@ function isNamed(tag: TagRef): boolean {
 
 function isTitled(entry: SeriesRef): boolean {
   return entry.slug !== "" && entry.title !== "";
+}
+
+function toPostChoice(row: Record<string, unknown>): PostChoice {
+  return {
+    slug: typeof row.slug === "string" ? row.slug : "",
+    title: typeof row.title === "string" ? row.title : "",
+    language: typeof row.language === "string" ? row.language : "",
+  };
+}
+
+function isPickable(post: PostChoice): boolean {
+  return post.slug !== "" && post.title !== "";
 }

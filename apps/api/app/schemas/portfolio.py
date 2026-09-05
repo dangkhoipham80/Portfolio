@@ -2,6 +2,7 @@ from datetime import date, datetime
 from typing import Annotated, List, Optional
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -10,7 +11,27 @@ from pydantic import (
     StringConstraints,
 )
 
+from app.core.constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 from app.models.portfolio import CommentStatus, PostFormat, ProjectStatus, SkillLevel
+
+
+def _known_language(value: str) -> str:
+    """Refuse a language the site has no name for.
+
+    A validator rather than ``Literal[...]`` because the list is a tuple in
+    constants.py and the whole point of it living there is that adding a
+    language is an edit to one line. The message names the choices, because a
+    bare "invalid input" on a two-letter field tells the admin nothing about
+    which two letters were wanted.
+    """
+    if value not in SUPPORTED_LANGUAGES:
+        raise ValueError(
+            f"Language has to be one of: {', '.join(SUPPORTED_LANGUAGES)}."
+        )
+    return value
+
+
+Language = Annotated[str, AfterValidator(_known_language)]
 
 
 def _no_null_list(value):
@@ -322,6 +343,12 @@ class PostBase(BaseModel):
     # out, the service stamps it the first time the post is published.
     published_at: Optional[datetime] = None
     series_order: int = 0
+    # What it is written in. See SUPPORTED_LANGUAGES; validated below rather
+    # than by the column, so adding a language is one line and no migration.
+    language: Language = DEFAULT_LANGUAGE
+    # Who wrote it. Null means the site owner, which the web app fills in —
+    # storing the name on every row would be one place for it to go stale.
+    author_name: Optional[Annotated[str, StringConstraints(max_length=120)]] = None
 
 
 class PostWrite(BaseModel):
@@ -335,10 +362,14 @@ class PostWrite(BaseModel):
     ``series_slug`` is the same, with null meaning "not in a series" — which is
     why it is spelled as its own field rather than folded into PostUpdate's
     optionals, where null already means "leave alone".
+
+    ``translation_of_slug`` names the post this one is a translation of, and
+    follows the same rule: unset leaves the link alone, null breaks it.
     """
 
     tag_slugs: Optional[List[str]] = None
     series_slug: Optional[str] = None
+    translation_of_slug: Optional[str] = None
 
 
 class PostCreate(PostBase, PostWrite):
@@ -354,9 +385,28 @@ class PostUpdate(PostWrite):
     published: Optional[bool] = None
     published_at: Optional[datetime] = None
     series_order: Optional[int] = None
+    language: Optional[Language] = None
+    author_name: Optional[Annotated[str, StringConstraints(max_length=120)]] = None
     # What changed, recorded on the revision this update creates. Never stored
     # on the post itself.
     revision_note: Optional[Annotated[str, StringConstraints(max_length=280)]] = None
+
+
+class PostTranslationRef(BaseModel):
+    """One version of a post, as it appears on another version.
+
+    Deliberately not a whole Post: the switcher needs a language to label the
+    link, a slug to point it at and a title for its accessible name, and
+    embedding the full row would put every translation's entire body inside
+    every other translation's response — and then recurse.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    title: str
+    language: Language
 
 
 class Post(PostBase):
@@ -364,6 +414,14 @@ class Post(PostBase):
 
     id: int
     slug: str
+    # The other language versions of this post, and the original it was
+    # translated from. Both are filled in by the route, never by
+    # `from_attributes` — see the note on the model's `original` relationship
+    # for why the ORM's own names are different. What is in them depends on who
+    # is asking: an unpublished translation is visible to an admin and to
+    # nobody else.
+    translation_of: Optional[PostTranslationRef] = None
+    translations: List[PostTranslationRef] = []
     # Objects, not strings. The web app needs the slug to build a tag URL and
     # the name to print, and a bare string can only supply one of them — which
     # is the reason this stopped being a JSON list of names. Ordered by name in

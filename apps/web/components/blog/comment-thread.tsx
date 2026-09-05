@@ -42,7 +42,8 @@ export function CommentThread({
     comments.filter((comment) => comment.parent_id === id);
 
   return (
-    <section aria-labelledby="comments-heading" className="mt-16">
+    // Spacing above comes from the grid row it sits in — see the post page.
+    <section aria-labelledby="comments-heading">
       <div className="flex items-center gap-4">
         <Eyebrow as="h2" id="comments-heading" className="text-foreground">
           {comments.length === 0

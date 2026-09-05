@@ -32,11 +32,39 @@ from app.schemas.portfolio import (
     PostRatingCreate,
     PostRatingSummary,
     PostRevision,
+    PostTranslationRef,
     PostUpdate,
 )
 from app.services.portfolio_service import PortfolioService
 
 router = APIRouter()
+
+
+def _present(service: PortfolioService, record, include_unpublished: bool) -> Post:
+    """A post row plus the language versions the caller may see.
+
+    ``translations`` and ``translation_of`` are attached here rather than read
+    off the ORM, and that is a visibility decision, not a style one: the model's
+    relationships know nothing about who is asking, so letting
+    ``from_attributes`` fill these fields would publish the title and slug of
+    every draft translation to anyone who fetched the original. See the note on
+    ``Post.original`` in models/portfolio.py — the relationships are
+    deliberately named something else so that cannot happen by accident.
+    """
+    presented = Post.model_validate(record)
+    presented.translations = [
+        PostTranslationRef.model_validate(other)
+        for other in service.get_post_translations(
+            record, include_unpublished=include_unpublished
+        )
+    ]
+
+    original = record.original
+    if original is not None and (include_unpublished or original.published):
+        presented.translation_of = PostTranslationRef.model_validate(original)
+
+    return presented
+
 
 # A second comment limit, keyed on the visitor handle rather than the address,
 # over a window the in-process rate limiter cannot hold. slowapi's buckets live
@@ -57,9 +85,13 @@ def get_posts(
 ):
     """Get published posts, newest first; admins also see drafts."""
     service = PortfolioService(db)
-    return service.get_posts(
-        tag=tag, series=series, q=q, include_unpublished=viewer is not None
-    )
+    include = viewer is not None
+    return [
+        _present(service, record, include)
+        for record in service.get_posts(
+            tag=tag, series=series, q=q, include_unpublished=include
+        )
+    ]
 
 
 @router.get("/slug/{slug}", response_model=Post)
@@ -70,10 +102,11 @@ def get_post_by_slug(
 ):
     """Get a specific post by slug"""
     service = PortfolioService(db)
-    post = service.get_post_by_slug(slug, include_unpublished=viewer is not None)
+    include = viewer is not None
+    post = service.get_post_by_slug(slug, include_unpublished=include)
     if not post:
         raise HTTPException(status_code=404, detail=ErrorMessages.POST_NOT_FOUND)
-    return post
+    return _present(service, post, include)
 
 
 @router.get("/{post_id}", response_model=Post)
@@ -86,17 +119,18 @@ def get_post(
     service = PortfolioService(db)
     # A draft 404s for anonymous callers rather than 403ing, as everywhere
     # else: whether an unpublished post exists at that id is itself not public.
-    post = service.get_post(post_id, include_unpublished=viewer is not None)
+    include = viewer is not None
+    post = service.get_post(post_id, include_unpublished=include)
     if not post:
         raise HTTPException(status_code=404, detail=ErrorMessages.POST_NOT_FOUND)
-    return post
+    return _present(service, post, include)
 
 
 @router.post("/", response_model=Post, dependencies=[Depends(require_admin)])
 def create_post(post: PostCreate, db: Session = Depends(get_db)):
     """Create a new post"""
     service = PortfolioService(db)
-    return service.create_post(post)
+    return _present(service, service.create_post(post), True)
 
 
 @router.put("/{post_id}", response_model=Post, dependencies=[Depends(require_admin)])
@@ -110,7 +144,7 @@ def update_post(
     updated_post = service.update_post(post_id, post)
     if not updated_post:
         raise HTTPException(status_code=404, detail=ErrorMessages.POST_NOT_FOUND)
-    return updated_post
+    return _present(service, updated_post, True)
 
 
 @router.delete("/{post_id}", dependencies=[Depends(require_admin)])
@@ -268,4 +302,4 @@ def restore_post_revision(
     restored = service.restore_revision(post_id, revision_id)
     if not restored:
         raise HTTPException(status_code=404, detail=ErrorMessages.REVISION_NOT_FOUND)
-    return restored
+    return _present(service, restored, True)

@@ -23,6 +23,21 @@ PASSWORD_RESET_EXPIRE_MINUTES = 60
 EMAIL_VERIFICATION_EXPIRE_MINUTES = 60
 
 
+# The languages a post may be written in, as BCP 47 primary subtags.
+#
+# A tuple of plain strings rather than a database enum, and that is the point:
+# adding a language has to be a one-line change here plus a label in the web
+# app, not an ALTER TYPE against production. The column is a VARCHAR and this is
+# the only thing that says which values are meaningful — the API validates
+# against it on write, so a typo is a 422 naming the choices rather than a post
+# filed under a language nothing knows how to render.
+#
+# The first entry is the default, and it is Vietnamese because that is what the
+# existing posts are; the migration backfills every row to it.
+SUPPORTED_LANGUAGES = ("vi", "en")
+DEFAULT_LANGUAGE = SUPPORTED_LANGUAGES[0]
+
+
 # Error Messages
 class ErrorMessages:
     # User related
@@ -50,6 +65,7 @@ class ErrorMessages:
     # Blog related
     POST_NOT_FOUND = "Post not found"
     TAG_NOT_FOUND = "Tag not found"
+    TRANSLATION_IS_SELF = "A post cannot be a translation of itself."
     SERIES_NOT_FOUND = "Series not found"
     COMMENT_NOT_FOUND = "Comment not found"
     REVISION_NOT_FOUND = "Revision not found"

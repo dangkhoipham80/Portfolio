@@ -8,6 +8,8 @@
  * hand; there are four shapes and they change rarely.
  */
 
+import type { LanguageCode } from "./languages";
+
 /** Enum values are the lowercase member values, not the names. */
 export type ProjectStatus = "completed" | "in_progress" | "on_hold" | "dropped";
 
@@ -112,6 +114,8 @@ export interface Contact {
 /** How a post's body should be read. See lib/mdx.tsx for what MDX may contain. */
 export type PostFormat = "markdown" | "mdx";
 
+export type { LanguageCode } from "./languages";
+
 /**
  * A tag as it appears inside a post.
  *
@@ -149,6 +153,20 @@ export interface Series extends SeriesRef {
   updated_at: string | null;
 }
 
+/**
+ * One language version of a post, as it appears on another version.
+ *
+ * Not a whole `Post`: the switcher needs a language to label the link, a slug to
+ * point it at and a title for its accessible name. Embedding the full row would
+ * put every translation's body inside every other translation's response.
+ */
+export interface PostTranslationRef {
+  id: number;
+  slug: string;
+  title: string;
+  language: LanguageCode;
+}
+
 export interface Post {
   id: number;
   slug: string;
@@ -158,6 +176,18 @@ export interface Post {
   /** Markdown or MDX per `format`. The API never renders it; the web app does. */
   body: string;
   format: PostFormat;
+  /** What it is written in. Goes into the `lang` attribute; see lib/languages.ts. */
+  language: LanguageCode;
+  /** Null means the site owner, which is who wrote all of them so far. */
+  author_name: string | null;
+  /** The post this one was translated from, when it is a translation. */
+  translation_of: PostTranslationRef | null;
+  /**
+   * The other language versions of this post, this one excluded — the original
+   * as well as its siblings, whichever end you are reading from. Drafts are
+   * filtered out by the API for anyone who is not an admin.
+   */
+  translations: PostTranslationRef[];
   tags: TagRef[];
   series: SeriesRef | null;
   /** Position within the series, lowest first. Meaningless without one. */

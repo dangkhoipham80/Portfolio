@@ -10,15 +10,17 @@ import { ReadRecorder } from "@/components/blog/read-recorder";
 import { RelatedPosts } from "@/components/blog/related-posts";
 import { SeriesNav, SeriesSteps } from "@/components/blog/series-nav";
 import { TableOfContents } from "@/components/blog/table-of-contents";
+import { TranslationSwitcher } from "@/components/blog/translation-switcher";
 import { Container } from "@/components/ui/container";
 import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
 import { Notice } from "@/components/ui/notice";
 import { getPost, getPostComments, getPosts, getSeriesPosts } from "@/lib/api";
 import { isOptimisableImage } from "@/lib/blob";
 import { cn } from "@/lib/cn";
+import { langAttribute } from "@/lib/languages";
 import { hasContents, headingsOf, summarise } from "@/lib/markdown";
 import { renderPostBody } from "@/lib/mdx";
-import { absoluteUrl } from "@/lib/site";
+import { absoluteUrl, SITE_AUTHOR } from "@/lib/site";
 
 /**
  * Pre-render the published posts at build time. Anything published after the
@@ -43,15 +45,37 @@ export async function generateMetadata({
   return {
     title: post.title,
     description,
-    alternates: { canonical: absoluteUrl(`/blog/${post.slug}`) },
+    alternates: {
+      canonical: absoluteUrl(`/blog/${post.slug}`),
+      /*
+        `hreflang`, built from the versions the API says this caller may see.
+
+        Each version includes itself in the map as well as its siblings, which
+        is what the specification asks for — a set of alternates that does not
+        list the page carrying it is a one-way reference, and search engines
+        treat the group as unconfirmed. So the entry for this post's own
+        language points at this post.
+      */
+      languages: {
+        [langAttribute(post.language)]: absoluteUrl(`/blog/${post.slug}`),
+        ...Object.fromEntries(
+          post.translations.map((other) => [
+            langAttribute(other.language),
+            absoluteUrl(`/blog/${other.slug}`),
+          ]),
+        ),
+      },
+    },
     openGraph: {
       type: "article",
       title: post.title,
       description,
+      locale: langAttribute(post.language),
       url: absoluteUrl(`/blog/${post.slug}`),
       // The instant, not the day: Open Graph wants ISO 8601 and consumers use
       // it for ordering, where a date alone puts everything at midnight.
       publishedTime: post.published_at ?? undefined,
+      authors: [post.author_name ?? SITE_AUTHOR],
       tags: post.tags.map((tag) => tag.name),
       images: post.cover_image ? [post.cover_image] : undefined,
     },
@@ -132,7 +156,18 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
             ← All posts
           </Link>
 
-          <header className="mt-6 max-w-4xl">
+          {/*
+            `lang` here and on the body below, rather than on the `<article>` or
+            the document.
+
+            It has to be narrow. The shell, the nav, "← All posts", "Related"
+            and "Was this useful?" are English whatever the post is written in,
+            and a `lang="vi"` covering all of them would have a screen reader
+            read the site's own chrome with Vietnamese phonology — which is the
+            same bug as not marking the post at all, pointed the other way. What
+            is marked is what is true: the title, the standfirst, and the body.
+          */}
+          <header lang={langAttribute(post.language)} className="mt-6 max-w-4xl">
             {post.series ? (
               <Eyebrow className="hero-item mb-3 [animation-delay:80ms]">
                 <Link
@@ -155,34 +190,61 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
             ) : null}
           </header>
 
+          {/*
+            Under the title, where a reader who opened the wrong language finds
+            it before reading a paragraph of it — rather than in a rail, which
+            on a phone is above the title and on a desktop is a column they have
+            no reason to have looked at yet. On the header's own clock, one beat
+            after the standfirst.
+          */}
+          <TranslationSwitcher
+            post={post}
+            className="hero-item mt-6 [animation-delay:260ms]"
+          />
+
           <div className="hero-item [animation-delay:300ms]">
             <Cover post={post} />
           </div>
 
           {/*
-            Two columns: the rail and the article, and the article gets the
-            larger share by a wide margin. The rail is sized to its content —
-            a date, a reading time, a list of headings — and never wider than
-            the 18rem that keeps the series card readable; the article takes
-            everything else. The rail always has something in it (the post's
-            own facts at minimum), which is what makes reserving it safe; a
-            column for a component that returns null is a strip of nothing.
+            Two columns at `lg`, three at `xl`, and at `xl` both margins are
+            occupied rather than one.
+
+            The two-column version still stopped short: the article's measure is
+            capped for readability, so at 1440px the column it sits in ran 241px
+            wider than the article inside it and that strip was empty — measured,
+            not estimated. Widening the measure again is not the answer; 48rem at
+            17px is already ~82 characters, past the rule and deliberately so
+            because this column holds code.
+
+            So the third column takes the strip and holds the article's
+            furniture: the series nav, the related posts and the rating. All
+            three were stacked under the prose before, so nothing was invented
+            to fill the space — it was moved to where the space is. The rating
+            is always rendered, so the column is never reserved for an empty
+            rail, which is the same rule the left one already passed.
+
+            The gap narrows from 20 to 10 at `xl` for the same reason: with
+            three columns there are two of them, and 80px twice is 160px taken
+            off the rail that needs 240 to hold a five-star control.
+
+            One DOM node each, not a desktop copy and a mobile copy. Below `xl`
+            the rail is simply the next thing in the flow, and below `lg` the
+            whole grid is one column and it all stacks. The explicit row and
+            column starts are what let the same element sit beside the article
+            at `xl` and under it at `lg` without duplicating it.
           */}
-          <div className="mt-12 grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(13rem,18rem)_minmax(0,1fr)] xl:gap-x-20">
-            <div className="hero-item space-y-8 [animation-delay:380ms] lg:sticky lg:top-24">
+          <div className="mt-12 grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(13rem,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(13rem,15rem)_minmax(0,48rem)_minmax(15rem,1fr)] xl:gap-x-10 2xl:grid-cols-[minmax(13rem,15rem)_minmax(0,54rem)_minmax(15rem,1fr)]">
+            {/*
+              Spans every row so the sticky rail keeps its grip past the end of
+              the article. A grid item sticks within its own grid area, so a
+              rail confined to row 1 would come unstuck at the comments.
+            */}
+            <div className="hero-item space-y-8 [animation-delay:380ms] lg:sticky lg:top-24 lg:row-span-3 xl:row-span-2">
               <PostMeta post={post} />
               {contents ? (
                 <div className="hidden lg:block">
                   <TableOfContents headings={headings} />
-                </div>
-              ) : null}
-              {series && post.series ? (
-                <div className="hidden lg:block">
-                  <SeriesNav
-                    series={post.series}
-                    posts={seriesPosts}
-                    currentSlug={post.slug}
-                  />
                 </div>
               ) : null}
             </div>
@@ -198,7 +260,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
               the line stays the same length in characters while the column
               uses more of the room it has.
             */}
-            <div className="hero-item min-w-0 max-w-[48rem] text-[1.0625rem] [animation-delay:440ms] 2xl:max-w-[54rem] 2xl:text-lg">
+            <div className="hero-item min-w-0 max-w-[48rem] text-[1.0625rem] [animation-delay:440ms] lg:col-start-2 lg:row-start-1 2xl:max-w-[54rem] 2xl:text-lg">
               {body.problem ? (
                 /*
                   Shown to everyone, not just the author. A post whose MDX did
@@ -219,18 +281,35 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
                 content, and every rule in that stylesheet is a direct-child
                 selector. See lib/mdx.tsx.
               */}
-              {body.content}
+              <div lang={langAttribute(post.language)}>{body.content}</div>
 
               {post.series && seriesPosts.length > 0 ? (
                 <SeriesSteps posts={seriesPosts} currentSlug={post.slug} />
               ) : null}
+            </div>
 
-              <div className="mt-12">
-                <Rating postId={post.id} />
-              </div>
+            <aside className="hero-item min-w-0 space-y-8 [animation-delay:500ms] lg:col-start-2 lg:row-start-2 lg:max-w-[48rem] xl:sticky xl:top-24 xl:col-start-3 xl:row-span-2 xl:row-start-1 xl:max-w-none">
+              {series && post.series ? (
+                /*
+                  Only in the rail. Below `xl` the same information is already
+                  at the foot of the article as `SeriesSteps`, which is the
+                  version written for someone who has finished reading.
+                */
+                <div className="hidden xl:block">
+                  <SeriesNav
+                    series={post.series}
+                    posts={seriesPosts}
+                    currentSlug={post.slug}
+                  />
+                </div>
+              ) : null}
+
+              <Rating postId={post.id} />
 
               <RelatedPosts post={post} posts={allPosts} />
+            </aside>
 
+            <div className="min-w-0 max-w-[48rem] lg:col-start-2 lg:row-start-3 xl:row-start-2 2xl:max-w-[54rem]">
               <CommentThread postId={post.id} comments={comments} />
             </div>
           </div>

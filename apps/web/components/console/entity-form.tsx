@@ -31,13 +31,14 @@ import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/cn";
 import {
   INITIAL_CONTENT_STATE,
+  type Choices,
   type ContentState,
   type EntitySpec,
   type FieldSpec,
   type Values,
   groupsFor,
 } from "@/lib/content-schema";
-import type { SeriesRef, TagRef } from "@/lib/types";
+import { languageFor } from "@/lib/languages";
 
 export function EntityForm({
   spec,
@@ -64,7 +65,7 @@ export function EntityForm({
    * down rather than baked into the description. Empty for every entity that
    * has no such field, which is all of them but posts.
    */
-  choices?: { tags: TagRef[]; series: SeriesRef[] };
+  choices?: Choices;
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL_CONTENT_STATE);
 
@@ -134,6 +135,7 @@ export function EntityForm({
                     value={values[field.name] ?? ""}
                     error={errors[field.name]}
                     choices={choices}
+                    slug={slug}
                   />
                 </div>
               ))}
@@ -231,11 +233,14 @@ function Control({
   value,
   error,
   choices,
+  slug,
 }: {
   field: FieldSpec;
   value: string;
   error?: string;
-  choices?: { tags: TagRef[]; series: SeriesRef[] };
+  choices?: Choices;
+  /** The slug of the row being edited, so it can be kept out of its own picker. */
+  slug?: string;
 }) {
   // Every control gets these three the same way, which is the point of pulling
   // them out: `hint` used to be handed to `meta` here and to `hint` in one
@@ -304,6 +309,31 @@ function Control({
               value: entry.slug,
               label: entry.title,
             })),
+          ]}
+          defaultValue={value}
+        />
+      );
+
+    case "translation":
+      return (
+        <SelectField
+          {...shared}
+          options={[
+            // A real choice, like the series one: picking it unlinks the post
+            // and makes it an original again.
+            { value: "", label: "Not a translation" },
+            ...(choices?.posts ?? [])
+              // A post cannot be a translation of itself. The API refuses it
+              // too — this is so it is not offered, rather than offered and
+              // then rejected on save.
+              .filter((entry) => entry.slug !== slug)
+              .map((entry) => ({
+                value: entry.slug,
+                // The language is what tells two versions of the same article
+                // apart, and they have the same title by definition. Without
+                // it the picker is a list of duplicates.
+                label: `${languageFor(entry.language).englishName} — ${entry.title}`,
+              })),
           ]}
           defaultValue={value}
         />

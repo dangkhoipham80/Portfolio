@@ -38,8 +38,18 @@ export function RelatedPosts({
   const mine = new Set(post.tags.map((tag) => tag.slug));
   if (mine.size === 0) return null;
 
+  /*
+    This post, and the same writing in another language.
+
+    A translation carries its original's tags, so it scores as the most related
+    thing on the site to the post it *is* — and it would be offered as further
+    reading directly under a switcher that already offers it, which reads as a
+    suggestion to read the article again.
+  */
+  const same = new Set([post.slug, ...post.translations.map((other) => other.slug)]);
+
   const related = posts
-    .filter((candidate) => candidate.slug !== post.slug)
+    .filter((candidate) => !same.has(candidate.slug))
     .map((candidate) => ({
       post: candidate,
       shared: candidate.tags.filter((tag) => mine.has(tag.slug)).length,
@@ -58,7 +68,10 @@ export function RelatedPosts({
   if (related.length === 0) return null;
 
   return (
-    <section aria-labelledby="related-heading" className="mt-16">
+    // No top margin of its own: this sits in a rail that spaces its own
+    // children, and a margin here would only be right in one of the two places
+    // that rail renders.
+    <section aria-labelledby="related-heading">
       <div className="flex items-center gap-4">
         <Eyebrow as="h2" id="related-heading" className="text-foreground">
           Related
@@ -66,7 +79,12 @@ export function RelatedPosts({
         <span aria-hidden="true" className="h-px flex-1 bg-border" />
       </div>
 
-      <ul className="mt-4 grid gap-4 sm:grid-cols-3">
+      {/*
+        Three across when this sits in the article's flow, one above the next
+        when it sits in the right rail at `xl` — same three cards, laid out for
+        the width they are given rather than duplicated for it.
+      */}
+      <ul className="mt-4 grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
         {related.map(({ post: entry, shared }) => (
           <li key={entry.slug}>
             <Link

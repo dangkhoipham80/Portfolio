@@ -16,17 +16,24 @@
  * column to a table is one entry in this file rather than an edit in four
  * places, and every screen gets it at once.
  *
- * ## Why this file has no imports
+ * ## Why this file imports almost nothing
  *
  * Same reason as lib/contact.ts: it is used by the browser (the form) and by
  * the server (the action that receives the form), so the two cannot disagree
  * about what a valid value is. Anything the browser enforces can be skipped by
  * posting the form directly, so the server runs the identical function.
  *
+ * The one import is lib/languages.ts, which is a list of constants with no
+ * dependencies of its own — safe in either place. Nothing that reads
+ * `process.env` or is marked `server-only` may be added here: it would either
+ * break the client build or silently read as undefined in the browser.
+ *
  * The maximums mirror the column widths in apps/api/app/models/portfolio.py.
  * Being stricter here than the API rejects values the API would accept; being
  * looser hands the admin a 500 that could have been a sentence under the field.
  */
+
+import { LANGUAGES } from "./languages";
 
 export type FieldKind =
   | "text"
@@ -80,7 +87,17 @@ export type FieldKind =
    * A `select` whose options come from the API rather than from this file,
    * which is the only reason it is its own kind.
    */
-  | "series";
+  | "series"
+  /**
+   * The slug of the post this one is a translation of, or empty for "this is
+   * an original".
+   *
+   * Same shape as `series` and for the same reason — the options are the posts
+   * that exist, which this file cannot know. The API normalises a pick that is
+   * itself a translation to *its* original, so the set of versions stays one
+   * level deep however the admin fills this in.
+   */
+  | "translation";
 
 export type FieldSpec = {
   name: string;
@@ -330,6 +347,33 @@ const ENTITY_DEFINITIONS: Omit<EntitySpec, "fields">[] = [
           SLUG,
           { name: "cover_image", label: "Cover image", kind: "image", maxLength: 500 },
           {
+            name: "language",
+            label: "Language",
+            kind: "select",
+            required: true,
+            span: "half",
+            options: LANGUAGES.map((language) => ({
+              value: language.code,
+              // Named in itself, with the English name after it only when that
+              // is not the same string — "English (English)" is noise, and a
+              // list where one row is doubled and another is not reads as a
+              // mistake rather than a convention.
+              label:
+                language.label === language.englishName
+                  ? language.label
+                  : `${language.label} — ${language.englishName}`,
+            })),
+            hint: "What the post is written in. Sets the page's lang attribute, so a screen reader pronounces it correctly.",
+          },
+          {
+            name: "author_name",
+            label: "Author",
+            kind: "text",
+            maxLength: 120,
+            span: "half",
+            hint: "Leave empty to credit the site owner. Fill it in for a guest post, or to credit a translator.",
+          },
+          {
             name: "tag_slugs",
             label: "Tags",
             kind: "tags",
@@ -381,6 +425,18 @@ const ENTITY_DEFINITIONS: Omit<EntitySpec, "fields">[] = [
             kind: "number",
             span: "half",
             hint: "Lowest first. Ignored when the post is not in a series.",
+          },
+        ],
+      },
+      {
+        label: "Translation",
+        hint: "A translation is its own post — its own slug, body and draft state. Point it at the original here and the two link to each other on the public page.",
+        fields: [
+          {
+            name: "translation_of_slug",
+            label: "Translation of",
+            kind: "translation",
+            hint: "Leave empty when this post is an original. Picking a post that is itself a translation files this one under that post's original instead, so a set of versions never becomes a chain.",
           },
         ],
       },
@@ -644,6 +700,23 @@ export function groupsFor(spec: EntitySpec, mode: "create" | "edit"): FieldGroup
     .filter((group) => group.fields.length > 0);
 }
 
+/** A post as the translation picker needs it: enough to label a choice. */
+export type PostChoice = { slug: string; title: string; language: string };
+
+/**
+ * The options a form needs that this file cannot know.
+ *
+ * Declared here rather than beside the fetcher in lib/console-choices.ts,
+ * because that module is `server-only` and the form rendering these options is
+ * a client component. A type-only import would erase, but the shape belongs
+ * with the field descriptions that consume it either way.
+ */
+export type Choices = {
+  tags: { id: number; slug: string; name: string }[];
+  series: { id: number; slug: string; title: string }[];
+  posts: PostChoice[];
+};
+
 export type Values = Record<string, string>;
 export type Errors = Record<string, string>;
 
@@ -747,6 +820,14 @@ export function toValues(spec: EntitySpec, record: Record<string, unknown>): Val
     if (field.kind === "series") {
       const series = record.series as { slug?: unknown } | null | undefined;
       values[field.name] = typeof series?.slug === "string" ? series.slug : "";
+      continue;
+    }
+
+    // Third of the same kind: the payload posts `translation_of_slug` and the
+    // response carries `translation_of` as an object.
+    if (field.kind === "translation") {
+      const original = record.translation_of as { slug?: unknown } | null | undefined;
+      values[field.name] = typeof original?.slug === "string" ? original.slug : "";
       continue;
     }
 
