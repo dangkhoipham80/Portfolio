@@ -68,9 +68,8 @@ export function RelatedPosts({
   if (related.length === 0) return null;
 
   return (
-    // No top margin of its own: this sits in a rail that spaces its own
-    // children, and a margin here would only be right in one of the two places
-    // that rail renders.
+    // No top margin of its own: the page rendering this decides how far it sits
+    // from what precedes it, which is not the same distance everywhere.
     <section aria-labelledby="related-heading">
       <div className="flex items-center gap-4">
         <Eyebrow as="h2" id="related-heading" className="text-foreground">
@@ -80,11 +79,12 @@ export function RelatedPosts({
       </div>
 
       {/*
-        Three across when this sits in the article's flow, one above the next
-        when it sits in the right rail at `xl` — same three cards, laid out for
-        the width they are given rather than duplicated for it.
+        Three across from `sm` up. It was also `xl:grid-cols-1`, for the right
+        rail this used to render into; that rail is gone and the override with
+        it, which is why the cards now stay a row rather than collapsing back
+        into a stack on the widest screens.
       */}
-      <ul className="mt-4 grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+      <ul className="mt-4 grid gap-4 sm:grid-cols-3">
         {related.map(({ post: entry, shared }) => (
           <li key={entry.slug}>
             <Link

@@ -97,6 +97,25 @@
   --measure: 50ch;
 
   /*
+   * The article's own measure, which is wider than the one above and answers a
+   * different question — that one caps a blurb, this one caps a body of
+   * technical prose that also contains code.
+   *
+   * The two numbers are not new: they are what the post page already set on its
+   * article column, as `max-w-[48rem]` and `2xl:max-w-[54rem]`. What is new is
+   * that the *column* no longer carries them. It is now the whole width the
+   * rail leaves, and the cap has moved onto the text inside it, so a table or a
+   * diagram can use the room the paragraphs do not want.
+   *
+   * In the `--container-*` namespace, so they are `max-w-measure` and
+   * `max-w-measure-wide` in a class as well as variables in CSS. A number
+   * needed in a stylesheet and in markup is a token; the same number written
+   * out in both places is how the two drift apart.
+   */
+  --container-measure: 48rem;
+  --container-measure-wide: 54rem;
+
+  /*
    * Two faces, three roles.
    *
    * Display and body are the same family at different weights: Be Vietnam Pro,
@@ -768,10 +787,59 @@
      * element's inline size — the article column, whatever the grid made it.
      */
     container-type: inline-size;
+    /*
+     * A bare URL in a footnote is one word, and one word does not wrap. The ETF
+     * post cites `static2.vietstock.vn/vietstock/2024/…` and pushed the
+     * *document* to 1720px at a 1440px viewport — the whole page scrolling
+     * sideways because of a link at the bottom of it. Breaking is only ever a
+     * fallback: `break-word` leaves ordinary prose alone and splits a word
+     * exactly when there is no other way to fit it.
+     */
+    overflow-wrap: break-word;
   }
 
   .article-prose > * + * {
     margin-top: 1.25em;
+  }
+
+  /*
+   * A wide column, a narrow measure, and the exceptions to it.
+   *
+   * The measure used to sit on the article column itself, which meant it was
+   * also the width of every table and every diagram in the post. A five-column
+   * table of ETF fees has a max-content width of 1340px; given 768 it scrolled
+   * sideways, and widening the column to fix that would have set the prose in
+   * 140-character lines. The two things want different widths, so they get
+   * different widths: the column is now everything the rail leaves, the cap is
+   * on the text, and what is not text is let past it.
+   *
+   * Direct children only, like every other rule here — a `<td>` is not text
+   * that wants a measure, it is a cell inside a block that has already made
+   * this decision.
+   */
+  .article-prose > * {
+    max-width: var(--container-measure);
+  }
+
+  .article-prose > pre,
+  .article-prose > figure,
+  .article-prose > img,
+  .article-prose > [data-table-scroll] {
+    max-width: none;
+  }
+
+  /*
+   * The type steps up on a very wide screen, so the measure holding it does
+   * too — the line stays the same length in characters.
+   *
+   * The four exceptions above survive this without being repeated: `*` carries
+   * no specificity, so `.article-prose > pre` outranks `.article-prose > *`
+   * whichever one a media query moves.
+   */
+  @media (min-width: 96rem) {
+    .article-prose > * {
+      max-width: var(--container-measure-wide);
+    }
   }
 
   .article-prose h2,
@@ -1159,6 +1227,29 @@
     min-width: 100%;
     border-collapse: collapse;
     font-size: 0.875rem;
+  }
+
+  /*
+   * Above `lg`, the table wraps instead of scrolling.
+   *
+   * `max-content` is right on a phone and wrong on a desktop. A cell holding a
+   * sentence — "Nhóm cổ phiếu đáp ứng bộ tiêu chí VNDiamond" — has a
+   * max-content width of that whole sentence on one line, so a five-column
+   * table of them asks for 1340px whatever it is given, and the reader drags a
+   * scrollbar to read a paragraph. Here there is room to wrap it, so it wraps.
+   *
+   * Below `lg` nothing changes: the column is a phone's width, wrapping five
+   * columns into 375px gives a table two words wide and a dozen lines tall, and
+   * the scrolling box is the better answer. Same split as the `pre` clamp
+   * above, for the same reason.
+   *
+   * The wrapper stays either way — a table whose *min* content still exceeds
+   * the column scrolls rather than pushing the page sideways.
+   */
+  @media (min-width: 64rem) {
+    .article-prose table {
+      width: 100%;
+    }
   }
 
   .article-prose th,
