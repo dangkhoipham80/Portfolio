@@ -1,3 +1,10 @@
+// KaTeX's own stylesheet. Route-scoped rather than global: it is 23kB plus a
+// font family, and this is the only public page that can contain a formula.
+// Next resolves the font URLs inside it, which is why it is imported here as a
+// module rather than `@import`-ed into globals.css — that would flatten the
+// text into a stylesheet in another directory and leave the fonts 404ing.
+import "katex/dist/katex.min.css";
+
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";

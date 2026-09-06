@@ -1,3 +1,10 @@
+// KaTeX's own stylesheet, for the body editor's preview — the preview runs the
+// real renderer, so it has to carry the real styles or an author checking a
+// formula sees it unstyled and assumes it is broken. Imported per area rather
+// than globally: it is 23kB plus a font family, and no page outside a post body
+// has any maths on it.
+import "katex/dist/katex.min.css";
+
 import type { Metadata } from "next";
 
 import { SkipLink } from "@/components/skip-link";

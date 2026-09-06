@@ -8,6 +8,8 @@ import { MDX_COMPONENTS } from "@/components/mdx-blocks";
 
 import {
   anchorHeadings,
+  displayMathBlocks,
+  katexOptions,
   labelCodeBlocks,
   markExternalLinks,
   renderMarkdown,
@@ -133,12 +135,24 @@ async function renderMdx(body: string): Promise<ReactNode> {
     remarkPlugins: [
       // First, so nothing executable reaches a later plugin — or the compiler.
       rejectExecutableMdx,
+      /*
+        Same settings as the Markdown pipeline, and here it is load-bearing
+        rather than a convenience: `$$…{,}…$$` contains a brace pair, and in MDX
+        a brace pair is an expression. The maths extension consumes the whole
+        delimited span while parsing, so nothing inside a formula is ever read
+        as MDX; without it, `2{,}48` would compile as JavaScript, the guard
+        above would reject it, and the post would fall back to Markdown and
+        render its own source.
+      */
+      [(await import("remark-math")).default, { singleDollarTextMath: false }],
       (await import("remark-gfm")).default,
     ],
     rehypePlugins: [
       // Before the highlighter, for the reason lib/markdown.ts gives. There is
       // no sanitiser on this path, so this is simply first.
       renderSequenceDiagrams,
+      displayMathBlocks,
+      [(await import("rehype-katex")).default, katexOptions],
       [(await import("@shikijs/rehype")).default, shikiOptions],
       // Both of these were missing, which is why an MDX post had no `data-lang`
       // labels on its fences and no ids on its headings — so its table of

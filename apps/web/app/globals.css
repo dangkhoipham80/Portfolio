@@ -1269,6 +1269,39 @@
   }
 
   /*
+   * Maths, rendered by KaTeX — two corrections to its stylesheet, no more.
+   *
+   * KaTeX ships a complete set of its own type, which is the point of using it:
+   * a fraction bar and an integral sign are not things this palette has an
+   * opinion about. What it also ships is its own spacing, which is where it
+   * collides with the rhythm above. `> * + *` already puts 1.25em between every
+   * pair of siblings, and KaTeX's own 1em on top of that made an equation float
+   * away from the sentence introducing it.
+   *
+   * The scroll box is the same bargain the tables strike. A long derivation has
+   * no wrapping point — it is one line by construction — so when it does not
+   * fit, something has to give, and a box that scrolls costs less than a page
+   * that does. `padding-block` keeps a descender from being clipped by the
+   * overflow.
+   */
+  .article-prose .katex-display {
+    margin: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: 0.5rem;
+  }
+
+  /*
+   * A formula KaTeX could not parse, printed as its own source. It is already
+   * on the destructive token via `errorColor` in lib/markdown.ts; the face is
+   * what says "this is source, not prose", the same as any other code inline.
+   */
+  .article-prose .katex-error {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+  }
+
+  /*
    * How far through the post you are, as a line across the top of the window.
    *
    * Scroll-driven, so it costs no JavaScript — the same technique the skill
