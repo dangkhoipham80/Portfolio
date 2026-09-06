@@ -1,3 +1,10 @@
+// KaTeX's own stylesheet. Route-scoped rather than global: it is 23kB plus a
+// font family, and this is the only public page that can contain a formula.
+// Next resolves the font URLs inside it, which is why it is imported here as a
+// module rather than `@import`-ed into globals.css — that would flatten the
+// text into a stylesheet in another directory and leave the fonts 404ing.
+import "katex/dist/katex.min.css";
+
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -207,41 +214,51 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
           </div>
 
           {/*
-            Two columns at `lg`, three at `xl`, and at `xl` both margins are
-            occupied rather than one.
+            One rail and one column, and the column gets everything else.
 
-            The two-column version still stopped short: the article's measure is
-            capped for readability, so at 1440px the column it sits in ran 241px
-            wider than the article inside it and that strip was empty — measured,
-            not estimated. Widening the measure again is not the answer; 48rem at
-            17px is already ~82 characters, past the rule and deliberately so
-            because this column holds code.
+            This was three columns: a rail, a fixed 48rem article, and a right
+            rail holding the series nav, the rating and the related posts. That
+            arrangement filled the empty strip down the right, which is what it
+            was for — but it filled it with furniture, and left the article
+            capped at a width the article's own contents did not fit in. A
+            five-column table of ETF fees wants 1340px. It had 768, and scrolled
+            sideways, with a star control sitting in the room it needed.
 
-            So the third column takes the strip and holds the article's
-            furniture: the series nav, the related posts and the rating. All
-            three were stacked under the prose before, so nothing was invented
-            to fill the space — it was moved to where the space is. The rating
-            is always rendered, so the column is never reserved for an empty
-            rail, which is the same rule the left one already passed.
+            So the furniture moves back under the article, in the order a reader
+            meets it: the writing, then what it was part of, then "was this
+            useful", then the discussion, then what to read next. The column is
+            now the whole remainder, and the measure is enforced on the text
+            rather than on the column — paragraphs keep the same 48rem line they
+            had, tables and diagrams get the rest. That split lives in
+            `.article-prose` in globals.css.
 
-            The gap narrows from 20 to 10 at `xl` for the same reason: with
-            three columns there are two of them, and 80px twice is 160px taken
-            off the rail that needs 240 to hold a five-star control.
+            The rail keeps what orients a reader: the post's own facts, the
+            series it belongs to, and its contents.
 
-            One DOM node each, not a desktop copy and a mobile copy. Below `xl`
-            the rail is simply the next thing in the flow, and below `lg` the
-            whole grid is one column and it all stacks. The explicit row and
-            column starts are what let the same element sit beside the article
-            at `xl` and under it at `lg` without duplicating it.
+            Two grid children, so the sticky rail keeps its grip to the foot of
+            the page for free — everything after the article is inside the
+            second child rather than in rows of its own, and a grid item can
+            only stick within its own area.
           */}
-          <div className="mt-12 grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(13rem,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(13rem,15rem)_minmax(0,48rem)_minmax(15rem,1fr)] xl:gap-x-10 2xl:grid-cols-[minmax(13rem,15rem)_minmax(0,54rem)_minmax(15rem,1fr)]">
-            {/*
-              Spans every row so the sticky rail keeps its grip past the end of
-              the article. A grid item sticks within its own grid area, so a
-              rail confined to row 1 would come unstuck at the comments.
-            */}
-            <div className="hero-item space-y-8 [animation-delay:380ms] lg:sticky lg:top-24 lg:row-span-3 xl:row-span-2">
+          <div className="mt-12 grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(13rem,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(13rem,15rem)_minmax(0,1fr)] xl:gap-x-10">
+            <div className="hero-item space-y-8 [animation-delay:380ms] lg:sticky lg:top-24">
               <PostMeta post={post} />
+
+              {/*
+                The whole run of the series, in the rail rather than under the
+                article — it is orientation for someone who arrived at part 3
+                from a search result, so it has to be readable before the post
+                is, not after. `SeriesSteps` at the foot is the other half:
+                previous and next, where the reader who finished is looking.
+              */}
+              {series && post.series ? (
+                <SeriesNav
+                  series={post.series}
+                  posts={seriesPosts}
+                  currentSlug={post.slug}
+                />
+              ) : null}
+
               {contents ? (
                 <div className="hidden lg:block">
                   <TableOfContents headings={headings} />
@@ -250,17 +267,15 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
             </div>
 
             {/*
-              The article's measure. 48rem at 17px is ~82 characters — past
-              the reading-measure rule's 80, on purpose: this column also
-              holds code, and every rem taken off it puts another line of a
-              snippet behind a horizontal scroll. Wider than the 42rem it was,
-              because the column it sits in is now most of the screen and a
-              measure that ignores that reads as the old layout with the box
-              removed. On a 2xl screen the type steps up with the measure, so
-              the line stays the same length in characters while the column
-              uses more of the room it has.
+              No measure on this column any more — it is the width the rail
+              leaves, and the cap has moved inside, onto the text. 48rem at 17px
+              is ~82 characters, past the reading-measure rule's 80 and on
+              purpose, because this article also holds code; the tokens carrying
+              it are in globals.css. What stays here is the type, which steps up
+              at 2xl along with the measure so the line keeps its length in
+              characters while the column uses more of the room it has.
             */}
-            <div className="hero-item min-w-0 max-w-[48rem] text-[1.0625rem] [animation-delay:440ms] lg:col-start-2 lg:row-start-1 2xl:max-w-[54rem] 2xl:text-lg">
+            <div className="hero-item min-w-0 text-[1.0625rem] [animation-delay:440ms] lg:col-start-2 lg:row-start-1 2xl:text-lg">
               {body.problem ? (
                 /*
                   Shown to everyone, not just the author. A post whose MDX did
@@ -286,31 +301,31 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
               {post.series && seriesPosts.length > 0 ? (
                 <SeriesSteps posts={seriesPosts} currentSlug={post.slug} />
               ) : null}
-            </div>
 
-            <aside className="hero-item min-w-0 space-y-8 [animation-delay:500ms] lg:col-start-2 lg:row-start-2 lg:max-w-[48rem] xl:sticky xl:top-24 xl:col-start-3 xl:row-span-2 xl:row-start-1 xl:max-w-none">
-              {series && post.series ? (
-                /*
-                  Only in the rail. Below `xl` the same information is already
-                  at the foot of the article as `SeriesSteps`, which is the
-                  version written for someone who has finished reading.
-                */
-                <div className="hidden xl:block">
-                  <SeriesNav
-                    series={post.series}
-                    posts={seriesPosts}
-                    currentSlug={post.slug}
-                  />
-                </div>
-              ) : null}
+              {/*
+                Held to the measure rather than the column. Five stars and a
+                distribution of five bars stretched across the full width reads
+                as a chart of something; at the width of the paragraph above it,
+                it reads as a question about that paragraph — which is what it
+                is. Same for the comment form, which is a place to write prose.
+              */}
+              <div className="hero-item mt-14 max-w-measure [animation-delay:500ms] 2xl:max-w-measure-wide">
+                <Rating postId={post.id} />
+              </div>
 
-              <Rating postId={post.id} />
+              <div className="mt-14 max-w-measure 2xl:max-w-measure-wide">
+                <CommentThread postId={post.id} comments={comments} />
+              </div>
 
-              <RelatedPosts post={post} posts={allPosts} />
-            </aside>
-
-            <div className="min-w-0 max-w-[48rem] lg:col-start-2 lg:row-start-3 xl:row-start-2 2xl:max-w-[54rem]">
-              <CommentThread postId={post.id} comments={comments} />
+              {/*
+                Full width, unlike the two above: three cards across the column
+                is the shape this already had at `sm`, and it is the last thing
+                on the page, so widening rather than narrowing is the right way
+                to end.
+              */}
+              <div className="mt-14">
+                <RelatedPosts post={post} posts={allPosts} />
+              </div>
             </div>
           </div>
 

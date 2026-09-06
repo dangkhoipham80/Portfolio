@@ -2,9 +2,11 @@ import "server-only";
 
 import rehypeShiki, { type RehypeShikiOptions } from "@shikijs/rehype";
 import type { Element, Root } from "hast";
-import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import rehypeKatex from "rehype-katex";
+import rehypeSanitize, { defaultSchema, type Options as Schema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
@@ -95,17 +97,7 @@ export function labelCodeBlocks() {
         };
       }
 
-      // Shiki writes the class under the raw `class` key as a single string;
-      // remark-rehype writes `className` as an array. Accept all of it —
-      // this runs after either producer.
-      const raw = code.properties?.className ?? code.properties?.["class"];
-      const classes = Array.isArray(raw)
-        ? raw
-        : typeof raw === "string"
-          ? raw.split(" ")
-          : [];
-
-      for (const entry of classes) {
+      for (const entry of classesOf(code)) {
         const match = LANGUAGE_CLASS.exec(String(entry));
         if (!match) continue;
 
@@ -131,7 +123,7 @@ export function labelCodeBlocks() {
  * links to them — the sanitiser runs first, so without this the anchors would
  * survive exactly until the next paragraph of this file was believed.
  */
-export const sanitiseSchema = {
+export const sanitiseSchema: Schema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
@@ -139,7 +131,42 @@ export const sanitiseSchema = {
     a: [...(defaultSchema.attributes?.a ?? []), "target", "rel"],
     h2: [...(defaultSchema.attributes?.h2 ?? []), "id"],
     h3: [...(defaultSchema.attributes?.h3 ?? []), "id"],
+    /*
+      The default schema allows one shape of class on a `code` — `language-*` —
+      and drops everything else. `remark-math` marks a formula by putting
+      `math-inline` or `math-display` there, and KaTeX finds formulas by looking
+      for exactly those two, so a sanitiser that strips them leaves the LaTeX
+      source sitting on the page as text. Three literal values, not a pattern:
+      nothing else needs a class here.
+    */
+    code: [["className", /^language-./, "math-inline", "math-display"]],
   },
+};
+
+/**
+ * KaTeX's settings, shared with the MDX pipeline the same way Shiki's are.
+ *
+ * `throwOnError` is off because a post body is not a build input: an unbalanced
+ * brace in one formula would otherwise throw at render and take the whole
+ * article down, which is the failure mode lib/api.ts's fallbacks exist to rule
+ * out. What happens instead is the plugin's own error path — the source printed
+ * in `errorColor`, with the parse error in a `title` — so the reader sees that
+ * something is wrong and the author can see what.
+ *
+ * `errorColor` is the token rather than KaTeX's default red, which is a hex
+ * that answers to nothing in this palette. The variable is defined globally, so
+ * the inline style KaTeX writes resolves in both themes.
+ *
+ * `strict: false` because these posts are written in Vietnamese. KaTeX's strict
+ * mode warns on any character outside its own metrics tables, and `\text{tỷ}` —
+ * "billion" — is three of them in one word. The glyphs render; the warning is
+ * only about KaTeX not knowing their exact widths, which a console full of
+ * warnings per page is not going to fix.
+ */
+export const katexOptions = {
+  throwOnError: false,
+  errorColor: "hsl(var(--destructive-text))",
+  strict: false as const,
 };
 
 /**
@@ -246,6 +273,106 @@ export function scrollableTables() {
 }
 
 /**
+ * A paragraph that is nothing but formulas becomes display maths.
+ *
+ * `remark-math` decides between inline and display on syntax alone: `$$…$$`
+ * spanning its own lines is a block, and `$$…$$` opened and closed on one line
+ * is inline — even when that line is the entire paragraph. Which means the two
+ * compound-interest lines in the ETF post,
+ *
+ * ```
+ * $$1.000.000.000 \times (1+9{,}5\%)^{10} \approx 2{,}48\ \text{tỷ}$$
+ * $$1.000.000.000 \times (1+8{,}0\%)^{10} \approx 2{,}16\ \text{tỷ}$$
+ * ```
+ *
+ * would render as two inline formulas run together on one line with a space
+ * between them, at body size. Nobody writing that means "inline"; `$$` is the
+ * display delimiter everywhere it exists, and a formula alone in a paragraph is
+ * a displayed equation by definition.
+ *
+ * So a paragraph holding only formulas — plus the whitespace and line breaks
+ * between them — is replaced by those formulas as blocks. A paragraph with a
+ * sentence in it is left exactly alone, which is what keeps `$$x$$` inline.
+ *
+ * ## Why this works on the HTML rather than on the Markdown
+ *
+ * The first version ran in remark and built `{type: "math"}` nodes, which
+ * looked like the tidier place to do it and rendered the LaTeX source as plain
+ * text on the page. An mdast maths node is not just a type and a value: it
+ * carries `data.hName` and `data.hChildren` describing the element it becomes,
+ * written by `mdast-util-math` while parsing, and a node assembled without them
+ * falls through to the handler for unknown nodes — which emits the value as
+ * text. Nothing failed; the article simply printed `\approx`.
+ *
+ * Here the shape is the contract instead: the classes below are what
+ * `rehype-katex` looks for, and they are also what the sanitiser has just been
+ * asked to preserve. Rewriting one class is a smaller thing to get wrong than
+ * reconstructing a node another package owns.
+ */
+export function displayMathBlocks() {
+  return (tree: Root) => {
+    visit(tree, "element", (node: Element, index, parent) => {
+      if (node.tagName !== "p" || !parent || index === undefined) return;
+
+      const formulas: Element[] = [];
+
+      for (const child of node.children) {
+        // The gaps: the newline between two formulas, and the hard break that
+        // gap becomes if the author ended the line with two spaces.
+        if (child.type === "text" && child.value.trim() === "") continue;
+        if (child.type === "element" && child.tagName === "br") continue;
+
+        if (child.type === "element" && classesOf(child).includes("math-inline")) {
+          formulas.push(child);
+          continue;
+        }
+
+        // Anything else — a word, a link, an image — means the formula is part
+        // of a sentence and belongs in the line it was written on.
+        return;
+      }
+
+      if (formulas.length === 0) return;
+
+      parent.children.splice(index, 1, ...formulas.map(displayed));
+
+      // Where to carry on from. The nodes just spliced in are `pre`, not `p`,
+      // so there is nothing in them for this visitor to find.
+      return index + formulas.length;
+    });
+  };
+}
+
+/** A formula, in the exact shape `mdast-util-math` gives a `$$` block. */
+function displayed(code: Element): Element {
+  return {
+    type: "element",
+    tagName: "pre",
+    properties: {},
+    children: [
+      {
+        ...code,
+        properties: { ...code.properties, className: ["language-math", "math-display"] },
+      },
+    ],
+  };
+}
+
+/**
+ * An element's classes, however the producer wrote them.
+ *
+ * Shiki writes the attribute under the raw `class` key as a single string;
+ * remark-rehype writes `className` as an array. Both callers here run after one
+ * producer or the other, so both forms have to be accepted.
+ */
+function classesOf(node: Element): string[] {
+  const raw = node.properties?.className ?? node.properties?.["class"];
+  if (Array.isArray(raw)) return raw.map(String);
+  if (typeof raw === "string") return raw.split(" ");
+  return [];
+}
+
+/**
  * Give every `h2` and `h3` the id its table-of-contents entry links to.
  *
  * The ids have to be derived the same way in two places that never see each
@@ -284,6 +411,18 @@ function textOf(node: Element): string {
 
 const processor = unified()
   .use(remarkParse)
+  /*
+   * LaTeX, with `$$` as the only delimiter.
+   *
+   * `singleDollarTextMath` is off, and that is the one judgement call here.
+   * With it on, `$` opens maths — and this blog writes about money, so "phí từ
+   * $5 đến $10" is a paragraph containing a perfectly well-formed inline
+   * formula reading "5 đến ", set in italics, with the dollar signs eaten. That
+   * is a silent corruption of prose that never mentioned maths. `$$` cannot be
+   * typed by accident, so it is the delimiter for both forms — inline inside a
+   * sentence, display when it is the whole paragraph.
+   */
+  .use(remarkMath, { singleDollarTextMath: false })
   // Tables, strikethrough, task lists and bare-URL autolinks. Plain CommonMark
   // has none of those, and a post that uses a table would render its pipes.
   .use(remarkGfm)
@@ -298,6 +437,19 @@ const processor = unified()
    * tree of coloured spans. See lib/sequence-diagram/plugin.ts.
    */
   .use(renderSequenceDiagrams)
+  /*
+   * The same bargain, for the same reasons. KaTeX emits spans, MathML and
+   * inline styles that the schema would strip if it ran last, all of it
+   * generated from text the sanitiser has already vetted — and it has to
+   * precede Shiki, because a maths block reaches this point as
+   * `<pre><code class="language-math">` and Shiki would highlight it as an
+   * unknown language and leave a code block where the equation should be.
+   *
+   * `displayMathBlocks` first: it decides which formulas KaTeX renders as
+   * blocks, by rewriting a class KaTeX has not looked at yet.
+   */
+  .use(displayMathBlocks)
+  .use(rehypeKatex, katexOptions)
   .use(rehypeShiki, shikiOptions)
   .use(labelCodeBlocks)
   .use(scrollableTables)

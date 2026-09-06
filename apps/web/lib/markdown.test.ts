@@ -116,6 +116,57 @@ describe("rendering", () => {
   });
 });
 
+/**
+ * LaTeX.
+ *
+ * The first of these is the one that broke on the real site: a formula rendered
+ * as its own source, because the sanitiser dropped the class KaTeX identifies a
+ * formula by. Nothing threw and nothing logged — the page simply showed the
+ * reader `\approx` and a pile of braces.
+ */
+describe("maths", () => {
+  it("renders a formula rather than its source", async () => {
+    const html = await renderMarkdown(String.raw`Inline $$a^2 + b^2 = c^2$$ here.`);
+
+    expect(html).toContain("katex");
+    expect(html).not.toContain("a^2 + b^2 = c^2</code>");
+  });
+
+  it("displays a formula that is a paragraph on its own", async () => {
+    const html = await renderMarkdown(
+      String.raw`$$1.000.000.000 \times (1+9{,}5\%)^{10} \approx 2{,}48\ \text{tỷ}$$`,
+    );
+
+    expect(html).toContain("katex-display");
+    // Vietnamese inside `\text{}` is outside KaTeX's metrics tables; it renders
+    // anyway, and `strict: false` is what keeps it from warning once per page.
+    expect(html).toContain("tỷ");
+  });
+
+  it("keeps a formula inside a sentence inline", async () => {
+    const html = await renderMarkdown(String.raw`The area is $$\pi r^2$$ exactly.`);
+
+    expect(html).toContain("katex");
+    expect(html).not.toContain("katex-display");
+  });
+
+  it("leaves single dollars alone, because they are prices", async () => {
+    const html = await renderMarkdown("Fees run from $5 to $10 a month.");
+
+    expect(html).not.toContain("katex");
+    expect(html).toContain("$5");
+    expect(html).toContain("$10");
+  });
+
+  it("prints a broken formula instead of throwing", async () => {
+    // A post body is not a build input. One unbalanced brace must cost the
+    // formula and not the article.
+    const html = await renderMarkdown(String.raw`$$\frac{1}{$$`);
+
+    expect(html).toContain("katex-error");
+  });
+});
+
 describe("plainText", () => {
   it("takes code fences out whole", () => {
     // A description opening with three backticks and a language name
