@@ -16,6 +16,44 @@ import { createPortal } from "react-dom";
 
 import { isCurrent, LINKS } from "@/components/nav-links";
 import { cn } from "@/lib/cn";
+import { useViewer } from "@/lib/viewer-store";
+
+/** The mono underline treatment the old "Console" link used, kept as one value. */
+const ACCOUNT_LINK =
+  "inline-flex min-h-11 items-center font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground underline underline-offset-4 transition-colors hover:text-primary";
+
+/**
+ * Sign in, or: your reading, and the console if this is the owner.
+ *
+ * Renders the signed-out link until the session answers — the correct state for
+ * most visitors, and a link that sends a signed-in one straight back out if it
+ * is briefly wrong. See lib/viewer-store.ts.
+ */
+function AccountLinks({ onNavigate }: { onNavigate: () => void }) {
+  const { status, viewer } = useViewer();
+
+  if (status !== "ready" || !viewer) {
+    return (
+      <Link href="/login" onClick={onNavigate} className={ACCOUNT_LINK}>
+        Sign in
+      </Link>
+    );
+  }
+
+  return (
+    <>
+      <Link href="/reading" onClick={onNavigate} className={ACCOUNT_LINK}>
+        Your reading
+        {viewer.streak > 0 ? ` · ${viewer.streak}d` : ""}
+      </Link>
+      {viewer.isAdmin ? (
+        <Link href="/admin" onClick={onNavigate} className={ACCOUNT_LINK}>
+          Console
+        </Link>
+      ) : null}
+    </>
+  );
+}
 
 export function MobileMenu() {
   const [open, setOpen] = useState(false);
@@ -114,14 +152,20 @@ export function MobileMenu() {
               );
             })}
 
-            <Link
-              href="/login"
-              onClick={() => setOpen(false)}
-              className="hero-item mt-8 inline-flex min-h-11 items-center font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground underline underline-offset-4 transition-colors hover:text-primary"
+            {/*
+              The account row, where the header's controls cannot fit.
+
+              In words rather than as a monogram: there is room here, and at
+              this size a 44px disc among 3xl display links would read as a
+              stray control. The entries are the same ones the header shows —
+              your reading, and for the owner the console.
+            */}
+            <div
+              className="hero-item mt-8 flex flex-wrap gap-x-6 gap-y-1"
               style={{ animationDelay: `${LINKS.length * 60}ms` }}
             >
-              Console
-            </Link>
+              <AccountLinks onNavigate={() => setOpen(false)} />
+            </div>
           </nav>
         </div>,
         document.body,

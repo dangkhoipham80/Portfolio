@@ -12,7 +12,7 @@ import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { SKIP, visit } from "unist-util-visit";
 
-import { slugifyHeading } from "./headings";
+import { type Heading, type HeadingLevel, slugifyHeading } from "./headings";
 import { renderSequenceDiagrams } from "./sequence-diagram/plugin";
 
 /**
@@ -115,6 +115,98 @@ export function labelCodeBlocks() {
 }
 
 /**
+ * Put a copy button in every code block.
+ *
+ * ## Why the button is emitted here rather than by a React component
+ *
+ * Because a post body is a string of HTML by the time it reaches the page —
+ * `dangerouslySetInnerHTML` on the Markdown path — so there is no component
+ * tree to put a button into. The alternatives were a client component that
+ * walks the DOM after mount and injects buttons (invisible to the server, and
+ * a flash of buttonless blocks on every post), or hydrating a component per
+ * fence, which is a React root per code block to run one `writeText`.
+ *
+ * So the markup is rendered on the server with the rest of the post, and one
+ * listener in the browser serves every block on the page. See
+ * components/blog/code-copy.tsx.
+ *
+ * ## Why the button lives inside the `<pre>`
+ *
+ * `.article-prose` styles direct children of the prose element — `> * + *` is
+ * what puts a gap between blocks — so wrapping each `pre` in a figure would put
+ * an element between every rule and the thing it styles. The same class of
+ * mistake as the `article-prose` wrapper note in lib/mdx.tsx, which cost every
+ * paragraph on the site its spacing.
+ *
+ * A `<button>` is phrasing content and is valid inside `<pre>`. It is absolutely
+ * positioned, so it is out of the text flow and the `white-space: pre` the
+ * block is set in never sees it.
+ *
+ * The one consequence that matters: `pre.textContent` now includes the word on
+ * the button. That is why the copy handler reads `pre > code` instead — which
+ * it would want to do anyway, since the code is what a reader asked for.
+ *
+ * ## Why it starts hidden
+ *
+ * `hidden` is removed on mount by the listener. Without JavaScript the button
+ * cannot do anything, and a control that does nothing when pressed is worse
+ * than no control.
+ *
+ * ## What does not get one
+ *
+ * A block with no `<code>` child. After `rehype-katex` a display formula is a
+ * `<pre>` full of KaTeX spans with no code element left, and "copy" on an
+ * equation would copy the rendered maths markup's text — the same check
+ * `labelCodeBlocks` already makes, for the same reason.
+ */
+export function copyableCodeBlocks() {
+  return (tree: Root) => {
+    visit(tree, "element", (node: Element) => {
+      if (node.tagName !== "pre") return;
+
+      const code = node.children.find(
+        (child): child is Element => child.type === "element" && child.tagName === "code",
+      );
+      if (!code) return;
+
+      node.properties = { ...node.properties, "data-code-block": "" };
+      node.children = [
+        {
+          type: "element",
+          tagName: "button",
+          properties: {
+            type: "button",
+            "data-copy": "",
+            hidden: true,
+            className: ["code-copy"],
+          },
+          // Two spans rather than one label swapped by script: the resting word
+          // and the confirmation are both in the markup, and CSS shows one at a
+          // time off `data-copied`. That keeps the button's width from jumping
+          // between "Copy" and "Copied" — and means the state is in the DOM
+          // where a test, and a screen reader, can see it.
+          children: [
+            {
+              type: "element",
+              tagName: "span",
+              properties: { className: ["code-copy-idle"] },
+              children: [{ type: "text", value: "Copy" }],
+            },
+            {
+              type: "element",
+              tagName: "span",
+              properties: { className: ["code-copy-done"] },
+              children: [{ type: "text", value: "Copied" }],
+            },
+          ],
+        },
+        ...node.children,
+      ];
+    });
+  };
+}
+
+/**
  * The sanitiser's schema, exported so the MDX pipeline uses the same one.
  *
  * Two copies of this would be two answers to "what markup may a post contain",
@@ -129,8 +221,13 @@ export const sanitiseSchema: Schema = {
     ...defaultSchema.attributes,
     // Every link out of a post body is untrusted by definition.
     a: [...(defaultSchema.attributes?.a ?? []), "target", "rel"],
+    // Every level `anchorHeadings` gives an id to has to be listed, or the
+    // sanitiser strips it and the contents list scrolls to nothing — silently,
+    // since neither the build nor the tests would notice an absent attribute.
+    h1: [...(defaultSchema.attributes?.h1 ?? []), "id"],
     h2: [...(defaultSchema.attributes?.h2 ?? []), "id"],
     h3: [...(defaultSchema.attributes?.h3 ?? []), "id"],
+    h4: [...(defaultSchema.attributes?.h4 ?? []), "id"],
     /*
       The default schema allows one shape of class on a `code` — `language-*` —
       and drops everything else. `remark-math` marks a formula by putting
@@ -372,32 +469,87 @@ function classesOf(node: Element): string[] {
   return [];
 }
 
+/** The heading levels a post's contents list is built from. */
+const HEADING_TAGS: Record<string, HeadingLevel> = { h1: 1, h2: 2, h3: 3, h4: 4 };
+
 /**
- * Give every `h2` and `h3` the id its table-of-contents entry links to.
+ * As much of a VFile as this module touches.
  *
- * The ids have to be derived the same way in two places that never see each
- * other's output — here, from the rendered tree, and in `headingsOf`, from the
- * Markdown source — so both call `slugifyHeading` and the duplicate-suffixing
- * rule is applied identically. A mismatch would not fail anywhere; the contents
- * list would simply scroll to nothing, which is why it is worth stating.
+ * Structural rather than `import type { VFile } from "vfile"`, which would mean
+ * adding a dependency on a package that is only in the tree transitively — and
+ * pnpm's node_modules is strict, so a transitive import that type-checks on one
+ * machine fails to resolve on another. Two fields is the whole contract: every
+ * unified transformer is handed the file, and `process()` hands the same one
+ * back.
+ */
+type FileData = { data: Record<string, unknown> };
+
+/**
+ * Give every heading an id, and record the list on the way past.
+ *
+ * ## Why this is the only place ids are decided
+ *
+ * There used to be two. This wrote ids onto the rendered tree; `headingsOf` in
+ * lib/headings.ts read the same headings out of the Markdown *source* to build
+ * the contents list, and each carried a comment asking the other to agree with
+ * it. They did not — see the note at the top of lib/headings.ts for the three
+ * ordinary constructs that pulled them apart — and the failure was silent: the
+ * list rendered, and its links scrolled nowhere.
+ *
+ * Collecting here, from the tree that is actually rendered, makes disagreement
+ * impossible rather than merely unlikely. The contents list is now a *result*
+ * of rendering the post, not a second opinion about it.
+ *
+ * ## Why the list travels on the VFile
+ *
+ * Because the processor below is a module-level singleton — it holds Shiki's
+ * grammars, and rebuilding it per call would pay that initialisation on every
+ * render. A plugin cannot return a value, but every transformer is handed the
+ * file being processed, and `process()` hands that same file back. So the
+ * headings ride out on `file.data`, which is what it is for.
+ *
+ * ## Why `h1` is included
+ *
+ * Because posts use it. `#` for a section is ordinary Markdown, and skipping it
+ * — which the old source reader did, on the grounds that `#` is "the title" —
+ * meant a post written that way had no contents list and no linkable anchors.
+ * The page's own `h1` is the post title and is not in the body, so nothing here
+ * collides with it.
  */
 export function anchorHeadings() {
-  return (tree: Root) => {
+  return (tree: Root, file: FileData) => {
     const seen = new Map<string, number>();
+    const headings: Heading[] = [];
 
     visit(tree, "element", (node: Element) => {
-      if (node.tagName !== "h2" && node.tagName !== "h3") return;
+      const level = HEADING_TAGS[node.tagName];
+      if (!level) return;
 
-      const base = slugifyHeading(textOf(node));
+      const text = textOf(node).trim();
+
+      const base = slugifyHeading(text);
+      // Two headings with the same words are ordinary in a technical post —
+      // every "Why" section, for instance. Without a suffix both anchors would
+      // point at the first one.
       const count = seen.get(base) ?? 0;
       seen.set(base, count + 1);
 
-      node.properties = {
-        ...node.properties,
-        id: count === 0 ? base : `${base}-${count + 1}`,
-      };
+      const id = count === 0 ? base : `${base}-${count + 1}`;
+      node.properties = { ...node.properties, id };
+
+      // A heading with no text has an anchor but nothing to label it with, so
+      // it is addressable and not listed.
+      if (text) headings.push({ id, text, level });
     });
+
+    file.data.headings = headings;
   };
+}
+
+/** The headings a processed file collected, in document order. */
+function headingsFrom(file: FileData): Heading[] {
+  const collected = file.data.headings;
+  return Array.isArray(collected) ? (collected as Heading[]) : [];
 }
 
 /** A node's visible text, which for a heading is what the slug is made of. */
@@ -452,23 +604,39 @@ const processor = unified()
   .use(rehypeKatex, katexOptions)
   .use(rehypeShiki, shikiOptions)
   .use(labelCodeBlocks)
+  // After labelCodeBlocks, which reads the fence's own children to measure the
+  // block: the button is not code and must not be counted in its width.
+  .use(copyableCodeBlocks)
   .use(scrollableTables)
   .use(anchorHeadings)
   .use(markExternalLinks)
   .use(rehypeStringify);
 
 /*
- * Re-exported so a caller reaching for "the headings of this post" finds them
- * next to the renderer. The definitions live in lib/headings.ts because the
- * table of contents is a client component and this module is `server-only` —
- * importing it there would ship remark, rehype and Shiki to the browser.
+ * Re-exported so a caller reaching for these finds them next to the renderer.
+ * The definitions live in lib/headings.ts because the table of contents is a
+ * client component and this module is `server-only` — importing it there would
+ * ship remark, rehype and Shiki to the browser.
  */
-export { hasContents, headingsOf, MINIMUM_HEADINGS, slugifyHeading } from "./headings";
-export type { Heading } from "./headings";
+export { hasContents, indentOf, MINIMUM_HEADINGS, slugifyHeading } from "./headings";
+export type { Heading, HeadingLevel } from "./headings";
+
+/** A rendered post: the markup, and the headings its anchors were built from. */
+export type RenderedMarkdown = { html: string; headings: Heading[] };
+
+/**
+ * The post, rendered, with its contents list.
+ *
+ * One pass produces both, which is the point — see `anchorHeadings`. A caller
+ * that wants only the markup can use `renderMarkdown` below.
+ */
+export async function renderArticle(markdown: string): Promise<RenderedMarkdown> {
+  const file = await processor.process(markdown);
+  return { html: String(file), headings: headingsFrom(file) };
+}
 
 export async function renderMarkdown(markdown: string): Promise<string> {
-  const file = await processor.process(markdown);
-  return String(file);
+  return (await renderArticle(markdown)).html;
 }
 
 /**
@@ -516,8 +684,21 @@ const READING_SPEED = 200;
  * nearest called that "1 min" — which reads as a stub rather than an estimate,
  * and is the one direction this number should not err in. Rounding up is also
  * what every other site's figure means, so it compares.
+ *
+ * ## When to use this, and when to use the count the API sends
+ *
+ * This one when the whole post is in hand. `minutesForWords(post.word_count)`
+ * when it may not be: a gated post arrives cut, and measuring the part that
+ * arrived would advertise the reading time of its own preview — wrong on the
+ * post, and actively misleading on an index, where this number is what says
+ * which posts are the substantial ones.
  */
 export function readingMinutes(markdown: string): number {
   const words = plainText(markdown).split(/\s+/).filter(Boolean).length;
+  return minutesForWords(words);
+}
+
+/** The same estimate, from a word count somebody else did. */
+export function minutesForWords(words: number): number {
   return Math.max(1, Math.ceil(words / READING_SPEED));
 }

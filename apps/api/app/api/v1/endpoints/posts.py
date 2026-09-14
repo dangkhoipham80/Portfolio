@@ -4,9 +4,13 @@ Three audiences share this router and the split is worth stating once, because
 every route below is one of the three:
 
 * **Anonymous.** Reads of published posts, reads of approved comments, and one
-  write — a star rating, which is a single integer and carries no text.
-* **Anonymous but moderated.** Posting a comment. It is accepted and queued;
-  nothing here can approve one.
+  write — a star rating, which is a single integer and carries no text. A long
+  post arrives cut at its publicly readable opening; see ``_present`` and
+  app/core/previews.py.
+* **Signed in.** The same reads, with whole bodies.
+* **Signed in and verified.** Posting a comment. It is accepted and queued;
+  nothing here can approve one, and the name on it comes from the account
+  rather than from the payload.
 * **Admin.** Writing posts, and reading the revision history. Drafts and
   unapproved comments are invisible to everyone else, and that is enforced by
   the service defaulting ``include_unpublished`` to False rather than by each
@@ -19,9 +23,15 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session
 
-from app.api.v1.dependencies import get_optional_admin, require_admin
+from app.api.v1.dependencies import (
+    get_optional_user,
+    require_admin,
+    require_verified_user,
+)
+from app.core.config import settings
 from app.core.constants import ErrorMessages, SuccessMessages
 from app.core.database import get_db
+from app.core.previews import preview_of, word_count
 from app.core.rate_limit import limiter
 from app.core.visitors import visitor_hash
 from app.schemas.portfolio import (
@@ -40,18 +50,50 @@ from app.services.portfolio_service import PortfolioService
 router = APIRouter()
 
 
-def _present(service: PortfolioService, record, include_unpublished: bool) -> Post:
-    """A post row plus the language versions the caller may see.
+def sees_drafts(reader) -> bool:
+    """Whether this caller may see unpublished posts. Admins only.
 
-    ``translations`` and ``translation_of`` are attached here rather than read
-    off the ORM, and that is a visibility decision, not a style one: the model's
-    relationships know nothing about who is asking, so letting
-    ``from_attributes`` fill these fields would publish the title and slug of
-    every draft translation to anyone who fetched the original. See the note on
-    ``Post.original`` in models/portfolio.py — the relationships are
-    deliberately named something else so that cannot happen by accident.
+    A function rather than an inline ``reader is not None and reader.is_admin``
+    at nine call sites, because the two questions this router asks about a
+    caller are now different — drafts are an admin thing, whole bodies are a
+    signed-in thing — and spelling the narrower one out is what stops the wider
+    one being used for it by a route that only needed "somebody".
     """
+    return reader is not None and reader.is_admin
+
+
+def _present(service: PortfolioService, record, reader) -> Post:
+    """A post row, cut to what this caller may read, plus its other languages.
+
+    Three fields here are filled by the route and never by ``from_attributes``,
+    and all three for the same reason: what goes in them depends on who is
+    asking, and the ORM knows nothing about that.
+
+    ``translations`` and ``translation_of`` — letting the model's own
+    relationships fill these would publish the title and slug of every draft
+    translation to anyone who fetched the original. See the note on
+    ``Post.original`` in models/portfolio.py; the relationships are deliberately
+    named something else so it cannot happen by accident.
+
+    ``gated`` — and with it, possibly, a shortened ``body``. An anonymous caller
+    gets a long post's publicly readable opening; anyone signed in gets the
+    whole thing. It is *cut*, not hidden: the part behind the gate is absent
+    from the response rather than present and covered, which is the only version
+    of this that a View Source cannot defeat. See app/core/previews.py.
+
+    ``word_count`` is the whole post's, in both cases, so a reading estimate
+    does not change the moment its reader signs in.
+    """
+    include_unpublished = sees_drafts(reader)
+
     presented = Post.model_validate(record)
+    presented.word_count = word_count(record.body)
+
+    if reader is None:
+        presented.body, presented.gated = preview_of(
+            record.body, settings.PUBLIC_PREVIEW_CHARS
+        )
+
     presented.translations = [
         PostTranslationRef.model_validate(other)
         for other in service.get_post_translations(
@@ -81,13 +123,20 @@ def get_posts(
         None, max_length=120, description="Match title, excerpt or body"
     ),
     db: Session = Depends(get_db),
-    viewer=Depends(get_optional_admin),
+    reader=Depends(get_optional_user),
 ):
-    """Get published posts, newest first; admins also see drafts."""
+    """Published posts, newest first; admins also see drafts.
+
+    Long bodies are cut for an anonymous caller here as well as on the detail
+    route, which is not belt and braces — it is the same gate. A list that sent
+    whole bodies would make the detail route's cut decorative: the index fetches
+    every post to build its facets, so "the rest of the article" would be one
+    request away and in the response the reader already has.
+    """
     service = PortfolioService(db)
-    include = viewer is not None
+    include = sees_drafts(reader)
     return [
-        _present(service, record, include)
+        _present(service, record, reader)
         for record in service.get_posts(
             tag=tag, series=series, q=q, include_unpublished=include
         )
@@ -98,53 +147,58 @@ def get_posts(
 def get_post_by_slug(
     slug: str,
     db: Session = Depends(get_db),
-    viewer=Depends(get_optional_admin),
+    reader=Depends(get_optional_user),
 ):
     """Get a specific post by slug"""
     service = PortfolioService(db)
-    include = viewer is not None
-    post = service.get_post_by_slug(slug, include_unpublished=include)
+    post = service.get_post_by_slug(slug, include_unpublished=sees_drafts(reader))
     if not post:
         raise HTTPException(status_code=404, detail=ErrorMessages.POST_NOT_FOUND)
-    return _present(service, post, include)
+    return _present(service, post, reader)
 
 
 @router.get("/{post_id}", response_model=Post)
 def get_post(
     post_id: int,
     db: Session = Depends(get_db),
-    viewer=Depends(get_optional_admin),
+    reader=Depends(get_optional_user),
 ):
     """Get a specific post by ID"""
     service = PortfolioService(db)
     # A draft 404s for anonymous callers rather than 403ing, as everywhere
     # else: whether an unpublished post exists at that id is itself not public.
-    include = viewer is not None
-    post = service.get_post(post_id, include_unpublished=include)
+    post = service.get_post(post_id, include_unpublished=sees_drafts(reader))
     if not post:
         raise HTTPException(status_code=404, detail=ErrorMessages.POST_NOT_FOUND)
-    return _present(service, post, include)
+    return _present(service, post, reader)
 
 
-@router.post("/", response_model=Post, dependencies=[Depends(require_admin)])
-def create_post(post: PostCreate, db: Session = Depends(get_db)):
+@router.post("/", response_model=Post)
+def create_post(
+    post: PostCreate,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
     """Create a new post"""
     service = PortfolioService(db)
-    return _present(service, service.create_post(post), True)
+    # The admin is passed to _present as the reader, which is what stops the
+    # console being handed back a truncated copy of the draft it just wrote.
+    return _present(service, service.create_post(post), admin)
 
 
-@router.put("/{post_id}", response_model=Post, dependencies=[Depends(require_admin)])
+@router.put("/{post_id}", response_model=Post)
 def update_post(
     post_id: int,
     post: PostUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
 ):
     """Update an existing post"""
     service = PortfolioService(db)
     updated_post = service.update_post(post_id, post)
     if not updated_post:
         raise HTTPException(status_code=404, detail=ErrorMessages.POST_NOT_FOUND)
-    return _present(service, updated_post, True)
+    return _present(service, updated_post, admin)
 
 
 @router.delete("/{post_id}", dependencies=[Depends(require_admin)])
@@ -157,13 +211,13 @@ def delete_post(post_id: int, db: Session = Depends(get_db)):
     return {"message": SuccessMessages.POST_DELETED}
 
 
-def _visible_post(service: PortfolioService, post_id: int, viewer) -> Post:
+def _visible_post(service: PortfolioService, post_id: int, reader) -> Post:
     """The post, or a 404 — the same answer a draft gives a stranger.
 
     Every route hanging off a post starts here, so none of them can be used to
     discover that an unpublished post exists by watching for a different error.
     """
-    post = service.get_post(post_id, include_unpublished=viewer is not None)
+    post = service.get_post(post_id, include_unpublished=sees_drafts(reader))
     if not post:
         raise HTTPException(status_code=404, detail=ErrorMessages.POST_NOT_FOUND)
     return post
@@ -174,7 +228,7 @@ def _visible_post(service: PortfolioService, post_id: int, viewer) -> Post:
 def get_post_comments(
     post_id: int,
     db: Session = Depends(get_db),
-    viewer=Depends(get_optional_admin),
+    reader=Depends(get_optional_user),
 ):
     """Approved comments on a post, oldest first.
 
@@ -184,7 +238,7 @@ def get_post_comments(
     ends up rendered on the public page by a consumer that did not check.
     """
     service = PortfolioService(db)
-    _visible_post(service, post_id, viewer)
+    _visible_post(service, post_id, reader)
     return service.get_comments(post_id)
 
 
@@ -199,9 +253,34 @@ def create_post_comment(
     post_id: int,
     payload: PostCommentCreate,
     db: Session = Depends(get_db),
-    viewer=Depends(get_optional_admin),
+    author=Depends(require_verified_user),
 ):
-    """Queue a comment for moderation. Public, rate limited.
+    """Queue a comment for moderation. Signed in and verified; rate limited.
+
+    ## Who the comment is from
+
+    ``author``, and there is no other answer available to this route. The
+    payload cannot express a name or an address — see PostCommentCreate — so
+    "trust the client's idea of who it is" is not a mistake that can be made
+    here, only one that could be reintroduced by adding a field back.
+
+    That includes the owner. An admin reading the site as a reader comments
+    through this route like anyone else, with the identity already on their
+    session: no name box, no email box, and no second, quieter path that mints
+    an author out of a payload.
+
+    ## What the two refusals mean
+
+    401 is "sign in"; 403 is "confirm your address, signing in again will not
+    help". Both come from ``require_verified_user``, which is also what makes
+    this the *only* description of who may comment — a check written inline here
+    would be one the moderation router could not share.
+
+    ## Why it is still moderated
+
+    Because an account is not a vouch. Verifying an address proves somebody can
+    read mail at it, which is exactly as much as it sounds like. There is still
+    no path in this API that produces an approved comment.
 
     The response is the comment as stored, which is deliberately not the same as
     the comment being visible: it comes back so the form can show the author
@@ -209,7 +288,7 @@ def create_post_comment(
     until it is approved.
     """
     service = PortfolioService(db)
-    _visible_post(service, post_id, viewer)
+    _visible_post(service, post_id, author)
 
     author_hash = visitor_hash(request, scope="comment")
     since = datetime.now(timezone.utc) - COMMENT_WINDOW
@@ -223,7 +302,9 @@ def create_post_comment(
             detail="That is a lot of comments for one day. Try again tomorrow.",
         )
 
-    return service.create_comment(post_id, payload, author_hash=author_hash)
+    return service.create_comment(
+        post_id, payload, author=author, author_hash=author_hash
+    )
 
 
 # Ratings
@@ -232,11 +313,11 @@ def get_post_rating(
     request: Request,
     post_id: int,
     db: Session = Depends(get_db),
-    viewer=Depends(get_optional_admin),
+    reader=Depends(get_optional_user),
 ):
     """A post's star summary, including this caller's own vote if they have one."""
     service = PortfolioService(db)
-    _visible_post(service, post_id, viewer)
+    _visible_post(service, post_id, reader)
     return service.get_rating_summary(
         post_id, voter_hash=visitor_hash(request, scope="rating")
     )
@@ -250,7 +331,7 @@ def rate_post(
     post_id: int,
     payload: PostRatingCreate,
     db: Session = Depends(get_db),
-    viewer=Depends(get_optional_admin),
+    reader=Depends(get_optional_user),
 ):
     """Score a post out of five. Public; one standing vote per visitor.
 
@@ -259,7 +340,7 @@ def rate_post(
     average — the unique constraint does that.
     """
     service = PortfolioService(db)
-    _visible_post(service, post_id, viewer)
+    _visible_post(service, post_id, reader)
     return service.rate_post(
         post_id, payload.stars, voter_hash=visitor_hash(request, scope="rating")
     )
@@ -285,13 +366,12 @@ def get_post_revisions(post_id: int, db: Session = Depends(get_db)):
     return service.get_revisions(post_id)
 
 
-@router.post(
-    "/{post_id}/revisions/{revision_id}/restore",
-    response_model=Post,
-    dependencies=[Depends(require_admin)],
-)
+@router.post("/{post_id}/revisions/{revision_id}/restore", response_model=Post)
 def restore_post_revision(
-    post_id: int, revision_id: int, db: Session = Depends(get_db)
+    post_id: int,
+    revision_id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
 ):
     """Put a post back to an earlier version. Admin only.
 
@@ -302,4 +382,4 @@ def restore_post_revision(
     restored = service.restore_revision(post_id, revision_id)
     if not restored:
         raise HTTPException(status_code=404, detail=ErrorMessages.REVISION_NOT_FOUND)
-    return _present(service, restored, True)
+    return _present(service, restored, admin)

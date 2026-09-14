@@ -249,6 +249,14 @@ function withPostLists(post: Post): Post {
     author_name: post.author_name ?? null,
     translation_of: post.translation_of ?? null,
     translations: post.translations ?? [],
+    // Same window again. An API that predates the login gate sends neither, and
+    // `gated: undefined` is falsy — so the page renders the body it was given
+    // and shows no gate, which is the correct way for this to degrade.
+    gated: post.gated ?? false,
+    // Falls back to counting the body it has. On an old API that is the whole
+    // post, so the estimate is right; on a gated body it would under-report,
+    // which cannot happen because `gated` and `word_count` ship together.
+    word_count: post.word_count ?? (post.body ?? "").split(/\s+/).filter(Boolean).length,
     tags: raw.map((tag, index) =>
       typeof tag === "string"
         ? // Negative ids so a synthesised ref can never collide with a real

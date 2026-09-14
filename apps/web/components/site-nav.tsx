@@ -1,10 +1,10 @@
 import Link from "next/link";
 
-import { ConsoleLink } from "./console-link";
 import { MobileMenu } from "./mobile-menu";
 import { NavLinks } from "./nav-links";
 import { ThemeToggle } from "./theme-toggle";
 import { Container } from "./ui/container";
+import { ViewerControl } from "./viewer-control";
 
 /*
  * The header is a pane of the page, not a separate surface: translucent ink
@@ -38,15 +38,18 @@ export function SiteNav() {
 
           {/*
             A hairline between the places you can go and the switches that act
-            on the site. Without it the console key reads as a fifth
+            on the site. Without it the account control reads as a fifth
             destination, which it is not.
           */}
           <span aria-hidden="true" className="mx-2 hidden h-5 w-px bg-border sm:block" />
 
-          {/* The console key stays desktop-only; the overlay menu and the
-              footer carry the phone-width way in. */}
-          <span className="hidden sm:flex">
-            <ConsoleLink />
+          {/*
+            Who is reading, and — for the owner — the way into the console.
+            Desktop only: the header runs out of room at 375px, so the overlay
+            menu and the footer carry the phone-width versions.
+          */}
+          <span className="hidden items-center gap-0.5 sm:flex sm:gap-2">
+            <ViewerControl />
           </span>
 
           <ThemeToggle />

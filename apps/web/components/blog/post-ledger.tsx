@@ -7,7 +7,7 @@ import { isOptimisableImage } from "@/lib/blob";
 import { cn } from "@/lib/cn";
 import { isoDay } from "@/lib/format";
 import { DEFAULT_LANGUAGE, langAttribute, languageFor } from "@/lib/languages";
-import { readingMinutes, summarise } from "@/lib/markdown";
+import { minutesForWords, summarise } from "@/lib/markdown";
 import type { Post } from "@/lib/types";
 
 /**
@@ -93,7 +93,7 @@ export function PostLedger({ posts }: { posts: Post[] }) {
 
 function LedgerRow({ post }: { post: Post }) {
   const day = isoDay(post.published_at);
-  const minutes = readingMinutes(post.body);
+  const minutes = minutesForWords(post.word_count);
   const blurb = post.excerpt ?? summarise(post.body);
 
   return (

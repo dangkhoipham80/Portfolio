@@ -4,7 +4,7 @@ import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/cn";
 import { formatFullDate, isoDay } from "@/lib/format";
 import { langAttribute, languageFor } from "@/lib/languages";
-import { readingMinutes } from "@/lib/markdown";
+import { minutesForWords } from "@/lib/markdown";
 import { SITE_AUTHOR } from "@/lib/site";
 import type { Post } from "@/lib/types";
 
@@ -42,7 +42,7 @@ export function PostMeta({ post }: { post: Post }) {
 
       <div>
         <Eyebrow className="mb-1">Reading</Eyebrow>
-        <p className="text-sm text-foreground">{readingMinutes(post.body)} min</p>
+        <p className="text-sm text-foreground">{minutesForWords(post.word_count)} min</p>
       </div>
 
       <div>

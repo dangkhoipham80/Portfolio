@@ -24,6 +24,8 @@ export const REFRESH_COOKIE = "pf_refresh";
 /** Where an unauthenticated caller is sent, and where sign-in lands. */
 export const LOGIN_PATH = "/login";
 export const ADMIN_PATH = "/admin";
+/** Where a reader lands when nothing more specific was asked for. */
+export const SITE_PATH = "/";
 export const REFRESH_PATH = "/auth/refresh";
 
 /**
@@ -147,31 +149,82 @@ export function accessTokenExpiry(token: string): Date | null {
  * `/login?next=https://evil.example` that ends up on the attacker's page having
  * passed through this site's domain is a credible phishing step.
  *
- * Allowing only paths under /admin rather than any local path, because that is
- * the only place either flow has business returning to.
+ * ## Why this now allows any path on this site
+ *
+ * It used to allow only paths under /admin, on the argument that the console was
+ * the only place either flow had business returning to. That stopped being true
+ * when readers got accounts: the commonest sign-in on this site is now somebody
+ * halfway down an article who has met the login gate, and the one thing that
+ * must happen afterwards is that they land back on the paragraph they were
+ * reading.
+ *
+ * What made the old rule safe is not the /admin prefix — it is the three checks
+ * below, which are what actually keep the redirect on this origin. The prefix
+ * was a fourth, narrower fence inside them. Removing it widens where a *local*
+ * redirect may point and does not widen anything else.
+ *
+ * `fallback` is where a missing or rejected value goes, and it is the caller's
+ * decision rather than a constant: the refresh route is renewing a console
+ * session and wants /admin, while a reader signing in wants the site.
  */
-export function safeNextPath(value: string | null | undefined): string {
-  if (typeof value !== "string") return ADMIN_PATH;
+export function safeNextPath(
+  value: string | null | undefined,
+  fallback: string = ADMIN_PATH,
+): string {
+  if (typeof value !== "string" || value === "") return fallback;
 
   // `//evil.example` and `/\evil.example` are both read as protocol-relative
   // URLs — the second because browsers normalise a backslash to a forward
   // slash — so both leave the site while passing a naive "starts with /" test.
   if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) {
-    return ADMIN_PATH;
+    return fallback;
   }
 
   // A newline or NUL on its way into a Location header is a response-splitting
-  // attempt, and neither belongs in a path regardless.
-  if ([...value].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f)) {
-    return ADMIN_PATH;
-  }
-
-  // Compare the path alone, so /admin?unread=1 survives the round trip rather
-  // than being quietly downgraded to /admin.
-  const path = value.split(/[?#]/)[0];
-  if (path !== ADMIN_PATH && !path.startsWith(`${ADMIN_PATH}/`)) {
-    return ADMIN_PATH;
+  // attempt, and neither belongs in a path regardless. Ordinary spaces go the
+  // same way: a URL has none, so one is either an encoding mistake or an
+  // attempt at something, and neither is worth forwarding.
+  if ([...value].some((ch) => /\s/.test(ch) || ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f)) {
+    return fallback;
   }
 
   return value;
+}
+
+/** Whether a sanitised path leads into the console rather than the site. */
+export function isAdminPath(path: string): boolean {
+  // The path alone, so /admin?unread=1 counts and /admin-ish does not.
+  const [pathname] = path.split(/[?#]/);
+  return pathname === ADMIN_PATH || pathname.startsWith(`${ADMIN_PATH}/`);
+}
+
+
+/**
+ * Where a signed-in caller belongs, given where they asked to go.
+ *
+ * ## Why this is one function and not two conditions
+ *
+ * Because it is asked in two places — by the sign-in action once the token is
+ * in hand, and by the sign-in screen when somebody who is already signed in
+ * opens it — and the two must agree. When they did not, the disagreement was an
+ * infinite redirect: a reader who opened /admin was bounced to
+ * `/login?next=/admin`, the screen saw a live session and sent them to `next`,
+ * which bounced them again. The browser gave up with ERR_TOO_MANY_REDIRECTS.
+ *
+ * ## The rule
+ *
+ * Honour what they asked for, with one exception: a non-admin asking for the
+ * console cannot have it, and sending them back to the sign-in form to be told
+ * so reads as a broken sign-in — the password was right and the session is
+ * live. They go to the site.
+ *
+ * With nothing asked for, the owner wants the console and a reader wants the
+ * site.
+ *
+ * `asked` must already have been through `safeNextPath`; this decides between
+ * destinations, it does not make one safe.
+ */
+export function landingPath(asked: string, isAdmin: boolean): string {
+  if (asked) return isAdmin || !isAdminPath(asked) ? asked : SITE_PATH;
+  return isAdmin ? ADMIN_PATH : SITE_PATH;
 }

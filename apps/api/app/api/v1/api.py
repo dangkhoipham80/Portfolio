@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     media,
     posts,
     projects,
+    reading,
     series,
     skills,
     tags,
@@ -33,6 +34,9 @@ api_router.include_router(series.router, prefix="/series", tags=["blog"])
 # carries commenters' email addresses. The router carries require_admin itself;
 # see endpoints/comments.py for why it is not mounted under /posts.
 api_router.include_router(comments.router, prefix="/comments", tags=["blog"])
+# Authenticated throughout, and scoped to the caller's own account — there is no
+# route under it that takes a user id. See endpoints/reading.py.
+api_router.include_router(reading.router, prefix="/reading", tags=["blog"])
 api_router.include_router(contacts.router, prefix="/contacts", tags=["contacts"])
 # Admin-only throughout, reads included — the router carries require_admin
 # itself rather than repeating it per route. See endpoints/media.py.

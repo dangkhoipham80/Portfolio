@@ -8,6 +8,7 @@ from app.schemas.user import (
     EmailVerificationRequest,
     PasswordResetConfirm,
     PasswordResetRequest,
+    RegistrationRequest,
     TokenResponse,
     UserLogin,
 )
@@ -15,19 +16,24 @@ from app.services.auth_service import AuthService
 
 router = APIRouter()
 
-# There is deliberately no POST /register and no POST /google here.
+# There is deliberately no POST /google here.
 #
-# This API backs a single-owner portfolio: the only account is the admin, and it
-# is created by the seed script. Public registration was pure attack surface —
-# anyone could create accounts and make the server send verification mail on
-# demand. Google OAuth verified ID tokens by calling Google's userinfo endpoint
-# from an unauthenticated route, which is more surface and more dependencies
-# than one admin login justifies.
+# It verified ID tokens by calling Google's userinfo endpoint from an
+# unauthenticated route, which is more surface and more dependencies than this
+# site's sign-in justifies.
 #
-# Three routes below are rate limited per IP. They are the unauthenticated ones
-# that cost something to call: /login guesses a password, and the two email
-# routes make the server send mail. The rest are either authenticated, or take a
-# token that has to be valid before any work happens.
+# POST /register *is* here, and used to carry the same note. See
+# AuthService.register for why it came back: reading past the cutoff,
+# commenting and keeping a reading position all belong to a person now, and an
+# account nobody can create is not an account system. What the removal was
+# about is kept — the route is rate limited, the account it makes can do
+# nothing until a mailed link is followed, and the role is assigned by the
+# service rather than taken from the payload.
+#
+# Four routes below are rate limited per IP. They are the unauthenticated ones
+# that cost something to call: /login guesses a password, and /register plus the
+# two email routes make the server send mail. The rest are either authenticated,
+# or take a token that has to be valid before any work happens.
 #
 # Every limited handler needs both `request` and `response` parameters. slowapi
 # finds the caller's address by looking for a parameter literally named
@@ -52,6 +58,31 @@ def login(
     """Login with email and password. Rate limited per IP."""
     auth_service = AuthService(db)
     return auth_service.login(user_credentials)
+
+# Five an hour, the same as the two other routes that make the server send mail
+# — which is what this one does, and the reason it is limited at all.
+@router.post("/register", status_code=202)
+@limiter.limit("5/hour")
+def register(
+    request: Request,
+    response: Response,
+    payload: RegistrationRequest,
+    db: Session = Depends(get_db),
+):
+    """Create a reader account. Public, rate limited per IP.
+
+    202 rather than 201, and the wording matters: nothing usable has been
+    created yet. The account exists in PENDING_VERIFICATION and cannot sign in
+    until the link in the mail is followed, so claiming a resource was created
+    would be claiming more than happened.
+
+    The same answer comes back for an address that already has an account — see
+    AuthService.register. The route must not inspect the result for a difference
+    that is deliberately not there.
+    """
+    auth_service = AuthService(db)
+    auth_service.register(payload)
+    return {"message": "Check your email for a link to confirm the address."}
 
 # Deliberately not rate limited. The web console calls this on its own schedule
 # whenever an access token ages out, so a cap here would sign the admin out
@@ -129,6 +160,16 @@ def get_current_user_info(current_user = Depends(get_current_user_dependency)):
         "is_verified": current_user.is_verified,
         "status": current_user.status.value,
         "roles": current_user.roles,
+        # Derived here rather than left for the caller to work out from `roles`,
+        # because two consumers working it out separately is how one of them
+        # ends up checking for "administrator".
+        "is_admin": current_user.is_admin,
         "created_at": current_user.created_at,
-        "last_login_at": current_user.last_login_at
+        "last_login_at": current_user.last_login_at,
+        # The daily streak, and the UTC day it was last advanced. Both, because
+        # a number with no date beside it cannot be read as live or stale — a
+        # client showing "7" has no way to know whether today is already counted
+        # or the streak is about to lapse. See UserService.record_login.
+        "login_streak": current_user.login_streak or 0,
+        "last_login_day": current_user.last_login_day,
     }

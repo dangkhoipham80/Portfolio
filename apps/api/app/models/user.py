@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum, Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -37,6 +37,22 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     last_login_at = Column(DateTime, nullable=True)
+
+    # How many days running this account has signed in, and the UTC day the
+    # streak was last extended.
+    #
+    # A Date and not a timestamp, because the question a streak asks is "was
+    # yesterday a day you signed in", and a timestamp cannot answer it without
+    # re-deriving the day on every read — which is where two callers start
+    # disagreeing about where the day boundary is. UTC, like every other instant
+    # this application stores; see UserService.record_login for the arithmetic
+    # and for why the boundary is stated rather than inferred.
+    #
+    # `last_login_at` above is not enough on its own: it is overwritten by every
+    # login, so the moment a second login lands on the same day the previous
+    # day is gone and the streak cannot be continued or broken.
+    login_streak = Column(Integer, nullable=False, default=0, server_default="0")
+    last_login_day = Column(Date, nullable=True)
 
     # Relationships
     tokens = relationship("Token", back_populates="user", cascade="all, delete-orphan")

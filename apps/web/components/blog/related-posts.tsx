@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Eyebrow, eyebrowClasses } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/cn";
 import { isoDay } from "@/lib/format";
-import { readingMinutes } from "@/lib/markdown";
+import { minutesForWords } from "@/lib/markdown";
 import type { Post } from "@/lib/types";
 
 /**
@@ -94,7 +94,7 @@ export function RelatedPosts({
               )}
             >
               <span className={cn(eyebrowClasses, "tracking-normal")}>
-                {isoDay(entry.published_at) ?? "Draft"} · {readingMinutes(entry.body)} min
+                {isoDay(entry.published_at) ?? "Draft"} · {minutesForWords(entry.word_count)} min
               </span>
               <span className="mt-2 text-sm font-medium text-foreground transition-colors group-hover:text-primary">
                 {entry.title}

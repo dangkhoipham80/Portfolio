@@ -13,7 +13,14 @@ from app.core.exceptions import UnauthorizedError, ValidationError
 from app.core.security import get_password_hash, verify_token
 from app.models.token import TokenType
 from app.models.user import UserStatus
-from app.schemas.user import PasswordResetConfirm, PasswordResetRequest, TokenResponse, UserLogin
+from app.schemas.user import (
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    RegistrationRequest,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+)
 from app.services.email_service import send_email, send_password_reset
 from app.services.user_service import UserService
 
@@ -48,13 +55,67 @@ class AuthService:
         if user.status == UserStatus.PENDING_VERIFICATION:
             raise UnauthorizedError("Please verify your email before logging in")
 
+        # Here rather than in authenticate_user(), which also returns for an
+        # account the three checks above then refuse. A streak counts the days
+        # somebody got in.
+        self.user_service.record_login(user)
+
         return self._create_token_pair(user)
 
-    # google_login() and register() were removed along with their endpoints —
-    # see the note in app/api/v1/endpoints/auth.py. The admin account comes from
-    # the seed script, so nothing needs a public signup path. The rest of the
-    # Google scaffolding (service method, schemas, two columns) went with the
-    # migration that drops google_id and google_email.
+    def register(self, request: RegistrationRequest) -> None:
+        """Create a reader account and mail it a verification link.
+
+        Returns None in every case, including when the address is already
+        registered — the same shape, and for the same reason, as
+        request_password_reset() below. The endpoint answers one 202 and one
+        sentence to every outcome, so the form cannot be used to find out which
+        addresses have accounts.
+
+        ## Why this exists again
+
+        It was deleted, and the note that replaced it said the admin account
+        comes from the seed script so nothing needs a public signup path. That
+        was true of a site whose only account was the owner's. It stopped being
+        true when reading past the cutoff, commenting and keeping a reading
+        position all became things that belong to a person: those features need
+        readers to have accounts, and an account nobody can create is not an
+        account system.
+
+        What the deletion was actually about is preserved. The route is rate
+        limited per address, the account lands in PENDING_VERIFICATION and can
+        do nothing until a link in the mail is followed, and the role assigned
+        is ``user`` — ``assign_default_role``, never a role from the payload, so
+        no request can ask for admin.
+
+        ## Why an existing address is not an error
+
+        Because answering differently is the enumeration leak. What happens
+        instead is nothing at all: no second account, no password overwritten —
+        which is the attack an "upsert" here would be — and no mail, so the
+        route cannot be used to send someone else repeated messages. The person
+        who genuinely owns the address and forgot has the reset flow.
+        """
+        existing = self.user_service.get_user_by_email(request.email)
+        if existing:
+            # Not the address itself; see request_password_reset.
+            logger.info("Registration skipped: an account already exists (id=%s)", existing.id)
+            return
+
+        user = self.user_service.create_user(
+            UserCreate(
+                email=request.email,
+                password=request.password,
+                full_name=request.full_name,
+                username=None,
+            )
+        )
+
+        self._send_verification_email(user)
+
+    # google_login() was removed along with its endpoint — see the note in
+    # app/api/v1/endpoints/auth.py. The rest of the Google scaffolding (service
+    # method, schemas, two columns) went with the migration that drops google_id
+    # and google_email.
 
     def refresh_token(self, refresh_token: str) -> TokenResponse:
         """Exchange a refresh token for a new token pair."""

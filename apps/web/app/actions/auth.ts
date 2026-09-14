@@ -5,10 +5,24 @@ import { redirect } from "next/navigation";
 
 import {
   confirmPasswordReset,
+  fetchCurrentUser,
   login,
   logout as revokeTokens,
+  register,
   requestPasswordReset as askForResetLink,
+  resendVerification,
+  verifyEmail,
 } from "@/lib/console-api";
+import {
+  type JoinState,
+  readJoinForm,
+  validateJoin,
+} from "@/lib/join";
+import {
+  type ResendState,
+  type VerifyEmailState,
+} from "@/lib/verify-email";
+import { readViewer } from "@/lib/viewer-server";
 import {
   type NewPasswordState,
   type ResetRequestState,
@@ -22,6 +36,7 @@ import { retryAfterSeconds } from "@/lib/retry-after";
 import {
   ACCESS_COOKIE,
   clearedSessionCookies,
+  landingPath,
   LOGIN_PATH,
   REFRESH_COOKIE,
   safeNextPath,
@@ -57,9 +72,12 @@ export async function signIn(
   formData: FormData,
 ): Promise<SignInState> {
   const values = readSignInForm(formData);
-  const next = safeNextPath(
-    typeof formData.get("next") === "string" ? (formData.get("next") as string) : null,
-  );
+  const asked = formData.get("next");
+  // Empty fallback, so "they did not ask for anywhere" survives sanitising and
+  // can be answered below by who they turn out to be. The default inside
+  // safeNextPath is /admin, which is right for the console's own renewal flow
+  // and wrong for a reader.
+  const next = safeNextPath(typeof asked === "string" ? asked : null, "");
 
   // The browser ran this too. It runs again because the browser's copy is a
   // convenience, not a control — this form posts fine with JavaScript off.
@@ -95,10 +113,78 @@ export async function signIn(
     jar.set(cookie.name, cookie.value, cookie.options);
   }
 
-  // Outside the try/catch shape above because redirect() works by throwing:
-  // wrapping it swallows the redirect and returns the caller to the form with
-  // a live session and no explanation.
-  redirect(next);
+  redirect(await landing(next, result.data.access_token));
+}
+
+/**
+ * Where a successful sign-in ends up.
+ *
+ * The rule itself is `landingPath` in lib/session.ts, shared with the sign-in
+ * screen — the two used to decide separately, and the disagreement was an
+ * infinite redirect. What this adds is the one fact the rule needs and only the
+ * server can get: whether the account is an admin.
+ *
+ * The lookup costs one request, at sign-in, which is the one moment where being
+ * wrong about this is most visible.
+ */
+async function landing(asked: string, accessToken: string): Promise<string> {
+  const result = await fetchCurrentUser(accessToken);
+
+  // The API answered the login and then would not say who it was for. Treating
+  // that as "a reader" sends them to the site, which every account can read.
+  return landingPath(asked, result.ok && result.data.roles.includes("admin"));
+}
+
+/**
+ * Create a reader account.
+ *
+ * No cookie and no redirect, deliberately. The account lands in the API in
+ * PENDING_VERIFICATION and cannot sign in until the link in the mail is
+ * followed, so there is nothing yet to sign this browser in *with* — minting a
+ * session here would be the one thing the verification step exists to prevent.
+ * The screen says to go and check their mail.
+ *
+ * The success state says "if that address is new" rather than "we have created
+ * your account", and that wording is load-bearing rather than cautious: the API
+ * answers the same 202 to an address that already has an account, so a screen
+ * claiming a new account existed would give that back in the copy — the same
+ * leak one layer up. Same arrangement as requestPasswordReset below.
+ */
+export async function join(
+  _previous: JoinState,
+  formData: FormData,
+): Promise<JoinState> {
+  const values = readJoinForm(formData);
+
+  // The browser ran this too. It runs again because the browser's copy is a
+  // convenience, not a control — this form posts fine with JavaScript off.
+  const errors = validateJoin(values);
+  if (Object.keys(errors).length > 0) {
+    return { status: "invalid", errors, values };
+  }
+
+  const result = await register(
+    {
+      email: values.email.trim(),
+      password: values.password,
+      full_name: values.full_name.trim(),
+    },
+    await forwardedFor(),
+  );
+
+  if (!result.ok) {
+    if (result.reason === "rate_limited") {
+      return {
+        status: "rate_limited",
+        retryAfterSeconds: retryAfterSeconds(result.response),
+        values,
+      };
+    }
+
+    return { status: "unavailable", values };
+  }
+
+  return { status: "sent", email: values.email.trim() };
 }
 
 /**
@@ -229,3 +315,54 @@ export async function resetPassword(
  * is signed in is an ordinary server-side function; it lives in
  * lib/admin-guard.ts, where it stays uncallable from outside.
  */
+
+
+/**
+ * Confirm an address from the link in the mail.
+ *
+ * A POST from a real form rather than something done during the render of a GET.
+ * The token is single-use, and a GET that spends it is fired by every link
+ * prefetcher, mail scanner and preview fetcher that meets the URL — the person
+ * then clicks it and is told their link has already been used, which is true and
+ * baffling.
+ *
+ * No cookie and no redirect. Confirming an address is not signing in: the screen
+ * says so and offers the sign-in link, carrying wherever they were going.
+ */
+export async function confirmEmail(
+  _previous: VerifyEmailState,
+  formData: FormData,
+): Promise<VerifyEmailState> {
+  const token = formData.get("token");
+  if (typeof token !== "string" || !token.trim()) return { status: "token_rejected" };
+
+  const result = await verifyEmail(token.trim());
+
+  if (result.ok) return { status: "done" };
+  if (result.reason === "token_rejected") return { status: "token_rejected" };
+  return { status: "unavailable" };
+}
+
+/**
+ * Mail a fresh verification link to the signed-in reader.
+ *
+ * The address comes from the session and is never a parameter. Taking one would
+ * make this an endpoint for sending mail to any address on request — a Server
+ * Action is a POST endpoint the browser can reach directly, so "the client only
+ * ever passes its own address" is not a property this could have.
+ *
+ * Answers the same way whether or not the address needed a link, for the reason
+ * requestPasswordReset does.
+ */
+export async function resendVerificationEmail(): Promise<ResendState> {
+  const viewer = await readViewer();
+  // Signed out, or already confirmed. Either way there is nothing to send, and
+  // the answer does not distinguish them.
+  if (!viewer || viewer.isVerified) return { status: "sent" };
+
+  const result = await resendVerification(viewer.email, await forwardedFor());
+
+  if (result.ok) return { status: "sent" };
+  if (result.reason === "rate_limited") return { status: "rate_limited" };
+  return { status: "unavailable" };
+}

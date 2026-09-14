@@ -6,13 +6,15 @@ import * as runtime from "react/jsx-runtime";
 
 import { MDX_COMPONENTS } from "@/components/mdx-blocks";
 
+import type { Heading } from "./headings";
 import {
   anchorHeadings,
+  copyableCodeBlocks,
   displayMathBlocks,
   katexOptions,
   labelCodeBlocks,
   markExternalLinks,
-  renderMarkdown,
+  renderArticle,
   scrollableTables,
   shikiOptions,
 } from "./markdown";
@@ -63,6 +65,16 @@ const PROSE = "article-prose";
 export type RenderedBody = {
   /** Already carries `article-prose`. Render it directly, do not wrap it. */
   content: ReactNode;
+  /**
+   * The post's headings, with the ids its anchors were actually given.
+   *
+   * A *result* of rendering rather than a second reading of the source, which
+   * is the whole point — see `anchorHeadings` in lib/markdown.ts. It is also
+   * why this comes back from the fallback path correctly: a post whose MDX did
+   * not compile gets the headings of the Markdown that was rendered instead,
+   * not the ones its MDX would have had.
+   */
+  headings: Heading[];
   /** What actually rendered it, which is not always what was asked for. */
   used: "markdown" | "mdx";
   /** Why MDX was not used, when it was asked for and did not work. */
@@ -73,16 +85,14 @@ export async function renderPostBody(
   body: string,
   format: "markdown" | "mdx",
 ): Promise<RenderedBody> {
-  if (format !== "mdx") {
-    return { content: await renderedMarkdown(body), used: "markdown" };
-  }
+  if (format !== "mdx") return { ...(await renderedMarkdown(body)), used: "markdown" };
 
   try {
-    return { content: await renderMdx(body), used: "mdx" };
+    return { ...(await renderMdx(body)), used: "mdx" };
   } catch (error) {
     console.error("[mdx] falling back to markdown:", error);
     return {
-      content: await renderedMarkdown(body),
+      ...(await renderedMarkdown(body)),
       used: "markdown",
       problem: messageFor(error),
     };
@@ -96,9 +106,14 @@ export async function renderPostBody(
  * gives and no other: that pipeline sanitises. This wrapper adds nothing to it
  * and takes nothing away.
  */
-async function renderedMarkdown(body: string): Promise<ReactNode> {
-  const html = await renderMarkdown(body);
-  return <div className={PROSE} dangerouslySetInnerHTML={{ __html: html }} />;
+async function renderedMarkdown(
+  body: string,
+): Promise<{ content: ReactNode; headings: Heading[] }> {
+  const { html, headings } = await renderArticle(body);
+  return {
+    content: <div className={PROSE} dangerouslySetInnerHTML={{ __html: html }} />,
+    headings,
+  };
 }
 
 /**
@@ -128,7 +143,9 @@ async function renderedMarkdown(body: string): Promise<ReactNode> {
  * component decides what to do with them — `Video` builds its URL from a
  * provider key and an id matched against a pattern rather than accepting one.
  */
-async function renderMdx(body: string): Promise<ReactNode> {
+async function renderMdx(
+  body: string,
+): Promise<{ content: ReactNode; headings: Heading[] }> {
   const compiled = await compile(body, {
     outputFormat: "function-body",
     development: false,
@@ -159,6 +176,7 @@ async function renderMdx(body: string): Promise<ReactNode> {
       // contents linked to anchors that did not exist. Nothing failed; the
       // contents list just scrolled nowhere.
       labelCodeBlocks,
+      copyableCodeBlocks,
       scrollableTables,
       anchorHeadings,
       markExternalLinks,
@@ -170,9 +188,24 @@ async function renderMdx(body: string): Promise<ReactNode> {
     baseUrl: import.meta.url,
   });
 
-  return (
-    <div className={PROSE}>
-      <Content components={MDX_COMPONENTS} />
-    </div>
-  );
+  return {
+    content: (
+      <div className={PROSE}>
+        <Content components={MDX_COMPONENTS} />
+      </div>
+    ),
+    /*
+      `compile` returns the VFile it processed, so `anchorHeadings` — which runs
+      as a rehype plugin above — has already written the list onto it. Same
+      arrangement as the Markdown path, which is what keeps the two formats from
+      needing two ways of answering "what are this post's headings".
+    */
+    headings: headingsOnFile(compiled),
+  };
+}
+
+/** The headings a compile collected. Empty if the plugin did not run. */
+function headingsOnFile(file: { data: Record<string, unknown> }): Heading[] {
+  const collected = file.data.headings;
+  return Array.isArray(collected) ? (collected as Heading[]) : [];
 }

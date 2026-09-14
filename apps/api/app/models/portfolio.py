@@ -7,6 +7,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -319,6 +320,12 @@ class Post(BaseModel):
     ratings = relationship(
         "PostRating", back_populates="post", cascade="all, delete-orphan", passive_deletes=True
     )
+    reading_progress = relationship(
+        "PostReadingProgress",
+        back_populates="post",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     revisions = relationship(
         "PostRevision",
         back_populates="post",
@@ -373,12 +380,32 @@ class PostRevision(BaseModel):
 class PostComment(BaseModel):
     """A reader's comment, pending until an admin approves it.
 
-    ## Why there is no account
+    ## Why there is an account now
 
-    Comments take a name and an email and nothing else. Requiring a login on a
-    portfolio blog is asking a stranger to sign up in order to say one sentence,
-    which mostly means nobody says anything. The cost is that a name is a claim
-    rather than a fact, so nothing here is presented as verified.
+    This used to take a name and an email from anyone, on the argument that
+    asking a stranger to sign up in order to say one sentence mostly means
+    nobody says anything. What it actually meant is that a name was a claim
+    rather than a fact — anyone could sign a comment "Phạm Đăng Khôi" — and the
+    only defence was that an admin read every one before it appeared.
+
+    A comment now belongs to an account with a verified address. ``user_id`` is
+    who wrote it, derived from the bearer token by the route and never from the
+    payload; ``author_name`` and ``author_email`` are still columns and are
+    still what the thread renders, copied from the account at the moment the
+    comment is written.
+
+    ## Why the name is copied rather than joined
+
+    Because it is what they were called when they said it. Reading the name
+    through the relationship would rewrite every comment somebody ever left the
+    day they change their display name — including the ones an admin approved
+    on the strength of who appeared to be saying it.
+
+    ## Why ``user_id`` is nullable
+
+    Every comment written from here on has one. The rows that predate accounts
+    do not, and back-filling them would mean inventing an account for a name
+    somebody typed into a box. They keep their name and their null.
 
     ## Why the email is stored but never returned
 
@@ -403,6 +430,13 @@ class PostComment(BaseModel):
         Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True
     )
     parent_id = Column(Integer, ForeignKey("post_comments.id", ondelete="CASCADE"), index=True)
+    # SET NULL rather than CASCADE: deleting an account must not silently remove
+    # a thread other people replied to. The comment keeps the name it was signed
+    # with and loses its link to the account, which is the same state a comment
+    # written before accounts existed is already in.
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     author_name = Column(String(80), nullable=False)
     author_email = Column(String(255), nullable=False)
     body = Column(Text, nullable=False)
@@ -467,6 +501,64 @@ class PostRating(BaseModel):
     voter_hash = Column(String(64), nullable=False)
 
     post = relationship("Post", back_populates="ratings")
+
+
+class PostReadingProgress(BaseModel):
+    """How far one account has got through one post.
+
+    ## Why this is a table and the reading history is not
+
+    lib/reading-history.ts in the web app keeps the same idea in localStorage,
+    and that stays: it is what an anonymous reader gets, it costs no row, and it
+    makes no claim about anyone. This table is the signed-in half, and the thing
+    it buys is the one localStorage cannot — the same progress on a phone as on
+    the laptop it was left on.
+
+    ## What ``progress`` is
+
+    A fraction, 0 to 1, of the article scrolled past. Stored as a float rather
+    than a percentage integer because the writer is a scroll position and
+    rounding it on the way in would make "finished" depend on which side of a
+    half-percent the last frame landed.
+
+    Clamped by the service, not by the column: a client can send anything, and a
+    check constraint would answer a bad value with a 500 rather than a 422.
+
+    ## Why ``finished`` is its own column
+
+    Because it is a decision, not a measurement. A post read to 0.97 and closed
+    is finished; a post whose last screen is a comment thread may never reach
+    1.0 at all. And once it is set it stays set — re-opening a post you have
+    read does not un-read it, which is what would happen if the flag were
+    derived from the current progress on every write.
+    """
+
+    __tablename__ = "post_reading_progress"
+
+    __table_args__ = (
+        # One row per reader per post. This is what makes a write an upsert
+        # rather than an append — without it a long read would leave a row per
+        # scroll bucket and "have I read this" would be a count.
+        UniqueConstraint("user_id", "post_id", name="uq_post_reading_progress_user_post"),
+        # The reading list is always "everything this account has open, most
+        # recent first".
+        Index(
+            "ix_post_reading_progress_user_id_last_read_at", "user_id", "last_read_at"
+        ),
+    )
+
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    post_id = Column(
+        Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    progress = Column(Float, nullable=False, default=0.0, server_default="0")
+    finished = Column(Boolean, nullable=False, default=False, server_default="false")
+    finished_at = Column(DateTime(timezone=True))
+    last_read_at = Column(DateTime(timezone=True), nullable=False)
+
+    post = relationship("Post", back_populates="reading_progress")
 
 
 class Contact(BaseModel):

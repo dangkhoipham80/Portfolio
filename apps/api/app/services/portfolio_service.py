@@ -15,6 +15,7 @@ from app.models.portfolio import (
     Post,
     PostComment,
     PostRating,
+    PostReadingProgress,
     PostRevision,
     Project,
     Series,
@@ -56,6 +57,18 @@ def _escape_like(term: str) -> str:
     The backslash has to go first, or it re-escapes the escapes added after it.
     """
     return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+# What counts as having reached the end of an article.
+#
+# Not 1.0. The foot of a post is the comment thread, the related posts and the
+# footer, and a reader who has finished the writing has no reason to scroll past
+# any of it — so a threshold of "the very bottom" marks nothing as read except
+# for the people who scroll to the bottom out of habit.
+#
+# 0.95 of the *document* lands somewhere inside that furniture, which is past
+# the last paragraph on every post on this site.
+FINISHED_AT_PROGRESS = 0.95
 
 
 class PortfolioService:
@@ -758,15 +771,34 @@ class PortfolioService:
         return self.db.query(PostComment).filter(PostComment.id == comment_id).first()
 
     def create_comment(
-        self, post_id: int, payload: PostCommentCreate, author_hash: Optional[str] = None
+        self,
+        post_id: int,
+        payload: PostCommentCreate,
+        *,
+        author,
+        author_hash: Optional[str] = None,
     ) -> PostComment:
-        """Queue a reader's comment. Never approves it.
+        """Queue a comment by ``author``. Never approves it.
 
         There is no path here that produces an APPROVED row. Auto-approving on
         any signal — a returning ``author_hash``, a short body, an address that
         has commented before — is how a comment section becomes a spam section,
         because every one of those signals is trivially forged by the only
         parties who bother.
+
+        ## Where the name and the address come from
+
+        The account, and only the account. ``author`` is a ``User`` the route
+        resolved from a bearer token; the payload carries a body and a parent
+        and has no way to express a name or an address at all — see
+        PostCommentCreate, which is the thing that makes "trust the client's
+        idea of who it is" unwriteable here rather than merely discouraged.
+
+        The two are *copied* rather than read through the relationship. What a
+        comment is signed with has to be what they were called when they said
+        it: joining would rewrite every comment somebody ever left the day they
+        change their display name, including the ones an admin approved on the
+        strength of who appeared to be saying them.
         """
         if payload.parent_id is not None:
             parent = self.get_comment(payload.parent_id)
@@ -784,8 +816,13 @@ class PortfolioService:
         record = PostComment(
             post_id=post_id,
             parent_id=payload.parent_id,
-            author_name=payload.author_name,
-            author_email=payload.author_email,
+            user_id=author.id,
+            # `full_name or email` and not `or "Anonymous"`: the registration
+            # schema requires a name, so the fallback is for an admin account
+            # seeded before it did. An address is a poor display name and a
+            # better one than a word nobody chose.
+            author_name=(author.full_name or author.email)[:80],
+            author_email=author.email,
             body=payload.body,
             status=CommentStatus.PENDING,
             author_hash=author_hash,
@@ -834,6 +871,95 @@ class PortfolioService:
             .scalar()
             or 0
         )
+
+    # Reading-progress methods
+    def get_reading_progress(
+        self, user_id: int, post_id: int
+    ) -> Optional[PostReadingProgress]:
+        """This account's row for this post, or None.
+
+        Both keys are required and neither is optional anywhere in this section:
+        every read and write here is scoped to one account, so there is no
+        signature in which "whose progress" can be left out and defaulted to
+        something. That is deliberate — ownership is the whole security property
+        of this feature, and a method that could be called without a user is a
+        method a route can call without one.
+        """
+        return (
+            self.db.query(PostReadingProgress)
+            .filter(
+                PostReadingProgress.user_id == user_id,
+                PostReadingProgress.post_id == post_id,
+            )
+            .first()
+        )
+
+    def list_reading_progress(self, user_id: int) -> List[PostReadingProgress]:
+        """Everything this account has opened, most recently read first."""
+        return (
+            self.db.query(PostReadingProgress)
+            .filter(PostReadingProgress.user_id == user_id)
+            .order_by(PostReadingProgress.last_read_at.desc())
+            .all()
+        )
+
+    def save_reading_progress(
+        self,
+        user_id: int,
+        post_id: int,
+        progress: float,
+        finished: Optional[bool] = None,
+    ) -> PostReadingProgress:
+        """Record how far through a post an account has got. Upsert.
+
+        ## What the client is allowed to move, and in which direction
+
+        ``progress`` is clamped to 0-1 and then only ever goes *up*. A scroll
+        position is not a cursor: opening a post you have read most of puts the
+        browser back at the top, and the recorder there would faithfully report
+        0.02 and erase what the reader actually did. Keeping the high-water mark
+        means "how far have I got" survives re-opening, which is the only
+        question this number is asked.
+
+        ``finished`` is the exception, and it has to be, because it is the one
+        thing a reader might want to take back. Passed explicitly it is obeyed
+        in both directions; left out it is inferred from the progress and can
+        only be set, never cleared — reaching the end marks a post read, and
+        scrolling back up does not un-read it.
+
+        ``finished_at`` is stamped the first time it goes true and cleared if it
+        is ever explicitly unset, so it always means what it says.
+        """
+        # Clamped here rather than by a check constraint: the value comes from a
+        # scroll position in somebody's browser, and a constraint would answer a
+        # nonsense one with a 500 rather than a stored 1.0.
+        progress = min(1.0, max(0.0, progress))
+        now = datetime.now(timezone.utc)
+
+        record = self.get_reading_progress(user_id, post_id)
+        if record is None:
+            record = PostReadingProgress(
+                user_id=user_id, post_id=post_id, progress=0.0, finished=False
+            )
+            self.db.add(record)
+
+        record.progress = max(record.progress or 0.0, progress)
+        record.last_read_at = now
+
+        if finished is None:
+            reached_the_end = record.progress >= FINISHED_AT_PROGRESS
+            record.finished = bool(record.finished or reached_the_end)
+        else:
+            record.finished = bool(finished)
+
+        if record.finished and record.finished_at is None:
+            record.finished_at = now
+        elif not record.finished:
+            record.finished_at = None
+
+        self.db.commit()
+        self.db.refresh(record)
+        return record
 
     # Rating methods
     def get_rating_summary(self, post_id: int, voter_hash: Optional[str] = None) -> dict:

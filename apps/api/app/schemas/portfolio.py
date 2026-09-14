@@ -429,6 +429,23 @@ class Post(PostBase):
     # requests.
     tags: List[TagRef] = []
     series: Optional[SeriesRef] = None
+    # Whether `body` above is the whole post or its publicly readable opening.
+    #
+    # Filled in by the route, never by `from_attributes` — there is no column
+    # for it and there should not be: whether a post is gated is a fact about
+    # the *caller*, not about the post. See app/core/previews.py for the cut and
+    # endpoints/posts.py for who gets which.
+    #
+    # A flag and not a length, because the only thing a consumer can honestly do
+    # with it is say so and offer a way in. Handing over "you have 1800 of 9400
+    # characters" invites a progress bar over content nobody has.
+    gated: bool = False
+    # How many words the *whole* post is, gated or not. Also filled by the route.
+    #
+    # It is what keeps a reading estimate from changing the moment its reader
+    # signs in — without it a gated post would advertise the reading time of its
+    # own preview, which on an index is what says which posts are substantial.
+    word_count: int = 0
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -451,22 +468,29 @@ class PostRevision(BaseModel):
 
 # Comment Schemas
 class PostCommentCreate(BaseModel):
-    """What a reader posts. The only unauthenticated write besides the contact form.
+    """What a reader posts: some prose, and which comment it answers.
 
-    Lengths are the column widths from models/portfolio.py, with one exception:
-    ``body`` is TEXT and has none, so the 4000 is a judgement about what a
-    comment is rather than something the database dictates.
+    ## What is *not* here, and why that is the security property
 
-    The email is required and never published — see the model. Validating it as
-    an address is not identity verification and is not treated as any; it is
-    there so a typo is caught at the form rather than discovered when a reply
-    bounces.
+    ``author_name`` and ``author_email``. They used to be required fields on
+    this model, because a comment could be left by anyone — which meant a name
+    was a claim rather than a fact, and nothing stopped a stranger signing one
+    "Phạm Đăng Khôi". They now come from the account the bearer token resolves
+    to, in ``PortfolioService.create_comment``.
+
+    Deleting them from the schema is what makes that structural. A route that
+    reads identity off the account while the payload can still carry a name is
+    one edit away from trusting the payload again; a payload with no way to
+    express a name cannot be believed by accident. The same reasoning as
+    ``PostComment`` below, which cannot leak an address because it has no field
+    for one.
+
+    ``body``'s 4000 is a judgement about what a comment is rather than a column
+    width — the column is TEXT and has none.
     """
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    author_name: Annotated[str, StringConstraints(min_length=1, max_length=80)]
-    author_email: Annotated[EmailStr, StringConstraints(max_length=255)]
     body: Annotated[str, StringConstraints(min_length=2, max_length=4000)]
     # A top-level comment on the same post. Anything else is rejected by the
     # route, which is where the post is known.
@@ -505,6 +529,44 @@ class PostCommentAdmin(PostComment):
 
 class PostCommentModerate(BaseModel):
     status: CommentStatus
+
+
+# Reading-progress Schemas
+class ReadingProgressWrite(BaseModel):
+    """What a reader's browser sends as they scroll.
+
+    No ``user_id`` and no ``post_id``: the account comes from the bearer token
+    and the post from the path. The same reasoning as ``PostCommentCreate`` —
+    a payload that cannot name a user cannot be used to write somebody else's
+    row, which is a stronger guarantee than a route remembering to ignore it.
+
+    ``finished`` is optional and tri-state on purpose. Left out, the service
+    works it out from the progress and can only ever set it; sent explicitly it
+    is obeyed in both directions, which is what makes "mark as read" and
+    "actually, not yet" possible at all.
+    """
+
+    progress: Annotated[float, Field(ge=0, le=1)]
+    finished: Optional[bool] = None
+
+
+class ReadingProgress(BaseModel):
+    """One post's progress, as its own reader sees it.
+
+    Carries the post's slug and title so a reading list is one request rather
+    than one plus N — filled by the route from the relationship, like the
+    moderation queue's ``post_slug``.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    post_id: int
+    progress: float
+    finished: bool
+    finished_at: Optional[datetime] = None
+    last_read_at: datetime
+    post_slug: Optional[str] = None
+    post_title: Optional[str] = None
 
 
 # Rating Schemas

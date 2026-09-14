@@ -199,6 +199,23 @@ export interface Post {
    * made. Null only on a draft, which the public API never returns.
    */
   published_at: string | null;
+  /**
+   * Whether `body` above is the whole post or only its publicly readable
+   * opening.
+   *
+   * True means the rest is *absent* from this response rather than present and
+   * covered — the API cuts it before sending. See apps/api/app/core/previews.py.
+   * A consumer's only honest move is to say so and offer a way in.
+   */
+  gated: boolean;
+  /**
+   * How many words the whole post is, gated or not.
+   *
+   * The reading estimate is computed from this rather than from `body`, so it
+   * does not change the moment a reader signs in — and so a gated post on the
+   * index still advertises its real length.
+   */
+  word_count: number;
   created_at: string;
   updated_at: string | null;
 }
@@ -244,6 +261,25 @@ export interface RatingSummary {
   distribution: number[];
   /** This visitor's standing vote, if they have one. */
   mine: number | null;
+}
+
+/**
+ * Where one reader has got to in one post.
+ *
+ * Belongs to the account that wrote it and to no one else — the API has no
+ * route that takes a user id, so there is no shape here that could carry
+ * somebody else's. See apps/api/app/api/v1/endpoints/reading.py.
+ */
+export interface ReadingProgress {
+  post_id: number;
+  /** 0 to 1, a high-water mark rather than a live scroll position. */
+  progress: number;
+  finished: boolean;
+  finished_at: string | null;
+  last_read_at: string;
+  /** Filled by the API from the post, so a list needs no second request. */
+  post_slug: string | null;
+  post_title: string | null;
 }
 
 /** A past version of a post. Admin-only; the public API never serves one. */
