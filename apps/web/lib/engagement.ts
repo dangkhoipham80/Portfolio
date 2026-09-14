@@ -2,7 +2,8 @@ import "server-only";
 
 import { headers } from "next/headers";
 
-import type { PostComment, RatingSummary } from "./types";
+import type { PostComment, RatingSummary, ReadingProgress } from "./types";
+import { readerToken } from "./viewer-server";
 
 /**
  * The two things a reader can write, and the one read that is about them.
@@ -19,6 +20,14 @@ import type { PostComment, RatingSummary } from "./types";
  * So these calls forward `X-Forwarded-For` and `User-Agent`, the same
  * arrangement app/actions/contact.ts already uses so the API rate-limits the
  * right person, and nothing here is cached.
+ *
+ * ## Why some of these carry a token
+ *
+ * Commenting and reading progress belong to an account, so those calls go out
+ * with the reader's own bearer token — read from the httpOnly cookie on the
+ * server, never handled in the browser. Ratings and the rating summary do not:
+ * they are keyed on the visitor hash above and are open to anyone, signed in or
+ * not.
  *
  * ## Why failures are reported rather than swallowed
  *
@@ -103,22 +112,38 @@ function isSummary(data: unknown): data is RatingSummary {
 /** What a write can come back as. `rate_limited` carries the wait, in seconds. */
 export type WriteResult<T> =
   | { ok: true; data: T }
+  /**
+   * Signed out, or signed in with an unconfirmed address. Two different things
+   * with two different remedies, which is why `needsVerification` is here and
+   * not left to the caller to infer from the message.
+   */
+  | { ok: false; reason: "unauthorised"; needsVerification: boolean; message: string }
   | { ok: false; reason: "rejected"; message: string }
   | { ok: false; reason: "rate_limited"; retryAfter: number | null }
   | { ok: false; reason: "unavailable" };
 
-async function post<T>(path: string, body: unknown): Promise<WriteResult<T>> {
+async function post<T>(
+  path: string,
+  body: unknown,
+  options: { authenticated?: boolean; method?: "POST" | "PUT" } = {},
+): Promise<WriteResult<T>> {
   let response: Response;
+
+  // Read here rather than by the callers, so the one place a reader's token is
+  // attached to an outbound request is also the one place that can be read to
+  // find out which routes carry it.
+  const token = options.authenticated ? await readerToken() : null;
 
   try {
     response = await fetch(`${API_URL}/api/v1${path}`, {
-      method: "POST",
+      method: options.method ?? "POST",
       cache: "no-store",
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         ...(await visitorHeaders()),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(body),
     });
@@ -134,6 +159,18 @@ async function post<T>(path: string, body: unknown): Promise<WriteResult<T>> {
       ok: false,
       reason: "rate_limited",
       retryAfter: Number.isFinite(seconds) ? seconds : null,
+    };
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    // Not a "rejected" payload: nothing about what was typed is wrong, and the
+    // API's own sentence says which of the two it is — sign in, or confirm your
+    // address. The form turns that into the right control.
+    return {
+      ok: false,
+      reason: "unauthorised",
+      needsVerification: response.status === 403,
+      message: await detailFrom(response),
     };
   }
 
@@ -170,11 +207,131 @@ async function detailFrom(response: Response): Promise<string> {
   return "The server would not accept that. Check the fields and try again.";
 }
 
+/**
+ * Post a comment as the signed-in reader.
+ *
+ * The payload carries prose and a parent and nothing else. The name and the
+ * address on the stored comment come from the account the token resolves to —
+ * the API's request schema has no field for either, so there is nothing this
+ * function could send that would change who the comment is from. See
+ * PostCommentCreate in apps/api/app/schemas/portfolio.py.
+ */
 export async function submitComment(
   postId: number,
-  payload: { author_name: string; author_email: string; body: string; parent_id?: number },
+  payload: { body: string; parent_id?: number },
 ): Promise<WriteResult<PostComment>> {
-  return post<PostComment>(`/posts/${postId}/comments`, payload);
+  return post<PostComment>(`/posts/${postId}/comments`, payload, {
+    authenticated: true,
+  });
+}
+
+/**
+ * Record how far the signed-in reader has got through a post.
+ *
+ * A PUT rather than a POST: it is idempotent, and the resource is "this
+ * reader's progress on this post" — one thing at one address, however many
+ * times it is written. These go out while somebody scrolls, so a verb that
+ * promises a new resource each time would be a lie about what a retry does.
+ */
+export async function saveProgress(
+  postId: number,
+  progress: number,
+  finished?: boolean,
+): Promise<WriteResult<ReadingProgress>> {
+  return post<ReadingProgress>(
+    `/reading/posts/${postId}`,
+    { progress, ...(finished === undefined ? {} : { finished }) },
+    { authenticated: true, method: "PUT" },
+  );
+}
+
+/**
+ * This reader's progress on one post, or null.
+ *
+ * Null covers three different things — not signed in, never opened, API down —
+ * and the caller treats them the same because there is nothing else it could
+ * do: all three mean "no position to restore".
+ */
+export async function readProgress(postId: number): Promise<ReadingProgress | null> {
+  const token = await readerToken();
+  if (!token) return null;
+
+  try {
+    const response = await fetch(`${API_URL}/api/v1/reading/posts/${postId}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) return null;
+    return (await response.json()) as ReadingProgress;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One post, whole, as the signed-in reader.
+ *
+ * Straight to the API with their own token rather than through lib/api.ts,
+ * whose reads are cached and made with this server's identity — both of which
+ * are exactly wrong for a response that depends on who asked.
+ *
+ * Null for a caller with no session, for a post that is not there, and for an
+ * API that did not answer. All three mean the same thing to the gate: it stays
+ * shut and says so.
+ */
+export async function readWholePost(
+  slug: string,
+): Promise<{ body: string; format: "markdown" | "mdx" } | null> {
+  const token = await readerToken();
+  if (!token) return null;
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/v1/posts/slug/${encodeURIComponent(slug)}`,
+      {
+        cache: "no-store",
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      },
+    );
+
+    if (!response.ok) return null;
+
+    const post = (await response.json()) as {
+      body?: string;
+      format?: "markdown" | "mdx";
+    };
+
+    return post?.body ? { body: post.body, format: post.format ?? "markdown" } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Everything this reader has open, most recently read first. */
+export async function readReadingList(): Promise<ReadingProgress[]> {
+  const token = await readerToken();
+  if (!token) return [];
+
+  try {
+    const response = await fetch(`${API_URL}/api/v1/reading/`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    // Same shape check as lib/api.ts, and for the same reason: an object where
+    // a list belongs throws on `.map()` during render — a 500 produced by a
+    // successful request.
+    return Array.isArray(data) ? (data as ReadingProgress[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function submitRating(

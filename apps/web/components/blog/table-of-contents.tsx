@@ -7,8 +7,18 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { useArticleState } from "@/lib/article-state";
 import { cn } from "@/lib/cn";
-import { type Heading, hasContents } from "@/lib/headings";
+import { type Heading, hasContents, indentOf } from "@/lib/headings";
+
+/**
+ * One step of indentation per level below the post's shallowest heading.
+ *
+ * Written out rather than computed into an arbitrary value, because Tailwind
+ * scans source text for class names — `pl-${n}` produces nothing at all, and
+ * the failure is a list with no hierarchy rather than an error.
+ */
+const INDENT = ["pl-4", "pl-7", "pl-10"] as const;
 
 /**
  * The post's headings, in the left margin.
@@ -22,8 +32,15 @@ import { type Heading, hasContents } from "@/lib/headings";
  * ## Why it disappears for short posts
  *
  * Three headings on a post you can read in four minutes is furniture. The
- * threshold is `hasContents` in lib/markdown.ts, shared with the page — which
+ * threshold is `hasContents` in lib/headings.ts, shared with the page — which
  * has to make the same decision to stop reserving the column this sits in.
+ *
+ * ## Where the entries come from
+ *
+ * The rendered post, not its Markdown. `renderPostBody` collects them as it
+ * writes the ids, so an entry's `id` is by construction the id that is on the
+ * page — see `anchorHeadings` in lib/markdown.ts for the several ordinary ways
+ * the two used to come apart while both looked right.
  *
  * ## The marker
  *
@@ -35,7 +52,16 @@ import { type Heading, hasContents } from "@/lib/headings";
  * without a lookup table. Under reduced motion the transition is zeroed by
  * the global rule and the node simply jumps.
  */
-export function TableOfContents({ headings }: { headings: Heading[] }) {
+export function TableOfContents({ headings: fromServer }: { headings: Heading[] }) {
+  /*
+    The headings of what is on screen, which is not always what the server sent:
+    a gated post is unlocked in place and its body replaced, and a contents list
+    still showing the preview's three entries would be pointing at an article
+    that has since grown. Null until that happens — see lib/article-state.ts.
+  */
+  const { headings: replaced } = useArticleState();
+  const headings = replaced ?? fromServer;
+
   const [active, setActive] = useState<string | null>(null);
   const [marker, setMarker] = useState<{ top: number; height: number } | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -68,6 +94,9 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
 
         if (visible.length > 0) setActive(visible[0].target.id);
       },
+      // The top of the band clears the sticky header, so a heading that has
+      // just been scrolled to — and is therefore sitting immediately below the
+      // bar — counts as current rather than as not yet reached.
       { rootMargin: "-80px 0px -70% 0px", threshold: 0 },
     );
 
@@ -114,8 +143,12 @@ export function TableOfContents({ headings }: { headings: Heading[] }) {
               // which section you are in is state, and it has to be readable.
               aria-current={active === heading.id ? "location" : undefined}
               className={cn(
-                "block py-1.5 pl-4 text-sm transition-[color,translate] duration-300 ease-[var(--ease-enter)] hover:translate-x-0.5",
-                heading.level === 3 && "pl-7",
+                "block py-1.5 text-sm transition-[color,translate] duration-300 ease-[var(--ease-enter)] hover:translate-x-0.5",
+                // Indented against the shallowest heading in *this* post rather
+                // than against `h2`, so a post whose sections are `#` and one
+                // whose sections are `##` produce the same-looking list. See
+                // `indentOf`.
+                INDENT[indentOf(heading, headings)],
                 active === heading.id
                   ? "text-foreground"
                   : "text-muted-foreground hover:text-foreground",

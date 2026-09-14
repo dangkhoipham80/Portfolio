@@ -6,16 +6,28 @@ import { LoginForm } from "@/components/login-form";
 import { Container } from "@/components/ui/container";
 import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { ScreenTitle } from "@/components/ui/screen-title";
-import { hasLiveSession } from "@/lib/admin-guard";
 import { cn } from "@/lib/cn";
-import { ADMIN_PATH, safeNextPath } from "@/lib/session";
+import { landingPath, safeNextPath } from "@/lib/session";
+import { readViewer } from "@/lib/viewer-server";
 
 export const metadata: Metadata = {
-  title: "Console access",
+  title: "Sign in",
 };
 
 /**
- * The way in to the admin area.
+ * The way in, for the owner and for a reader alike.
+ *
+ * ## Why there is one of these and not two
+ *
+ * It was the console's door and is now everyone's, which looks like it should
+ * mean a second, friendlier screen somewhere on the site. It does not. A second
+ * screen is a second form, a second set of field rules and a second place for
+ * the `next` round trip to be got subtly wrong — and the thing a reader and the
+ * owner are doing here is identical: exchanging an address and a password for
+ * the same cookie pair, through the same action.
+ *
+ * What differs is only where they end up, and that is decided after the fact by
+ * who the account turns out to be. See `landing` in app/actions/auth.ts.
  *
  * Composed as a panel sitting on the site's own grid rather than a card
  * floating in the middle of an empty screen. The centred-card login is the
@@ -29,23 +41,26 @@ export const metadata: Metadata = {
  * same wire carrying credentials to the same backend.
  */
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  // Already signed in? Go straight through.
-  //
-  // This is what lets the header's console control be a plain static link. The
-  // alternative — having the header ask who is signed in — means calling
-  // cookies() in a component every page renders, which opts the entire public
-  // site out of static rendering to answer a question only the owner ever asks.
-  //
-  // The check is the real one rather than "is there a cookie", so a stale
-  // cookie shows the form instead of bouncing to /admin and being sent back.
-  if (await hasLiveSession()) redirect(ADMIN_PATH);
-
   const params = await searchParams;
   const raw = params.next;
-  // Never rendered into an href — it is a hidden form value the action
+  // Never rendered into an href unescaped — it is a hidden form value the action
   // re-validates — but sanitised here too so nothing downstream inherits an
-  // attacker-chosen string.
-  const next = safeNextPath(typeof raw === "string" ? raw : null);
+  // attacker-chosen string. The fallback is empty so that "they did not ask for
+  // anywhere" survives, and is answered by the action from who they are.
+  const next = safeNextPath(typeof raw === "string" ? raw : null, "");
+
+  // Already signed in? Go straight through, to wherever they were heading.
+  //
+  // The check is the real one rather than "is there a cookie", so a stale cookie
+  // shows the form instead of bouncing and being sent back.
+  //
+  // `landingPath` and not `next`, and the difference is not cosmetic: a reader
+  // who opens /admin is sent here with `next=/admin`, and honouring that would
+  // bounce them to the guard, which would send them back here, for as long as
+  // the browser was willing to follow it. Shared with the sign-in action so the
+  // two cannot disagree about this again.
+  const viewer = await readViewer();
+  if (viewer) redirect(landingPath(next, viewer.isAdmin));
 
   return (
     // The console group no longer supplies a <main>; each screen places its
@@ -64,17 +79,24 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
               restates its heading is the shape the detector's
               kicker-above-heading rule is named for. The eyebrows that stay
               on this site carry a path and a count. */}
-          <ScreenTitle>Console access</ScreenTitle>
+          <ScreenTitle>Sign in</ScreenTitle>
           <p className="mt-4 text-muted-foreground">
-            This area manages the site&rsquo;s content. There is no public
-            sign-up — the one account is created from the command line.
+            An account gets you the rest of a long post, a comment under your own
+            name, and a reading position that follows you between devices. The
+            owner signs in here too, and lands in the console.
           </p>
 
           <div className="mt-10">
             <LoginForm next={next} />
           </div>
 
-          <p className={cn(eyebrowClasses, "mt-10")}>
+          <p className={cn(eyebrowClasses, "mt-10 flex flex-wrap gap-x-5 gap-y-1")}>
+            <Link
+              href={next ? `/join?next=${encodeURIComponent(next)}` : "/join"}
+              className="underline underline-offset-4 hover:text-primary"
+            >
+              Create an account
+            </Link>
             <Link href="/" className="underline underline-offset-4 hover:text-primary">
               Back to the site
             </Link>

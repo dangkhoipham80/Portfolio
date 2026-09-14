@@ -10,6 +10,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ArticleBody } from "@/components/blog/article-body";
+import { CodeCopy } from "@/components/blog/code-copy";
 import { CommentThread } from "@/components/blog/comment-thread";
 import { PostMeta } from "@/components/blog/post-meta";
 import { Rating } from "@/components/blog/rating";
@@ -25,7 +27,7 @@ import { getPost, getPostComments, getPosts, getSeriesPosts } from "@/lib/api";
 import { isOptimisableImage } from "@/lib/blob";
 import { cn } from "@/lib/cn";
 import { langAttribute } from "@/lib/languages";
-import { hasContents, headingsOf, summarise } from "@/lib/markdown";
+import { hasContents, minutesForWords, summarise } from "@/lib/markdown";
 import { renderPostBody } from "@/lib/mdx";
 import { absoluteUrl, SITE_AUTHOR } from "@/lib/site";
 
@@ -117,9 +119,27 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
     post.series ? getSeriesPosts(post.series.slug) : Promise.resolve([]),
   ]);
 
-  const headings = headingsOf(post.body);
+  /*
+    The headings come back from the renderer rather than from a second reading
+    of the source, which is what stops the contents list and the anchors on the
+    page disagreeing — see `anchorHeadings` in lib/markdown.ts for the several
+    ordinary ways they used to.
+  */
+  const headings = body.headings;
   const contents = hasContents(headings);
   const series = Boolean(post.series && seriesPosts.length > 1);
+
+  /*
+    How much of the post is behind the gate, in minutes.
+
+    `word_count` is the whole post's in every response, gated or not, so this is
+    a real figure rather than one derived from the part that happens to have
+    arrived. The rendered portion is counted the same way the whole was, so the
+    subtraction compares like with like.
+  */
+  const minutesLeft = post.gated
+    ? Math.max(1, minutesForWords(post.word_count) - minutesForWords(wordsIn(post.body)))
+    : 0;
 
   return (
     <>
@@ -137,7 +157,12 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
         <div className="reading-progress-y h-full w-full bg-signal" />
       </div>
 
-      <ReadRecorder slug={post.slug} title={post.title} />
+      {/*
+        One listener for every code block on the page, rather than a component
+        per fence. The buttons themselves are in the post's own markup, written
+        by `copyableCodeBlocks` — see components/blog/code-copy.tsx.
+      */}
+      <CodeCopy />
 
       {/*
         The whole width, like the home page. The post used to sit in the 7xl
@@ -295,8 +320,30 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
                 with the class puts one element between the class and the
                 content, and every rule in that stylesheet is a direct-child
                 selector. See lib/mdx.tsx.
+
+                `ArticleBody` is a client component and the body is its child, so
+                the markup above is still rendered on the server and shipped as
+                HTML. What the client half adds is the gate at the end of a long
+                post, and the ability to swap the whole body for the unabridged
+                one once its reader signs in — see components/blog/article-body.tsx
+                for why the page itself cannot simply read the session.
               */}
-              <div lang={langAttribute(post.language)}>{body.content}</div>
+              <div lang={langAttribute(post.language)}>
+                <ArticleBody
+                  slug={post.slug}
+                  gated={post.gated}
+                  minutesLeft={minutesLeft}
+                >
+                  {body.content}
+                </ArticleBody>
+              </div>
+
+              {/*
+                Where the reader has got to, and the finished mark. At the end of
+                the article because that is where somebody who has finished one
+                is, and because it is a statement about the thing above it.
+              */}
+              <ReadRecorder postId={post.id} slug={post.slug} title={post.title} />
 
               {post.series && seriesPosts.length > 0 ? (
                 <SeriesSteps posts={seriesPosts} currentSlug={post.slug} />
@@ -344,6 +391,11 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
       </article>
     </>
   );
+}
+
+/** The same count the API makes, so the two halves of a gated post compare. */
+function wordsIn(markdown: string): number {
+  return markdown.replace(/```[\s\S]*?```/g, " ").split(/\s+/).filter(Boolean).length;
 }
 
 /**

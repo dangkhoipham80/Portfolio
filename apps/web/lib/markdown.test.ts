@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { headingsOf, plainText, readingMinutes, renderMarkdown, summarise } from "./markdown";
+import { plainText, readingMinutes, renderMarkdown, summarise } from "./markdown";
 
 /**
  * The output of `renderMarkdown` goes straight into `dangerouslySetInnerHTML`.
@@ -75,16 +75,16 @@ describe("rendering", () => {
     expect(html).toMatch(/<h2 id="kept">/);
   });
 
-  it("agrees with headingsOf about every anchor", async () => {
-    // The two derive ids from different inputs — this one from the rendered
-    // tree, `headingsOf` from the Markdown source — and nothing fails when they
-    // disagree. The contents list just stops working.
-    const source = "## Why\n\ntext\n\n### Cấu trúc\n\ntext\n\n## Why\n";
-    const html = await renderMarkdown(source);
+  it("anchors an h1 in the body, which a post may use for its sections", async () => {
+    // The ids and the contents list are one derivation now; that the list and
+    // the page agree is checked in mdx-guard.test.ts. What is checked here is
+    // that the sanitiser's schema permits `id` on every level that gets one —
+    // it runs before `anchorHeadings`, so a missing entry strips the attribute
+    // silently and the anchors stop existing.
+    const html = await renderMarkdown("# Introduction\n\n#### Deep\n");
 
-    for (const heading of headingsOf(source)) {
-      expect(html).toContain(`id="${heading.id}"`);
-    }
+    expect(html).toContain('id="introduction"');
+    expect(html).toContain('id="deep"');
   });
 
   it("renders GitHub tables, which plain CommonMark does not", async () => {
@@ -240,5 +240,64 @@ describe("links", () => {
     const html = await renderMarkdown('<a href="https://example.com" target="_top">x</a>');
 
     expect(html).not.toContain('target="_top"');
+  });
+});
+
+
+describe("copyable code blocks", () => {
+  /*
+   * The button is rendered on the server so that one delegated listener in the
+   * browser can serve every fence on the page — see `copyableCodeBlocks` in
+   * lib/markdown.ts and components/blog/code-copy.tsx. What is checked here is
+   * the markup that arrangement depends on.
+   */
+
+  it("puts a button inside every fence", async () => {
+    const html = await renderMarkdown("```python\nprint(1)\n```\n");
+
+    expect(html).toContain("data-code-block");
+    expect(html).toMatch(/<pre[^>]*><button type="button" data-copy="" hidden/);
+  });
+
+  it("carries both words, so the button does not resize mid-press", async () => {
+    const html = await renderMarkdown("```js\nconst a = 1\n```\n");
+
+    expect(html).toContain('class="code-copy-idle">Copy<');
+    expect(html).toContain('class="code-copy-done">Copied<');
+  });
+
+  it("starts hidden, because without scripting it cannot do anything", async () => {
+    // The listener removes `hidden` on mount. A control that does nothing when
+    // pressed is worse than no control.
+    const html = await renderMarkdown("```\nplain\n```\n");
+
+    expect(html).toMatch(/<button[^>]*hidden/);
+  });
+
+  it("keeps the code as the only thing inside the <code>", async () => {
+    // The copy handler reads `pre > code`, not `pre`, precisely because the
+    // button's own text sits inside the <pre>. If the button ever moved into
+    // the <code>, every copy would begin with the word "Copy".
+    const html = await renderMarkdown("```bash\necho hi\n```\n");
+    const code = html.slice(html.indexOf("<code"), html.indexOf("</code>"));
+
+    expect(code).not.toContain("code-copy");
+    expect(code).not.toContain("Copy");
+  });
+
+  it("leaves a display formula alone", async () => {
+    // KaTeX has replaced the <code> by the time the plugin runs, so there is
+    // nothing to copy and no button. A "copy" on an equation would put the
+    // rendered maths markup's text on the clipboard.
+    const html = await renderMarkdown(String.raw`$$\pi r^2$$` + "\n");
+
+    expect(html).toContain("katex");
+    expect(html).not.toContain("code-copy");
+  });
+
+  it("gives each fence its own button", async () => {
+    const html = await renderMarkdown("```js\na\n```\n\ntext\n\n```js\nb\n```\n");
+
+    expect(html.match(/data-copy=""/g)).toHaveLength(2);
   });
 });

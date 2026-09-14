@@ -218,12 +218,93 @@ export type CurrentUser = {
   email: string;
   full_name: string | null;
   roles: string[];
+  /** Derived by the API from `roles`, so two consumers cannot disagree. */
+  is_admin: boolean;
+  /** Whether the address has been confirmed. Commenting requires it. */
+  is_verified: boolean;
+  /** Consecutive days signed in. See UserService.record_login on the API. */
+  login_streak: number;
+  /** The UTC day the streak was last advanced, as `YYYY-MM-DD`, or null. */
+  last_login_day: string | null;
 };
 
 /** Who the access token belongs to. The console's real authorisation check. */
 export async function fetchCurrentUser(token: string): Promise<ApiResult<CurrentUser>> {
   const response = await call("/auth/me", { token });
   return toResult<CurrentUser>(response, "/auth/me");
+}
+
+/**
+ * Create a reader account.
+ *
+ * Answers `ok` for an address that already has an account as readily as for a
+ * new one — the API's design, not an oversight here (see AuthService.register),
+ * and this must not undo it by inspecting the response for a difference that is
+ * deliberately not there. The screen says "check your email" either way.
+ */
+export async function register(
+  payload: { email: string; password: string; full_name: string },
+  forwardedFor?: string,
+): Promise<ApiResult<{ message: string }>> {
+  const response = await call("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    // Same reason as login(): the API's cap is 5/hour per IP, and without this
+    // the IP it counts is this server's — so five sign-ups from anywhere in the
+    // world would close the form for everybody.
+    headers: forwardedFor ? { "X-Forwarded-For": forwardedFor } : {},
+  });
+
+  return toResult<{ message: string }>(response, "/auth/register");
+}
+
+/**
+ * Spend a verification link.
+ *
+ * Not `ApiResult`, for the reason `confirmPasswordReset` above is not either:
+ * the API answers 422 to a token it will not take, and `toResult` folds every
+ * 422 into `error` — which would report a link that has already been used as
+ * "the API did not answer". The two need different sentences.
+ */
+export async function verifyEmail(
+  token: string,
+): Promise<{ ok: true } | { ok: false; reason: "token_rejected" | "error" }> {
+  const response = await call("/auth/verify-email", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+
+  if (!response) return { ok: false, reason: "error" };
+  if (response.ok) return { ok: true };
+  if (response.status === 422 || response.status === 400) {
+    return { ok: false, reason: "token_rejected" };
+  }
+
+  console.error(`[console] ${response.status} from /auth/verify-email`);
+  return { ok: false, reason: "error" };
+}
+
+/**
+ * Mail a fresh verification link.
+ *
+ * Answers `ok` for an unknown or already-verified address as readily as for one
+ * waiting on a link — the API's design, not an oversight here — so nothing
+ * downstream may inspect the result for a difference that is deliberately not
+ * there.
+ */
+export async function resendVerification(
+  email: string,
+  forwardedFor?: string,
+): Promise<ApiResult<{ message: string }>> {
+  const response = await call("/auth/resend-verification", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    // Same reason as login(): the API's cap is 5/hour per IP, and without this
+    // the IP it counts is this server's.
+    headers: forwardedFor ? { "X-Forwarded-For": forwardedFor } : {},
+  });
+
+  return toResult<{ message: string }>(response, "/auth/resend-verification");
 }
 
 /** Contact messages, newest first. Admin-only on the API. */

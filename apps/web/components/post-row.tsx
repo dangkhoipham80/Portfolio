@@ -3,7 +3,7 @@ import Link from "next/link";
 import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { cn } from "@/lib/cn";
 import { isoDay } from "@/lib/format";
-import { readingMinutes, summarise } from "@/lib/markdown";
+import { minutesForWords, summarise } from "@/lib/markdown";
 import type { Post } from "@/lib/types";
 
 /**
@@ -19,7 +19,9 @@ import type { Post } from "@/lib/types";
  */
 export function PostRow({ post }: { post: Post }) {
   const day = isoDay(post.published_at);
-  const minutes = readingMinutes(post.body);
+  // From the count the API sends rather than from the body in hand: a gated
+  // post arrives cut, and measuring it would advertise its preview's length.
+  const minutes = minutesForWords(post.word_count);
   const blurb = post.excerpt ?? summarise(post.body);
 
   return (

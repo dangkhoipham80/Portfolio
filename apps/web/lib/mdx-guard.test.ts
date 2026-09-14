@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { headingsOf, slugifyHeading } from "./markdown";
+import { renderArticle, slugifyHeading } from "./markdown";
 import { validateMdx } from "./mdx-guard";
 
 /**
@@ -141,33 +141,78 @@ describe("MDX that is allowed", () => {
   });
 });
 
-describe("headings", () => {
-  it("collects h2 and h3 only", async () => {
-    const headings = headingsOf("# Title\n\n## Two\n\n### Three\n\n#### Four\n");
+describe("heading anchors", () => {
+  /*
+   * These used to test `headingsOf`, which read headings out of the Markdown
+   * *source* while `anchorHeadings` wrote ids onto the rendered tree — two
+   * derivations of the same thing, each with a comment asking the other to
+   * agree with it. They did not, and nothing failed when they diverged: the
+   * contents list simply linked to anchors that were not on the page.
+   *
+   * There is one derivation now, and it happens during rendering, so these test
+   * it where it lives. The cases below are the ones the two used to disagree
+   * about.
+   */
 
-    expect(headings.map((h) => h.text)).toEqual(["Two", "Three"]);
-    expect(headings.map((h) => h.level)).toEqual([2, 3]);
+  it("collects every level a post uses, h1 included", async () => {
+    // `#` is ordinary Markdown for a section. The old source reader skipped it
+    // as "the post title", so a post written that way had no contents at all.
+    const { headings } = await renderArticle(
+      "# Introduction\n\n## Installation\n\n## Configuration\n\n### Environment Variables\n",
+    );
+
+    expect(headings.map((heading) => heading.text)).toEqual([
+      "Introduction",
+      "Installation",
+      "Configuration",
+      "Environment Variables",
+    ]);
+    expect(headings.map((heading) => heading.level)).toEqual([1, 2, 2, 3]);
   });
 
-  it("ignores a comment inside a code fence", async () => {
-    // A shell session is not a table of contents.
-    const headings = headingsOf("```bash\n## not a heading\n```\n\n## Real One\n");
+  it("gives every entry an id that is actually on the page", async () => {
+    // The property the whole arrangement exists for. Nothing in a build or a
+    // browser complains when this is false — the links just go nowhere.
+    const source =
+      "# Why\n\ntext\n\n## Cấu trúc\n\ntext\n\n> ## Quoted\n\n## Why\n\n#### Deep\n";
+    const { html, headings } = await renderArticle(source);
 
-    expect(headings.map((h) => h.text)).toEqual(["Real One"]);
-  });
-
-  it("strips inline markdown from the label", async () => {
-    const headings = headingsOf("## The `format` column\n");
-
-    expect(headings[0].text).toBe("The format column");
+    expect(headings.length).toBeGreaterThan(0);
+    for (const heading of headings) {
+      expect(html).toContain(`id="${heading.id}"`);
+    }
   });
 
   it("gives repeated headings distinct ids", async () => {
     // Every "Why" section in a technical post, otherwise both anchors point at
     // the first one.
-    const headings = headingsOf("## Why\n\n## Why\n");
+    const { headings } = await renderArticle("## Why\n\n## Why\n\n## Why\n");
 
-    expect(headings.map((h) => h.id)).toEqual(["why", "why-2"]);
+    expect(headings.map((heading) => heading.id)).toEqual(["why", "why-2", "why-3"]);
+  });
+
+  it("counts a heading inside a blockquote, like the page does", async () => {
+    // The source reader's pattern was anchored to the start of a line, so it
+    // missed this one — and every later duplicate then got the wrong suffix.
+    const { headings } = await renderArticle("## Why\n\n> ## Why\n\n## Why\n");
+
+    expect(headings.map((heading) => heading.id)).toEqual(["why", "why-2", "why-3"]);
+  });
+
+  it("ignores a comment inside a code fence", async () => {
+    // A shell session is not a table of contents.
+    const { headings } = await renderArticle(
+      "```bash\n## not a heading\n```\n\n## Real One\n",
+    );
+
+    expect(headings.map((heading) => heading.text)).toEqual(["Real One"]);
+  });
+
+  it("strips inline markdown from the label", async () => {
+    const { headings } = await renderArticle("## The `format` column\n");
+
+    expect(headings[0].text).toBe("The format column");
+    expect(headings[0].id).toBe("the-format-column");
   });
 
   it("folds accents rather than dropping the heading", async () => {

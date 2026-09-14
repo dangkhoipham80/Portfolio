@@ -10,6 +10,10 @@ actually matter:
 * A comment is never public until an admin says so. There is no code path that
   produces an approved comment, and ``test_a_new_comment_is_not_public``
   is what says so.
+* A comment is signed by the account that posted it and by nothing else. The
+  request schema cannot carry a name or an address, which is a stronger claim
+  than "the route ignores them" and is what
+  ``test_a_comment_is_signed_by_the_account_not_the_payload`` checks.
 * A rating cannot be moved by voting twice.
 * An edit is recoverable. A publish toggle is not an edit and must not fill the
   history with entries nobody wants to scroll past.
@@ -23,7 +27,10 @@ from fastapi.testclient import TestClient
 
 from app.core.slugs import unique_slug
 from app.main import app
-from app.models.portfolio import Post, Series, Tag
+from app.models.portfolio import CommentStatus, Post, PostComment, Series, Tag
+from app.models.token import TokenType
+from app.models.user import UserStatus
+from app.services.user_service import UserService
 
 client = TestClient(app)
 
@@ -300,29 +307,108 @@ def test_deleting_a_series_keeps_its_posts(make_series, make_post, admin_token):
 
 # --- comments --------------------------------------------------------------
 
-def _comment(post_id, **fields):
-    body = {
-        "author_name": "A Reader",
-        "author_email": "reader@example.com",
-        "body": "This was useful, thank you.",
-        **fields,
-    }
-    return client.post(f"/api/v1/posts/{post_id}/comments", json=body)
+def _comment(post_id, token, **fields):
+    """Post a comment as the holder of ``token``.
+
+    The payload carries prose and a parent and nothing else — the name and the
+    address come from the account the token resolves to, and the request schema
+    has no field that could say otherwise. That is the point of
+    test_a_comment_is_signed_by_the_account_not_the_payload below.
+    """
+    body = {"body": "This was useful, thank you.", **fields}
+    return client.post(
+        f"/api/v1/posts/{post_id}/comments", json=body, headers=_auth(token)
+    )
 
 
-def test_a_new_comment_is_not_public(make_post):
+def test_anonymous_cannot_comment(make_post):
+    """Commenting needs an account. There is no name-and-email path any more."""
+    post = make_post("No Anonymous Comments", published=True)
+
+    response = client.post(
+        f"/api/v1/posts/{post.id}/comments", json={"body": "Let me in."}
+    )
+
+    assert response.status_code == 401
+    assert client.get(f"/api/v1/posts/{post.id}/comments").json() == []
+
+
+def test_an_unverified_account_cannot_comment(make_post, db, make_user):
+    """403 and not 401: the token is fine, the address is not.
+
+    Signing in already refuses an unverified account, so this token is the state
+    that check exists for — an address reset to unverified while a session was
+    still live.
+    """
+    unverified = make_user(
+        "unverified@example.invalid", is_verified=False, status=UserStatus.ACTIVE
+    )
+    token = UserService(db).create_token(
+        unverified.id, TokenType.ACCESS, expires_in_minutes=10
+    )
+    post = make_post("Verify First", published=True)
+
+    response = _comment(post.id, token)
+
+    assert response.status_code == 403
+    assert "email" in response.json()["detail"].lower()
+
+
+def test_a_comment_is_signed_by_the_account_not_the_payload(
+    make_post, reader_token, db
+):
+    """A name in the body is not a name on the comment — there is no such field.
+
+    The extra keys below are ignored rather than rejected, which is pydantic's
+    default and is fine: what matters is that they cannot reach the row.
+    """
+    post = make_post("Identity Comes From The Token", published=True)
+
+    created = _comment(
+        post.id,
+        reader_token,
+        author_name="Phạm Đăng Khôi",
+        author_email="owner@example.invalid",
+    ).json()
+
+    stored = db.query(PostComment).filter(PostComment.id == created["id"]).first()
+    assert stored.author_name == "Test User"
+    assert stored.author_email == "reader@example.invalid"
+    assert stored.user_id is not None
+
+
+def test_an_admin_comments_as_themselves_with_no_name_or_email(
+    make_post, admin_token, db
+):
+    """The owner reading their own site comments through the same route.
+
+    No second, quieter path that mints an author out of a payload: the admin's
+    comment is an ordinary authenticated comment carrying their account's
+    identity, and it queues for moderation like anyone else's.
+    """
+    post = make_post("Admin Comments From The Site", published=True)
+
+    created = _comment(post.id, admin_token).json()
+
+    stored = db.query(PostComment).filter(PostComment.id == created["id"]).first()
+    assert stored.author_email == "content-admin@example.invalid"
+    assert stored.user_id is not None
+    assert stored.status == CommentStatus.PENDING
+
+
+def test_a_new_comment_is_not_public(make_post, reader_token):
     """The one that matters. Nothing here can approve a comment."""
     post = make_post("Commented On", published=True)
 
-    assert _comment(post.id).status_code == 201
+    assert _comment(post.id, reader_token).status_code == 201
 
     assert client.get(f"/api/v1/posts/{post.id}/comments").json() == []
 
 
-def test_an_approved_comment_is_public(make_post, admin_token):
+def test_an_approved_comment_is_public(make_post, admin_token, reader_token):
     """Baseline: without it the test above could pass on a broken read."""
     post = make_post("Approved Comment Here", published=True)
-    created = _comment(post.id).json()
+    created = _comment(post.id, reader_token).json()
 
     client.put(
         f"/api/v1/comments/{created['id']}",
@@ -334,10 +420,10 @@ def test_an_approved_comment_is_public(make_post, admin_token):
     assert [c["id"] for c in public] == [created["id"]]
 
 
-def test_the_public_comment_shape_has_no_email(make_post, admin_token):
+def test_the_public_comment_shape_has_no_email(make_post, admin_token, reader_token):
     """The address is how the owner replies. It is not published."""
     post = make_post("Email Must Not Leak", published=True)
-    created = _comment(post.id).json()
+    created = _comment(post.id, reader_token).json()
     client.put(
         f"/api/v1/comments/{created['id']}",
         json={"status": "approved"},
@@ -348,19 +434,19 @@ def test_the_public_comment_shape_has_no_email(make_post, admin_token):
 
     assert "author_email" not in public
     assert "author_hash" not in public
-    assert "reader@example.com" not in str(public)
+    assert "reader@example.invalid" not in str(public)
 
 
-def test_the_create_response_also_hides_the_email(make_post):
+def test_the_create_response_also_hides_the_email(make_post, reader_token):
     """The same model guards the echo the form shows back to its author."""
     post = make_post("Echo Hides Email", published=True)
 
-    assert "author_email" not in _comment(post.id).json()
+    assert "author_email" not in _comment(post.id, reader_token).json()
 
 
-def test_an_admin_sees_pending_comments_in_the_queue(make_post, admin_token):
+def test_an_admin_sees_pending_comments_in_the_queue(make_post, admin_token, reader_token):
     post = make_post("Queued For Moderation", published=True)
-    created = _comment(post.id).json()
+    created = _comment(post.id, reader_token).json()
 
     queue = client.get("/api/v1/comments/?status=pending", headers=_auth(admin_token)).json()
 
@@ -375,9 +461,9 @@ def test_the_moderation_queue_needs_admin():
     assert client.get("/api/v1/comments/").status_code in (401, 403)
 
 
-def test_a_rejected_comment_stays_out_of_the_public_thread(make_post, admin_token):
+def test_a_rejected_comment_stays_out_of_the_public_thread(make_post, admin_token, reader_token):
     post = make_post("Rejected Comment Here", published=True)
-    created = _comment(post.id).json()
+    created = _comment(post.id, reader_token).json()
 
     client.put(
         f"/api/v1/comments/{created['id']}",
@@ -388,43 +474,43 @@ def test_a_rejected_comment_stays_out_of_the_public_thread(make_post, admin_toke
     assert client.get(f"/api/v1/posts/{post.id}/comments").json() == []
 
 
-def test_a_reply_must_name_an_approved_parent_on_the_same_post(make_post):
+def test_a_reply_must_name_an_approved_parent_on_the_same_post(make_post, reader_token):
     """A parent from another post would render under a comment that is not there."""
     post = make_post("Has A Thread", published=True)
     elsewhere = make_post("Somewhere Else", published=True)
-    stranger = _comment(elsewhere.id).json()
+    stranger = _comment(elsewhere.id, reader_token).json()
 
-    response = _comment(post.id, parent_id=stranger["id"])
+    response = _comment(post.id, reader_token, parent_id=stranger["id"])
 
     assert response.status_code == 422
 
 
-def test_replies_do_not_nest_two_deep(make_post, admin_token):
+def test_replies_do_not_nest_two_deep(make_post, admin_token, reader_token):
     """Below 375px there is no indentation left to spend on a third level."""
     post = make_post("Threaded Once", published=True)
-    top = _comment(post.id).json()
+    top = _comment(post.id, reader_token).json()
     approve = {"status": "approved"}
     client.put(f"/api/v1/comments/{top['id']}", json=approve, headers=_auth(admin_token))
 
-    reply = _comment(post.id, parent_id=top["id"]).json()
+    reply = _comment(post.id, reader_token, parent_id=top["id"]).json()
     client.put(f"/api/v1/comments/{reply['id']}", json=approve, headers=_auth(admin_token))
 
-    assert _comment(post.id, parent_id=reply["id"]).status_code == 422
+    assert _comment(post.id, reader_token, parent_id=reply["id"]).status_code == 422
 
 
-def test_commenting_on_a_draft_is_a_404(make_post):
+def test_commenting_on_a_draft_is_a_404(make_post, reader_token):
     """The same answer the post itself gives a stranger."""
     draft = make_post("Not Yet Published", published=False)
 
-    assert _comment(draft.id).status_code == 404
+    assert _comment(draft.id, reader_token).status_code == 404
 
 
-def test_deleting_a_comment_takes_its_replies(make_post, admin_token, db):
+def test_deleting_a_comment_takes_its_replies(make_post, admin_token, reader_token, db):
     post = make_post("Thread To Delete", published=True)
-    top = _comment(post.id).json()
+    top = _comment(post.id, reader_token).json()
     approve = {"status": "approved"}
     client.put(f"/api/v1/comments/{top['id']}", json=approve, headers=_auth(admin_token))
-    reply = _comment(post.id, parent_id=top["id"]).json()
+    reply = _comment(post.id, reader_token, parent_id=top["id"]).json()
 
     client.delete(f"/api/v1/comments/{top['id']}", headers=_auth(admin_token))
 

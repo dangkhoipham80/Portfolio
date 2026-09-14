@@ -91,6 +91,18 @@ def make_user(db):
     this database has done it — would otherwise leave a row behind and poison
     every later run with a UniqueViolation in the fixture rather than a real
     failure in the test.
+
+    ## Why the username is the whole address
+
+    It was ``email.split("@")[0]``, which is also unique right up to the moment
+    two test addresses share a local part — and ``username`` has a unique index
+    of its own. ``reader@example.invalid`` and a ``reader@`` anything else then
+    collide, and the failure is a UniqueViolation at *setup* of whichever test
+    happened to run second: every case in the file errors, none of them for a
+    reason that has anything to do with what they assert.
+
+    The address is unique by definition, so using it whole removes the class.
+    Nothing here reads the username; it exists because the column is there.
     """
     made = []
 
@@ -104,7 +116,7 @@ def make_user(db):
         _drop_user(db, email)
         record = User(
             email=email,
-            username=email.split("@")[0],
+            username=email,
             full_name="Test User",
             hashed_password=hashed_password,
             is_active=True,
@@ -121,6 +133,24 @@ def make_user(db):
 
     for email in made:
         _drop_user(db, email)
+
+
+@pytest.fixture
+def reader_token(db, make_user):
+    """A bearer token for an ordinary, verified reader.
+
+    The counterpart to admin_token below and built the same way, through
+    UserService.create_token rather than by signing a JWT: the dependency also
+    checks the token has a live row, so a hand-signed one is rejected before any
+    role or verification check is reached.
+
+    Verified, because that is the account state every reader-facing write
+    assumes — signing in refuses an unverified account, so a token belonging to
+    one only exists in the case require_verified_user is actually there for, and
+    the tests that want it build it themselves.
+    """
+    user = make_user("reader@example.invalid")
+    return UserService(db).create_token(user.id, TokenType.ACCESS, expires_in_minutes=10)
 
 
 @pytest.fixture

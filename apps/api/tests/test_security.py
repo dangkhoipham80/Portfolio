@@ -13,13 +13,16 @@ database — the contact-form cases insert rows.
 
 import base64
 import json
+import secrets
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.database import SessionLocal
 from app.core.security import create_access_token
 from app.main import app
 from app.models.portfolio import Contact
+from app.models.user import User, UserStatus
 
 client = TestClient(app)
 
@@ -117,10 +120,87 @@ def test_non_numeric_subject_is_rejected_not_a_crash():
     assert r.status_code in (401, 403), r.status_code
 
 
-@pytest.mark.parametrize("path", ["/api/v1/auth/register", "/api/v1/auth/google"])
-def test_public_signup_surface_is_gone(path):
-    """Single-owner API: the admin comes from the seed script, not signup."""
-    assert client.post(path, json={}).status_code == 404
+def test_google_sign_in_surface_is_gone():
+    """It verified ID tokens from an unauthenticated route. It is not coming back.
+
+    Registration, which used to be checked here alongside it, *has* come back —
+    see AuthService.register. The properties its removal was protecting are
+    asserted directly below instead of by the route being absent.
+    """
+    assert client.post("/api/v1/auth/google", json={}).status_code == 404
+
+
+# `@example.com` below rather than the `.invalid` the other fixtures use.
+# EmailStr refuses reserved names, and the registration route is one of the few
+# that validates an address properly rather than storing whatever it was handed.
+#
+# The passwords are minted rather than written down, for the reason
+# .github/workflows/ci.yml gives about its own SECRET_KEY: the value is a
+# throwaway either way, and a literal shaped like a credential is what a secret
+# scanner reports — which is the noise that trains people to ignore the real
+# findings.
+A_PASSWORD = f"register-{secrets.token_urlsafe(16)}"
+ANOTHER_PASSWORD = f"register-{secrets.token_urlsafe(16)}"
+
+
+def test_registration_cannot_ask_for_a_role():
+    """The payload has no way to say "admin", and an extra key cannot add one."""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "role-grab@example.com",
+            "password": A_PASSWORD,
+            "full_name": "Role Grabber",
+            "roles": ["admin"],
+            "is_verified": True,
+        },
+    )
+
+    assert response.status_code == 202
+
+    session = SessionLocal()
+    try:
+        created = (
+            session.query(User).filter(User.email == "role-grab@example.com").first()
+        )
+        assert created is not None
+        # The role comes from assign_default_role, and the account is unusable
+        # until a mailed link is followed.
+        assert created.roles == ["user"]
+        assert created.is_verified is False
+        assert created.status == UserStatus.PENDING_VERIFICATION
+
+        session.delete(created)
+        session.commit()
+    finally:
+        session.close()
+
+
+def test_registering_a_known_address_answers_the_same_as_a_new_one():
+    """Otherwise the form is an oracle for which addresses have accounts."""
+    payload = {
+        "email": "twice@example.com",
+        "password": A_PASSWORD,
+        "full_name": "Twice Over",
+    }
+
+    first = client.post("/api/v1/auth/register", json=payload)
+    second = client.post("/api/v1/auth/register", json={**payload, "password": ANOTHER_PASSWORD})
+
+    assert first.status_code == second.status_code == 202
+    assert first.json() == second.json()
+
+    session = SessionLocal()
+    try:
+        rows = session.query(User).filter(User.email == "twice@example.com").all()
+        # One account, and the second attempt did not overwrite its password —
+        # which is the attack an upsert here would be.
+        assert len(rows) == 1
+        for row in rows:
+            session.delete(row)
+        session.commit()
+    finally:
+        session.close()
 
 
 CONTACT_TEST_ADDRESS = "ratelimit{}@example.com"

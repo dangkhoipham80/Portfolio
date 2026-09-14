@@ -4,7 +4,9 @@ import { signOut } from "@/app/actions/auth";
 import { ConsoleNav } from "@/components/console/console-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { eyebrowClasses } from "@/components/ui/eyebrow";
 import { requireAdmin } from "@/lib/admin-guard";
+import { cn } from "@/lib/cn";
 import { accessTokenExpiry } from "@/lib/session";
 
 /**
@@ -60,6 +62,32 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
 
           <div className="order-3 w-full lg:order-2 lg:w-auto lg:flex-1">
             <ConsoleNav />
+
+            {/*
+              The other half of the switch.
+
+              The public header carries the way *in* to the console; until now
+              nothing carried the way out, so leaving the console meant editing
+              the address bar or signing out — which is the one thing it must
+              not mean. It is the same session either way: the owner reading
+              their own blog is signed in, comments under their own name and
+              keeps reading progress like anyone else.
+
+              Separated by a rule and set in the quiet mono treatment rather
+              than as a seventh nav item, because it is not a section of the
+              console. It leaves it.
+            */}
+            <div className="mt-4 border-t border-border/70 pt-4 lg:mt-6">
+              <Link
+                href="/"
+                className={cn(
+                  eyebrowClasses,
+                  "inline-flex min-h-11 items-center px-3 transition-colors hover:text-primary",
+                )}
+              >
+                View site
+              </Link>
+            </div>
           </div>
 
           {/*

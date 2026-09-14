@@ -154,6 +154,24 @@ class PermissionListResponse(BaseModel):
     size: int
 
 # Password reset schemas
+class RegistrationRequest(BaseModel):
+    """What a reader sends to create an account.
+
+    Three fields and no more. There is no ``username``, no ``avatar_url`` and
+    above all no ``roles`` — ``UserCreate`` can express the first two and the
+    service fills them with None, and the role comes from
+    ``assign_default_role`` so that no payload can ask to be an admin.
+
+    ``full_name`` is what a comment is signed with, so it is required and
+    bounded: the column is 255, but a display name is a name, and 80 is the
+    width ``post_comments.author_name`` actually has.
+    """
+
+    email: EmailStr
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
+    full_name: str = Field(..., min_length=1, max_length=80)
+
+
 class PasswordResetRequest(BaseModel):
     email: EmailStr
 

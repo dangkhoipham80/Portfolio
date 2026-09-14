@@ -144,6 +144,53 @@ class UserService:
         
         return user
 
+    def record_login(self, user: User) -> User:
+        """Advance the account's daily login streak. Idempotent within a day.
+
+        Called once a login has actually succeeded — after the password, the
+        active check and the verification check — rather than from
+        authenticate_user(), which also returns for an account that is then
+        refused. A streak counts days you got in, not days you tried.
+
+        ## Where the day boundary is
+
+        UTC, stated here and nowhere else. Every instant this application stores
+        is UTC (``datetime.now(timezone.utc)`` throughout), so a streak measured
+        in local days would be the one date in the system that means something
+        different from the rest — and "which local?" has no answer on a server
+        that never learns the reader's timezone. The cost is that someone
+        signing in at 07:00 in Ho Chi Minh City is already on the new UTC day,
+        which advances the streak a few hours early rather than losing it.
+
+        ## The arithmetic
+
+        Exactly four cases, and the reason they are spelled out rather than
+        computed from a delta is that three of them are not "add one":
+
+        * never signed in    -> 1, the first day of a streak
+        * already today      -> unchanged, so refreshing the login screen or
+                                signing in on a second device costs nothing
+        * yesterday          -> one more
+        * anything else      -> back to 1, including a clock that went backwards
+        """
+        today = datetime.now(timezone.utc).date()
+        previous = user.last_login_day
+
+        if previous == today:
+            # Nothing to write. Returning early also means the common case —
+            # the second and third login of the day — does not touch the row.
+            return user
+
+        if previous is not None and previous == today - timedelta(days=1):
+            user.login_streak = (user.login_streak or 0) + 1
+        else:
+            user.login_streak = 1
+
+        user.last_login_day = today
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
     # authenticate_google_user() was removed with the rest of the Google OAuth
     # scaffolding. The POST /auth/google endpoint that called it had already
     # gone; this method, get_user_by_google_id(), the two schemas and the two

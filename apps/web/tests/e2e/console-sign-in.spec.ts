@@ -1,5 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
+import { BASE_URL } from "../../playwright.config";
+
 /**
  * The console's session, driven for real.
  *
@@ -36,7 +38,9 @@ test.describe("the way in", () => {
     await page.locator('header a[href="/login"]').click();
 
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByRole("heading", { level: 1, name: "Console access" })).toBeVisible();
+    // "Sign in", not "Console access": the screen serves readers now as well as
+    // the owner, and one of the two audiences is much the larger.
+    await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
   });
 
   test("on a phone it moves to the footer, and is still there", async ({ page }) => {
@@ -75,7 +79,7 @@ test.describe("signed out", () => {
     await page.goto("/admin");
 
     await expect(page).toHaveURL(/\/login\?next=%2Fadmin$/);
-    await expect(page.getByRole("heading", { level: 1, name: "Console access" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
   });
 
   test("the login screen does not wear the public site's nav", async ({ page }) => {
@@ -194,19 +198,39 @@ test.describe("signing in", () => {
     await expect(page.getByText(/that email and password don.t match/)).toHaveCount(0);
   });
 
-  test("an account without the admin role is turned away", async ({ page, context }) => {
+  test("an account without the admin role is signed in, and not into the console", async ({
+    page,
+    context,
+  }) => {
     // The stub hands out a perfectly valid session for this one; it is the role
-    // check that has to refuse it, not the credentials.
+    // check that decides where it goes, not the credentials.
     await signIn(page, "stub:viewer@example.com", PASSWORD);
 
-    // The full round trip, not just /login: sign-in succeeded and redirected to
-    // /admin, and the guard bounced it back. Matching a bare /login here would
-    // pass without the form ever being submitted, since that is where it began.
-    await expect(page).toHaveURL(/\/login\?next=%2Fadmin$/);
-    await expect(page.getByRole("heading", { level: 1, name: "Console access" })).toBeVisible();
+    /*
+      It used to be bounced back to this form with `?next=%2Fadmin` still on it,
+      which was the only thing the app could do when every account was the
+      owner's. It reads as a broken sign-in: the password was right, the session
+      is live, and the screen asks for it again.
 
-    // The session exists — it is the role that was refused, not the password.
+      Readers have accounts now, so a non-admin signing in goes to the site. The
+      property this test is actually about is unchanged and is asserted below —
+      they are not in the console.
+    */
+    await expect(page).toHaveURL(`${BASE_URL}/`);
+
+    // The session exists — it is the destination that differs, not the outcome.
     expect(await sessionCookies(context)).not.toHaveLength(0);
+
+    /*
+      And the console is still shut to them. They are turned around at the guard
+      and put back on the site rather than parked on the sign-in form with
+      `?next=%2Fadmin` — asking a live session to sign in again is a loop with
+      no exit, and the browser proves it: the first version of this behaved
+      exactly that way and died with ERR_TOO_MANY_REDIRECTS. See `landingPath`.
+    */
+    await page.goto("/admin");
+    await expect(page).toHaveURL(`${BASE_URL}/`);
+    await expect(page).not.toHaveURL(/\/admin/);
   });
 });
 

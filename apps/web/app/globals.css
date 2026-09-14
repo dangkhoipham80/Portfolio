@@ -842,8 +842,18 @@
     }
   }
 
-  .article-prose h2,
-  .article-prose h3 {
+  /*
+   * `h1` and `h4` are here because the contents list now covers them.
+   *
+   * `#` is ordinary Markdown for a section — the old contents parser skipped it
+   * as "the post title", which meant a post written that way had no list and no
+   * anchors — so a post body can contain an `h1`, and it needs the same
+   * treatment as the levels below it rather than the browser's 2em default.
+   *
+   * The page's own `h1` is the post title in the header above, outside
+   * `.article-prose`, so nothing here touches it.
+   */
+  .article-prose :is(h1, h2, h3, h4) {
     font-family: var(--font-display);
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -858,12 +868,26 @@
     scroll-margin-top: 6rem;
   }
 
+  /*
+   * One step per level, from the same scale. A post that uses `#` for its
+   * sections gets 1.5rem where one that uses `##` gets 1.375 — the same
+   * hierarchy, one notch up, rather than the browser's 2em heading sitting
+   * halfway to the page title's size.
+   */
+  .article-prose h1 {
+    font-size: 1.625rem;
+  }
+
   .article-prose h2 {
     font-size: 1.375rem;
   }
 
   .article-prose h3 {
     font-size: 1.125rem;
+  }
+
+  .article-prose h4 {
+    font-size: 1rem;
   }
 
   /*
@@ -1045,7 +1069,15 @@
     }
   }
 
-  /* Room for the label, and only where there is a label to make room for. */
+  /*
+   * Room for the block's furniture: the language on the left, the copy control
+   * on the right.
+   *
+   * Keyed on `data-code-block` rather than on `data-lang`, which is what it used
+   * to be. Every fence has a copy button and only some have a language, so a
+   * bare ``` fence would otherwise have the button overlapping its first line.
+   */
+  .article-prose pre[data-code-block],
   .article-prose pre[data-lang] {
     padding-top: 2.25rem;
   }
@@ -1075,17 +1107,130 @@
    * The fence's language, in the same mono-uppercase treatment as every other
    * field name on the site. `data-lang` is written by lib/markdown.ts from a
    * className the sanitiser has already vetted.
+   *
+   * On the left now, where it used to be on the right. The copy control has
+   * taken the right-hand corner, and of the two the language is the label and
+   * the button is the action — a label left, an action right, which is the
+   * order every other row on this site is in.
    */
   .article-prose pre[data-lang]::before {
     content: attr(data-lang);
     position: absolute;
     top: 0.625rem;
-    right: 1rem;
+    left: 1.25rem;
     font-family: var(--font-mono);
     font-size: 0.625rem;
     text-transform: uppercase;
     letter-spacing: 0.18em;
     color: hsl(var(--muted-foreground));
+  }
+
+  /*
+   * The copy control.
+   *
+   * ## Why it is a word and not an icon
+   *
+   * Because two overlapping rectangles is only a clipboard if you already know
+   * it is. The block is set in mono and labelled in mono; a mono word in the
+   * opposite corner reads as part of the same furniture, and it says what it
+   * does without anyone having to hover to find out.
+   *
+   * ## Why both words are in the markup
+   *
+   * "Copy" and "Copied" are both rendered and CSS shows one at a time off
+   * `data-copied` — see `copyableCodeBlocks`. Swapping the text in script would
+   * change the button's width mid-press, which is the one moment a control must
+   * not move under the pointer.
+   *
+   * ## The confirmation
+   *
+   * A `--live` dot beside the word, which is the site's standing vocabulary for
+   * "this happened" — the same dot `Notice` and `StatusBadge` use, and never a
+   * colour on the text itself.
+   *
+   * `user-select: none` so dragging across the block to select it by hand does
+   * not pick up the word "Copy" along with the code.
+   */
+  .article-prose .code-copy {
+    position: absolute;
+    top: 0.375rem;
+    right: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    /*
+     * 32px of *box*, 44px of target. The visible control has to stay small —
+     * it sits inside another element's padding, and a 44px box there would
+     * either overlap the first line of code or force every block on the site
+     * to reserve three-quarters of an inch it does not otherwise need.
+     *
+     * So the hit area is grown instead of the button, with the `::after` below.
+     * Same 44px a finger gets anywhere else on the site; nothing moves.
+     */
+    position: relative;
+    min-height: 2rem;
+    padding-inline: 0.625rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    background: none;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    line-height: 1;
+    color: hsl(var(--muted-foreground));
+    user-select: none;
+    cursor: pointer;
+    transition:
+      color 200ms var(--ease-enter),
+      border-color 200ms var(--ease-enter),
+      background-color 200ms var(--ease-enter);
+  }
+
+  /*
+   * The target, rather than the button.
+   *
+   * 6px above and below takes the pressable area from 32px to the 44px floor,
+   * and 4px either side widens it to match. It reaches the top edge of the
+   * block and a few pixels into the first line of code — which costs nothing,
+   * because the code is text and the only interactive thing in a `pre` is this.
+   */
+  .article-prose .code-copy::after {
+    content: "";
+    position: absolute;
+    inset: -6px -4px;
+  }
+
+  .article-prose .code-copy:hover {
+    border-color: hsl(var(--border));
+    background-color: hsl(var(--card));
+    color: hsl(var(--primary));
+  }
+
+  .article-prose .code-copy:active {
+    /* The same press the buttons have, so a control on a code block behaves
+       like every other control on the site. */
+    scale: 0.98;
+  }
+
+  /* Only one of the two words at a time. */
+  .article-prose .code-copy-done,
+  .article-prose .code-copy[data-copied] .code-copy-idle {
+    display: none;
+  }
+
+  .article-prose .code-copy[data-copied] .code-copy-done {
+    display: inline;
+  }
+
+  /* The dot: hue marks what is happening, and never the text itself. */
+  .article-prose .code-copy[data-copied]::before {
+    content: "";
+    display: inline-block;
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: var(--radius-pill);
+    background-color: hsl(var(--live));
   }
 
   .article-prose img {

@@ -1,27 +1,48 @@
 /**
- * A post's headings, derived from its source.
+ * What a post's contents list is made of.
  *
  * ## Why this is not in lib/markdown.ts
  *
  * It was, and the `server-only` guard at the top of that file rejected it — for
  * exactly the reason the guard exists. The table of contents is a client
  * component (it observes scroll position to mark the current section) and it
- * needs the same threshold the page uses to decide whether to render a column
- * for it. Importing that from lib/markdown.ts meant importing the whole unified
- * stack — remark, rehype, the sanitiser and Shiki's grammars — into the browser
- * bundle, to read one number.
+ * needs these types and the threshold below. Importing them from lib/markdown.ts
+ * meant importing the whole unified stack — remark, rehype, the sanitiser and
+ * Shiki's grammars — into the browser bundle to read one number.
  *
  * Everything here is plain string work with no dependencies, so it is safe on
  * both sides. That is the whole reason it is a separate file.
  *
- * ## Why the source and not the rendered HTML
+ * ## Why there is no longer a parser here
  *
- * Parsing the output would need a DOM on the server and a second pass over
- * every post. The source has the same headings in the same order, and reading
- * it works identically for a Markdown body and an MDX one.
+ * There used to be: `headingsOf`, which read `##` and `###` out of the Markdown
+ * *source*, while `anchorHeadings` in lib/markdown.ts wrote ids onto the
+ * *rendered tree*. Two derivations of the same ids, from two different inputs,
+ * with a comment on each saying the other had to agree with it.
+ *
+ * They did not, and nothing failed when they diverged — the contents list
+ * simply scrolled to an anchor that was not on the page. The ways they came
+ * apart were all ordinary Markdown:
+ *
+ * * `# Introduction`. The source reader skipped `#` as "the post title", so a
+ *   post written with `#` for its sections had no contents at all — and the
+ *   rendered `h1`s got no ids, so linking to one was impossible.
+ * * `> ## A quoted heading`. The source reader's pattern is anchored to the
+ *   start of a line, so it missed this one; the renderer found it, gave it an
+ *   id, and counted it — which shifted the `-2` suffix onto the wrong one of
+ *   every later duplicate.
+ * * A heading inside an MDX component, which is not in the source as a `##` at
+ *   all.
+ *
+ * So the ids are now derived once, in one pass, from the tree that is actually
+ * rendered — see `anchorHeadings`. This file keeps the type, the threshold and
+ * the slug rule, which is the part both ends genuinely share.
  */
 
-export type Heading = { id: string; text: string; level: 2 | 3 };
+/** `1` is a `#` in the body, which is not the same as the page's own title. */
+export type HeadingLevel = 1 | 2 | 3 | 4;
+
+export type Heading = { id: string; text: string; level: HeadingLevel };
 
 /**
  * Below this many, a contents list is furniture rather than navigation — three
@@ -34,58 +55,28 @@ export function hasContents(headings: Heading[]): boolean {
 }
 
 /**
- * The `##` and `###` headings in a post.
+ * How far a heading is indented in the contents list, relative to the shallowest
+ * one in it.
  *
- * `#` is skipped: that is the post title, which the page already carries as its
- * `h1`. Anything deeper than `###` is not navigation.
- *
- * Fenced code is stripped first. A shell session with a `# comment` in it is
- * not a heading, and without this the contents list fills up with them.
+ * Relative rather than absolute, because both conventions are in use and both
+ * are correct: a post whose sections are `##` and a post whose sections are `#`
+ * should produce the same-looking list, not one of them indented a step for no
+ * reason a reader can see.
  */
-export function headingsOf(markdown: string): Heading[] {
-  const withoutFences = markdown.replace(/```[\s\S]*?```/g, "");
-  const headings: Heading[] = [];
-  const seen = new Map<string, number>();
-
-  for (const line of withoutFences.split("\n")) {
-    const match = /^(#{2,3})\s+(.+?)\s*#*\s*$/.exec(line);
-    if (!match) continue;
-
-    const text = match[2]
-      // Inline Markdown, taken off: a heading rendered as "The `format` column"
-      // must not appear in the contents with its backticks.
-      .replace(/`([^`]*)`/g, "$1")
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-      .replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, "$1")
-      .trim();
-
-    if (!text) continue;
-
-    const base = slugifyHeading(text);
-    // Two headings with the same words are ordinary in a technical post — every
-    // "Why" section, for instance. Without a suffix both anchors would point at
-    // the first one. `anchorHeadings` in lib/markdown.ts counts the same way.
-    const count = seen.get(base) ?? 0;
-    seen.set(base, count + 1);
-
-    headings.push({
-      id: count === 0 ? base : `${base}-${count + 1}`,
-      text,
-      level: match[1].length === 2 ? 2 : 3,
-    });
-  }
-
-  return headings;
+export function indentOf(heading: Heading, headings: Heading[]): number {
+  const shallowest = Math.min(...headings.map((entry) => entry.level));
+  // Capped at two steps. A fourth level at 375px has nowhere left to go, and
+  // an `h4` under an `h3` under an `h2` is already past what a rail can show.
+  return Math.min(heading.level - shallowest, 2);
 }
 
 /**
  * The id a heading's anchor uses.
  *
- * Called from two places that never see each other's output — here, from the
- * Markdown source, and `anchorHeadings`, from the rendered tree — so both use
- * this and apply the duplicate-suffixing rule identically. A mismatch would not
- * fail anywhere: the contents list would simply scroll to nothing, which is why
- * it is worth stating.
+ * Called from one place now — `anchorHeadings`, over the rendered tree — which
+ * is the point of the note at the top of this file. It stays here rather than
+ * moving into lib/markdown.ts so the client half can be tested against the same
+ * function the server half writes with.
  */
 export function slugifyHeading(text: string): string {
   return (

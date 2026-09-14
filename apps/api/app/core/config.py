@@ -42,6 +42,23 @@ class Settings(BaseSettings):
     # existing deployment keeps working until this is set.
     FRONTEND_URL: str = ""
 
+    # How much of a long post an anonymous caller is given, in characters.
+    #
+    # A setting rather than a constant because it is the one number in this
+    # feature that is a judgement about this blog's readers rather than about
+    # correctness, and because 0 has to be reachable: it switches gating off
+    # entirely, which is the escape hatch if the whole idea turns out to cost
+    # more readers than the accounts are worth.
+    #
+    # 2000 characters is roughly 350 words — a page, or about two minutes. It is
+    # deliberately past the point where someone can tell whether they want the
+    # rest: a gate that lands before the article has said what it is about is
+    # asking for an account in exchange for nothing.
+    #
+    # Only posts more than twice this long are gated at all; see
+    # app/core/previews.py.
+    PUBLIC_PREVIEW_CHARS: int = 2000
+
     DATABASE_URL: str
 
     # Security
